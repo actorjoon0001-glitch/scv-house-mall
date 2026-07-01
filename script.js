@@ -1,26 +1,28 @@
 // ============ PRODUCT DATA ============
 const products = [
-  { id: 1, brand: "Maison Margiela", name: "Oversized Wool Topcoat", price: 2480000, was: 2980000, badge: "NEW", cat: "outer", shade: 1,
-    img: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&q=80&auto=format&fit=crop" },
-  { id: 2, brand: "The Row", name: "Cashmere Crewneck", price: 1290000, badge: null, cat: "knit", shade: 2,
-    img: "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=800&q=80&auto=format&fit=crop" },
-  { id: 3, brand: "Bottega Veneta", name: "Intrecciato Tote", price: 4150000, badge: "LIMITED", cat: "bag", shade: 3,
-    img: "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800&q=80&auto=format&fit=crop" },
-  { id: 4, brand: "Saint Laurent", name: "Leather Chelsea Boot", price: 1680000, badge: null, cat: "shoes", shade: 4,
-    img: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=800&q=80&auto=format&fit=crop" },
-  { id: 5, brand: "Lemaire", name: "Croissant Shoulder Bag", price: 1320000, badge: "NEW", cat: "bag", shade: 5,
-    img: "https://images.unsplash.com/photo-1590739225497-56c3a3e8aa9c?w=800&q=80&auto=format&fit=crop" },
-  { id: 6, brand: "Jil Sander", name: "Tailored Wool Trouser", price: 980000, badge: null, cat: "outer", shade: 6,
-    img: "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=800&q=80&auto=format&fit=crop" },
-  { id: 7, brand: "Loewe", name: "Anagram Wool Knit", price: 1450000, badge: "EXCLUSIVE", cat: "knit", shade: 7,
-    img: "https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=800&q=80&auto=format&fit=crop" },
-  { id: 8, brand: "Prada", name: "Re-Nylon Loafer", price: 1290000, badge: null, cat: "shoes", shade: 8,
-    img: "https://images.unsplash.com/photo-1533867617858-e7b97e060509?w=800&q=80&auto=format&fit=crop" },
+  { id: 1, brand: "SECHAN WOOD", name: "프리미엄 원목마루 (오크)", price: 89000, was: 109000, unit: "/㎡", badge: "NEW", cat: "floor", shade: 1,
+    img: "https://images.unsplash.com/photo-1615873968403-89e068629265?w=800&q=80&auto=format&fit=crop" },
+  { id: 2, brand: "IMPORT TILE", name: "포세린 대형 타일 600×1200", price: 42000, unit: "/㎡", badge: null, cat: "tile", shade: 2,
+    img: "https://images.unsplash.com/photo-1600566752355-35792bedcfea?w=800&q=80&auto=format&fit=crop" },
+  { id: 3, brand: "SECHAN DOOR", name: "시스템 단열 현관도어", price: 1250000, unit: "/EA", badge: "BEST", cat: "door", shade: 3,
+    img: "https://images.unsplash.com/photo-1558002038-1055907df827?w=800&q=80&auto=format&fit=crop" },
+  { id: 4, brand: "THERMO", name: "고성능 압출 단열재 XPS", price: 18000, unit: "/장", badge: null, cat: "insul", shade: 4,
+    img: "https://images.unsplash.com/photo-1581092160562-40aa08e78837?w=800&q=80&auto=format&fit=crop" },
+  { id: 5, brand: "IMPORT TILE", name: "이탈리아 수입 포세린", price: 68000, unit: "/㎡", badge: "직수입", cat: "tile", shade: 5,
+    img: "https://images.unsplash.com/photo-1615529328331-f8917597711f?w=800&q=80&auto=format&fit=crop" },
+  { id: 6, brand: "SECHAN WOOD", name: "강화 강마루 (내수합판)", price: 39000, was: 47000, unit: "/㎡", badge: null, cat: "floor", shade: 6,
+    img: "https://images.unsplash.com/photo-1585128792020-803d29415281?w=800&q=80&auto=format&fit=crop" },
+  { id: 7, brand: "SYSTEM WIN", name: "알루미늄 시스템 창호", price: 320000, unit: "/㎡", badge: "BEST", cat: "door", shade: 7,
+    img: "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?w=800&q=80&auto=format&fit=crop" },
+  { id: 8, brand: "THERMO", name: "준불연 그라스울 단열재", price: 12000, unit: "/장", badge: null, cat: "insul", shade: 8,
+    img: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=800&q=80&auto=format&fit=crop" },
 ];
 
 const fmt = (n) => "₩ " + n.toLocaleString("ko-KR");
 
 const grid = document.getElementById("products");
+
+let io = null;
 
 function render(list) {
   grid.innerHTML = list
@@ -39,7 +41,7 @@ function render(list) {
         <span class="product__brand">${p.brand}</span>
         <h3 class="product__name">${p.name}</h3>
         <div class="product__price">
-          ${p.was ? `<s>${fmt(p.was)}</s>` : ""}${fmt(p.price)}
+          ${p.was ? `<s>${fmt(p.was)}</s>` : ""}${fmt(p.price)}${p.unit || ""}
         </div>
       </div>
     </a>`
@@ -81,7 +83,6 @@ document.addEventListener("click", (e) => {
 });
 
 // ============ SCROLL REVEAL ============
-let io;
 function observeReveal() {
   if (!io) {
     io = new IntersectionObserver(
