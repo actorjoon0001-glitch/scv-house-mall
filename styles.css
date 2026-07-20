@@ -354,7 +354,7 @@ button { background: none; border: 0; cursor: pointer; }
 }
 .town__joystick {
   position: absolute;
-  left: 22px;
+  right: 22px;
   bottom: 22px;
   width: 108px;
   height: 108px;
@@ -363,8 +363,11 @@ button { background: none; border: 0; cursor: pointer; }
   border: 1.5px solid rgba(255,255,255,0.35);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  display: none;
+  touch-action: none;
+  cursor: grab;
+  z-index: 3;
 }
+.town__joystick:active { cursor: grabbing; }
 .town__stick {
   position: absolute;
   left: 50%;
@@ -455,7 +458,6 @@ body.town-fs-lock { overflow: hidden; }
 .town__card-price { margin: 2px 0 0; font-size: 14px; font-weight: 700; }
 .town__card .btn { flex-shrink: 0; }
 @media (pointer: coarse) {
-  .town__joystick { display: block; }
   .town__hud { font-size: 12px; }
 }
 @media (max-width: 640px) {
