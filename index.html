@@ -70,8 +70,9 @@
           <p class="eyebrow eyebrow--light">SEUM 3D TOWN</p>
           <h2 class="head__title">세움봇과 함께 걷는 3D 타운</h2>
           <p class="viewer__sub">
-            세움의 건축 마스코트 <strong>세움봇</strong>을 움직여 마을에 놓인 하우스들을 둘러보세요.
-            하우스를 클릭하면 제품 소개로 이동합니다.
+            세움의 건축 마스코트 <strong>세움봇</strong>과 함께 마을을 걸어보세요.
+            카탈로그의 <strong>실제 판매 모델 전체</strong>가 마을에 놓여 있고,
+            집에 가까이 가면 실사진과 가격이 나타납니다. 집을 클릭하면 상세 페이지로 이동합니다.
           </p>
         </div>
         <div class="town__stage" id="town-stage">
@@ -80,6 +81,16 @@
           <p class="town__hud"><span class="town__keys">W A S D</span> 또는 방향키로 이동 · 모바일은 조이스틱</p>
           <div class="town__joystick" id="town-joystick" aria-hidden="true">
             <div class="town__stick" id="town-stick"></div>
+          </div>
+          <div class="town__card" id="town-card" hidden>
+            <img id="town-card-img" alt="모델 사진" hidden />
+            <div class="town__card-body">
+              <span class="town__card-tag" id="town-card-tag"></span>
+              <h3 class="town__card-name" id="town-card-name"></h3>
+              <p class="town__card-spec" id="town-card-spec"></p>
+              <p class="town__card-price" id="town-card-price"></p>
+            </div>
+            <a class="btn btn--primary btn--sm" id="town-card-link" target="_blank" rel="noopener" hidden>상세보기</a>
           </div>
         </div>
       </div>
