@@ -376,9 +376,49 @@ button { background: none; border: 0; cursor: pointer; }
   background: rgba(255,255,255,0.85);
   box-shadow: 0 4px 14px rgba(0,0,0,0.25);
 }
+.town__card[hidden] { display: none; }
+.town__card {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(420px, calc(100% - 36px));
+  padding: 14px;
+  background: rgba(16,19,15,0.72);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 16px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #fff;
+  animation: town-card-in .35s var(--ease);
+}
+@keyframes town-card-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.town__card img {
+  width: 96px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.town__card-body { min-width: 0; }
+.town__card-tag { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9fdcbb; }
+.town__card-name { margin: 2px 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.town__card-spec { margin: 0; font-size: 12px; color: rgba(255,255,255,0.7); }
+.town__card-price { margin: 2px 0 0; font-size: 14px; font-weight: 700; }
+.town__card .btn { flex-shrink: 0; }
 @media (pointer: coarse) {
   .town__joystick { display: block; }
   .town__hud { font-size: 12px; }
+}
+@media (max-width: 640px) {
+  .town__card { right: 12px; left: auto; bottom: 12px; padding: 10px; gap: 10px; }
+  .town__card img { width: 72px; height: 56px; }
+  .town__card-name { font-size: 15px; }
 }
 @media (max-width: 640px) {
   .town__stage { height: 70vw; min-height: 340px; }

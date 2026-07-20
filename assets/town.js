@@ -48,8 +48,8 @@ function init() {
   sun.position.set(18, 30, 14);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -40; sun.shadow.camera.right = 40;
-  sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40;
+  sun.shadow.camera.left = -48; sun.shadow.camera.right = 48;
+  sun.shadow.camera.top = 48; sun.shadow.camera.bottom = -48;
   sun.shadow.bias = -0.0004;
   scene.add(sun);
 
@@ -74,12 +74,20 @@ function init() {
 
   const pathMat = new THREE.MeshStandardMaterial({ color: 0xcdc2ac, roughness: 1 });
   [0, Math.PI / 2, Math.PI, -Math.PI / 2].forEach((a) => {
-    const path = new THREE.Mesh(new THREE.PlaneGeometry(3, 26), pathMat);
+    const path = new THREE.Mesh(new THREE.PlaneGeometry(3, 40), pathMat);
     path.rotation.x = -Math.PI / 2;
-    path.position.set(Math.sin(a) * 19, 0.015, Math.cos(a) * 19);
+    path.position.set(Math.sin(a) * 24, 0.015, Math.cos(a) * 24);
     path.rotation.z = -a;
     path.receiveShadow = true;
     scene.add(path);
+  });
+  // 링 도로 (마을 순환로)
+  [21.5, 31.5].forEach((r) => {
+    const ringRoad = new THREE.Mesh(new THREE.RingGeometry(r - 1.1, r + 1.1, 80), pathMat);
+    ringRoad.rotation.x = -Math.PI / 2;
+    ringRoad.position.y = 0.012;
+    ringRoad.receiveShadow = true;
+    scene.add(ringRoad);
   });
 
   // ---------- 나무 ----------
@@ -100,7 +108,7 @@ function init() {
     crown.castShadow = true;
     t.add(trunk, crown);
     const ang = Math.random() * Math.PI * 2;
-    const rad = 26 + Math.random() * (WORLD_R - 28);
+    const rad = 42 + Math.random() * 16;
     t.position.set(Math.sin(ang) * rad, 0, Math.cos(ang) * rad);
     scene.add(t);
   }
@@ -150,30 +158,148 @@ function init() {
     return obj;
   }
 
-  // 세움 하우스 배치 (기존 image-to-3D 하우스 재사용)
-  const HOUSES = [
-    { pos: [-14, -13], rot: 0.6, h: 4.6, label: "STAY 19RB" },
-    { pos: [15, -11], rot: -0.7, h: 4.0, label: "STAY 16GB" },
-    { pos: [-16, 12], rot: 2.3, h: 3.6, label: "FOREST 6" },
-    { pos: [14, 14], rot: -2.4, h: 4.3, label: "CUBE-G 10W" },
-    { pos: [0, -21], rot: 0, h: 5.0, label: "STAY 28" },
+  // ---------- 카탈로그 모델 전체를 마을에 배치 ----------
+  const CATALOG_URL = "https://seum-catalog-online.netlify.app";
+  const SB_URL = "https://aypugjvzvwinnmpquguj.supabase.co";
+  const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5cHVnanZ6dndpbm5tcHF1Z3VqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1NjQ0ODIsImV4cCI6MjA4OTE0MDQ4Mn0.yLBG31-8VGWai9Rpv9RtVxZwwWMsKI_syGs0QN7PkUU";
+  const TOWN_FALLBACK = [
+    { name: "STAY 19RB", category: "전원주택", size: "19평" },
+    { name: "STAY 16GB", category: "전원주택", size: "16평" },
+    { name: "STAY 28", category: "전원주택", size: "28평" },
+    { name: "FOREST-P 10W", category: "체류형 쉼터", size: "10평" },
+    { name: "FOREST 6", category: "체류형 쉼터", size: "6평" },
+    { name: "CUBE-G 10W", category: "특별모델", size: "10평" },
   ];
-  loader.load("assets/house-3d.glb", (glb) => {
-    sharpen(glb.scene);
-    HOUSES.forEach((cfg) => {
+
+  const cardEl = document.getElementById("town-card");
+  const cardImg = document.getElementById("town-card-img");
+  const cardTag = document.getElementById("town-card-tag");
+  const cardName = document.getElementById("town-card-name");
+  const cardSpec = document.getElementById("town-card-spec");
+  const cardPrice = document.getElementById("town-card-price");
+  const cardLink = document.getElementById("town-card-link");
+
+  function fmtPrice(m) {
+    const won = m.event_on && m.event_price ? m.event_price : m.base_price;
+    if (!won) return "가격 상담";
+    const uk = Math.floor(won / 1e8);
+    const man = Math.round((won % 1e8) / 1e4);
+    return `${uk ? uk + "억 " : ""}${man ? man.toLocaleString() + "만" : ""}원~`;
+  }
+
+  function nameSign(text) {
+    const c = document.createElement("canvas");
+    c.width = 512; c.height = 128;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "rgba(16,19,15,0.78)";
+    ctx.beginPath();
+    ctx.roundRect(6, 6, 500, 116, 60);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.font = "700 52px 'Inter','Noto Sans KR',sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, 256, 68, 460);
+    const tex = new THREE.CanvasTexture(c);
+    tex.anisotropy = maxAniso;
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    sp.scale.set(4.2, 1.05, 1);
+    return sp;
+  }
+
+  // 링 배치: 안쪽부터 채워 마을 형태로
+  function lotPositions(n) {
+    const rings = [
+      { r: 16.5, cap: 10 },
+      { r: 26.5, cap: 14 },
+      { r: 36.5, cap: 18 },
+    ];
+    const out = [];
+    let left = n;
+    rings.forEach((ring, ri) => {
+      const cnt = Math.min(ring.cap, left);
+      left -= cnt;
+      for (let i = 0; i < cnt; i++) {
+        const a = (i / cnt) * Math.PI * 2 + ri * 0.35;
+        out.push({ x: Math.sin(a) * ring.r, z: Math.cos(a) * ring.r, face: a + Math.PI });
+      }
+    });
+    return out;
+  }
+
+  const houseLots = []; // { wrap, model }
+  let seedHouse = null;
+
+  function placeModels(models) {
+    if (!seedHouse) return;
+    const lots = lotPositions(models.length);
+    models.forEach((m, i) => {
+      const lot = lots[i];
+      if (!lot) return;
       const wrap = new THREE.Group();
-      const inst = glb.scene.clone(true);
-      inst.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-      normalize(inst, cfg.h);
-      inst.position.y -= cfg.h * 0.045; // 스캔 밑판을 지면에 살짝 묻기
+      const inst = seedHouse.clone(true);
+      const h = 3.4 + ((i * 2654435761) % 100) / 100 * 1.4; // 모델별 크기 변화
+      const castsShadow = i < 12; // 안쪽 링만 그림자 캐스팅 (성능)
+      inst.traverse((o) => { if (o.isMesh) { o.castShadow = castsShadow; o.receiveShadow = true; } });
+      normalize(inst, h);
+      inst.position.y -= h * 0.045;
       wrap.add(inst);
-      wrap.position.set(cfg.pos[0], 0, cfg.pos[1]);
-      wrap.rotation.y = cfg.rot;
-      wrap.userData.label = cfg.label;
+      const sign = nameSign(m.name);
+      sign.position.y = h + 1.1;
+      wrap.add(sign);
+      wrap.position.set(lot.x, 0, lot.z);
+      wrap.rotation.y = lot.face;
+      wrap.userData.model = m;
       scene.add(wrap);
       clickTargets.push(wrap);
+      houseLots.push({ wrap, model: m });
     });
+    updateNearCard();
+  }
+
+  loader.load("assets/house-3d.glb", (glb) => {
+    sharpen(glb.scene);
+    seedHouse = glb.scene;
+    fetch(
+      `${SB_URL}/rest/v1/models?select=slug,name,category,size,base_price,main_image,event_on,event_price&order=created_at.asc`,
+      { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
+    )
+      .then((r) => { if (!r.ok) throw new Error("catalog"); return r.json(); })
+      .then((data) => {
+        const models = data.filter((m) => m.name);
+        placeModels(models.length ? models : TOWN_FALLBACK);
+      })
+      .catch(() => placeModels(TOWN_FALLBACK));
   });
+
+  // 가까운 집 안내 카드
+  let activeLot = null;
+  function updateNearCard() {
+    if (!cardEl || !houseLots.length) return;
+    let best = null, bestD = 7.5;
+    houseLots.forEach((l) => {
+      const d = Math.hypot(l.wrap.position.x - player.position.x, l.wrap.position.z - player.position.z);
+      if (d < bestD) { bestD = d; best = l; }
+    });
+    if (best === activeLot) return;
+    activeLot = best;
+    if (!best) { cardEl.hidden = true; return; }
+    const m = best.model;
+    cardTag.textContent = m.category || "세움 모델";
+    cardName.textContent = m.name;
+    cardSpec.textContent = m.size || "";
+    cardPrice.textContent = fmtPrice(m);
+    if (m.main_image) { cardImg.src = m.main_image; cardImg.hidden = false; }
+    else cardImg.hidden = true;
+    if (m.slug) {
+      cardLink.href = `${CATALOG_URL}/model-detail.html?slug=${encodeURIComponent(m.slug)}`;
+      cardLink.hidden = false;
+    } else cardLink.hidden = true;
+    cardEl.hidden = false;
+  }
 
   // ---------- 캐릭터 (세움봇) ----------
   const player = new THREE.Group();
@@ -286,8 +412,15 @@ function init() {
     ray.setFromCamera(pointer, camera);
     const hits = ray.intersectObjects(clickTargets, true);
     if (hits.length) {
-      const prod = document.getElementById("products");
-      if (prod) prod.scrollIntoView({ behavior: "smooth" });
+      let p = hits[0].object;
+      while (p && !p.userData.model) p = p.parent;
+      const m = p && p.userData.model;
+      if (m && m.slug) {
+        window.open(`${CATALOG_URL}/model-detail.html?slug=${encodeURIComponent(m.slug)}`, "_blank", "noopener");
+      } else {
+        const prod = document.getElementById("products");
+        if (prod) prod.scrollIntoView({ behavior: "smooth" });
+      }
     }
   });
 
@@ -309,6 +442,12 @@ function init() {
   const lookAt = new THREE.Vector3();
   const clock = new THREE.Clock();
   let heading = 0;
+
+  // 디버그/테스트 훅 (프로덕션 동작에 영향 없음)
+  window.__seumTown = {
+    teleport(x, z) { player.position.x = x; player.position.z = z; updateNearCard(); },
+    lots: houseLots,
+  };
 
   function tick() {
     requestAnimationFrame(tick);
@@ -340,6 +479,7 @@ function init() {
       heading += diff * Math.min(1, dt * 10);
       player.rotation.y = heading;
       if (walkAction) { walkAction.paused = false; walkAction.timeScale = 0.7 + mag * 0.6; }
+      updateNearCard();
     } else if (walkAction) {
       walkAction.paused = true;
     }
