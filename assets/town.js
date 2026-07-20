@@ -213,6 +213,14 @@ function init() {
   const cardSpec = document.getElementById("town-card-spec");
   const cardPrice = document.getElementById("town-card-price");
   const cardLink = document.getElementById("town-card-link");
+  const cardChat = document.getElementById("town-card-chat");
+  if (cardChat) {
+    cardChat.addEventListener("click", () => {
+      if (activeLot && window.__metaChat && window.__metaChat.openCurator) {
+        window.__metaChat.openCurator(activeLot.model);
+      }
+    });
+  }
 
   function fmtPrice(m) {
     const won = m.event_on && m.event_price ? m.event_price : m.base_price;
@@ -245,24 +253,88 @@ function init() {
     return sp;
   }
 
-  // 링 배치: 안쪽부터 채워 마을 형태로
-  function lotPositions(n) {
-    const rings = [
-      { r: 16.5, cap: 10 },
-      { r: 26.5, cap: 14 },
-      { r: 36.5, cap: 18 },
-    ];
+  // ---------- 전시장 존 (용도별 구역) ----------
+  // 카탈로그 category 필드 기준 자동 배치. 새 모델도 용도에 맞는 존에 자동으로 들어간다.
+  const ZONE_SPAN = Math.PI * 0.36; // 존 반각(±)
+  const ZONES = {
+    "전원주택": { angle: Math.PI * 0.25, label: "전원주택 존", emoji: "🏡", color: 0x69b25e },
+    "세컨하우스": { angle: Math.PI * 0.75, label: "세컨하우스 존", emoji: "🏠", color: 0x5e9db2 },
+    "체류형 쉼터": { angle: Math.PI * 1.25, label: "체류형 쉼터 존", emoji: "🌿", color: 0xb2a15e },
+    "특별모델": { angle: Math.PI * 1.75, label: "특별모델 존", emoji: "⛳", color: 0x9a7fc0 },
+  };
+  function zoneFor(cat) {
+    return ZONES[cat] ? cat : "특별모델";
+  }
+
+  // 부채꼴 바닥 지오메트리 (XZ 평면, 방향 규약을 코드로 고정)
+  function sectorGeometry(a0, a1, r0, r1, segs) {
+    const pos = [];
+    for (let i = 0; i < segs; i++) {
+      const s0 = a0 + ((a1 - a0) * i) / segs;
+      const s1 = a0 + ((a1 - a0) * (i + 1)) / segs;
+      const p = (a, r) => [Math.sin(a) * r, 0, Math.cos(a) * r];
+      pos.push(...p(s0, r0), ...p(s0, r1), ...p(s1, r1));
+      pos.push(...p(s0, r0), ...p(s1, r1), ...p(s1, r0));
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    return g;
+  }
+
+  // 존 바닥 틴트 + 입구 표지판
+  Object.entries(ZONES).forEach(([cat, z]) => {
+    const sector = new THREE.Mesh(
+      sectorGeometry(z.angle - ZONE_SPAN, z.angle + ZONE_SPAN, 11.5, 47, 18),
+      new THREE.MeshBasicMaterial({ color: z.color, transparent: true, opacity: 0.16, depthWrite: false })
+    );
+    sector.position.y = 0.006;
+    scene.add(sector);
+    const sign = nameSign(`${z.emoji} ${z.label}`);
+    sign.scale.set(6.4, 1.6, 1);
+    sign.position.set(Math.sin(z.angle) * 13, 3.1, Math.cos(z.angle) * 13);
+    scene.add(sign);
+  });
+
+  // 존 내부 슬롯: 안쪽 줄부터 부채꼴로 채움
+  function zoneSlots(count, zangle) {
+    const rings = [17, 25.5, 34, 42.5];
     const out = [];
-    let left = n;
-    rings.forEach((ring, ri) => {
-      const cnt = Math.min(ring.cap, left);
-      left -= cnt;
-      for (let i = 0; i < cnt; i++) {
-        const a = (i / cnt) * Math.PI * 2 + ri * 0.35;
-        out.push({ x: Math.sin(a) * ring.r, z: Math.cos(a) * ring.r, face: a + Math.PI });
+    let left = count;
+    for (let ri = 0; ri < rings.length && left > 0; ri++) {
+      const r = rings[ri];
+      const cap = Math.max(1, Math.floor((ZONE_SPAN * 2 * r) / 8.2));
+      const n = Math.min(cap, left);
+      for (let i = 0; i < n; i++) {
+        const a = n === 1 ? zangle : zangle - ZONE_SPAN * 0.85 + ((i + 0.5) / n) * ZONE_SPAN * 1.7;
+        out.push({ x: Math.sin(a) * r, z: Math.cos(a) * r, face: a + Math.PI });
       }
-    });
+      left -= n;
+    }
     return out;
+  }
+
+  // 인포메이션 데스크 (광장 중앙): 키오스크 + 표지판
+  const infoDesk = new THREE.Group();
+  {
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.15, 1.3, 1.1, 8),
+      new THREE.MeshStandardMaterial({ color: 0x2f5d46, roughness: 0.6 })
+    );
+    base.position.y = 0.55;
+    base.castShadow = true;
+    const top = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.5, 1.5, 0.14, 8),
+      new THREE.MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.5 })
+    );
+    top.position.y = 1.18;
+    top.castShadow = true;
+    const infoSign = nameSign("ℹ️ 인포메이션");
+    infoSign.scale.set(4.6, 1.15, 1);
+    infoSign.position.y = 3;
+    infoDesk.add(base, top, infoSign);
+    infoDesk.position.set(0, 0, -2.2);
+    scene.add(infoDesk);
   }
 
   const houseLots = []; // { wrap, model }
@@ -306,11 +378,19 @@ function init() {
   }
 
   function placeModels(models) {
-    const lots = lotPositions(models.length);
+    // 용도(category)별 존으로 그룹핑 후 존 내부 슬롯에 배치
+    const byZone = {};
+    models.forEach((m) => {
+      const zc = zoneFor(m.category);
+      (byZone[zc] = byZone[zc] || []).push(m);
+    });
+    const placement = [];
+    Object.entries(byZone).forEach(([zc, list]) => {
+      const slots = zoneSlots(list.length, ZONES[zc].angle);
+      list.forEach((m, i) => { if (slots[i]) placement.push([m, slots[i]]); });
+    });
     const catCounters = {};
-    models.forEach((m, i) => {
-      const lot = lots[i];
-      if (!lot) return;
+    placement.forEach(([m, lot], i) => {
       const c = m.category || "_";
       const idxInCat = catCounters[c] || 0;
       catCounters[c] = idxInCat + 1;
@@ -342,7 +422,7 @@ function init() {
   }
 
   fetch(
-    `${SB_URL}/rest/v1/models?select=slug,name,category,size,base_price,main_image,event_on,event_price&order=created_at.asc`,
+    `${SB_URL}/rest/v1/models?select=slug,name,category,size,base_price,main_image,event_on,event_price,rooms,bathrooms,short_description,features,badge&order=created_at.asc`,
     { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
   )
     .then((r) => { if (!r.ok) throw new Error("catalog"); return r.json(); })
@@ -363,6 +443,10 @@ function init() {
     });
     if (best === activeLot) return;
     activeLot = best;
+    // 메타봇 채팅에 현재 집 컨텍스트 전달 (큐레이터 모드)
+    if (window.__metaChat && window.__metaChat.setContext) {
+      window.__metaChat.setContext(best ? best.model : null);
+    }
     if (!best) { cardEl.hidden = true; return; }
     const m = best.model;
     cardTag.textContent = m.category || "메타하우스 모델";
@@ -721,6 +805,7 @@ function init() {
       selEl.hidden = true;
       setPlayerCharacter(selChar);
       joinRealtime();
+      maybeAutoInfo();
     });
   }
   if (charBtn) charBtn.addEventListener("click", openSelect);
@@ -728,28 +813,40 @@ function init() {
   if (myChar) {
     setPlayerCharacter(myChar);
     joinRealtime();
+    maybeAutoInfo();
   } else {
     setPlayerCharacter("robot");
     openSelect();
   }
 
-  // 광장의 안내 NPC 메타봇 — 다가가면 상담 채팅이 열린다
+  // 인포메이션의 안내 NPC 메타봇 — 다가가면 안내 채팅이 열린다
   let npcGroup = null;
   let npcNear = false;
   buildCharInstance("robot")
     .then((rig) => {
       const npc = new THREE.Group();
       npc.add(rig.obj);
-      const label = nameSign("메타봇 상담 🤖");
+      const label = nameSign("안내봇 메타봇 🤖");
       label.scale.set(2.8, 0.7, 1);
       label.position.y = 2.5;
       npc.add(label);
-      npc.position.set(3.4, 0, -3.4);
-      npc.rotation.y = Math.atan2(0 - 3.4, 4 + 3.4);
+      npc.position.set(2.2, 0, -2.2);
+      npc.rotation.y = Math.atan2(0 - 2.2, 4 + 2.2);
       scene.add(npc);
       npcGroup = npc;
     })
     .catch(() => {});
+
+  // 마을 첫 입장 시 인포 안내 자동 오픈 (세션당 1회)
+  function maybeAutoInfo() {
+    try {
+      if (sessionStorage.getItem("seum_info_greeted")) return;
+      sessionStorage.setItem("seum_info_greeted", "1");
+    } catch (e) {}
+    setTimeout(() => {
+      if (window.__metaChat && window.__metaChat.openInfo) window.__metaChat.openInfo();
+    }, 1600);
+  }
 
   // ---------- 입력 ----------
   const keys = new Set();
@@ -933,6 +1030,24 @@ function init() {
     mapCtx.clip();
     mapCtx.fillStyle = "#8fbe75";
     mapCtx.fillRect(0, 0, S, S);
+    // 존 부채꼴 + 이모지
+    Object.values(ZONES).forEach((z) => {
+      const t1 = Math.PI / 2 - (z.angle + ZONE_SPAN);
+      const t2 = Math.PI / 2 - (z.angle - ZONE_SPAN);
+      mapCtx.fillStyle = `#${z.color.toString(16).padStart(6, "0")}44`;
+      mapCtx.beginPath();
+      mapCtx.moveTo(c, c);
+      mapCtx.arc(c, c, 47 * scale, t1, t2);
+      mapCtx.closePath();
+      mapCtx.fill();
+      mapCtx.font = "13px sans-serif";
+      mapCtx.textAlign = "center";
+      mapCtx.textBaseline = "middle";
+      mapCtx.fillText(z.emoji, c + Math.sin(z.angle) * 40 * scale, c + Math.cos(z.angle) * 40 * scale);
+    });
+    // 인포메이션 위치
+    mapCtx.font = "11px sans-serif";
+    mapCtx.fillText("ℹ️", c, c - 2.2 * scale);
     mapCtx.strokeStyle = "rgba(210,200,178,0.95)";
     mapCtx.lineWidth = 4;
     [21.5, 31.5].forEach((r) => {
@@ -991,6 +1106,16 @@ function init() {
       setPlayerCharacter(charKey && CHARACTERS[charKey] ? charKey : myChar || "robot");
       joinRealtime();
     },
+    // 존 바로가기 (인포 안내봇의 순간이동 버튼)
+    gotoZone(cat) {
+      const z = ZONES[zoneFor(cat)];
+      player.position.x = Math.sin(z.angle) * 14.5;
+      player.position.z = Math.cos(z.angle) * 14.5;
+      heading = z.angle;
+      player.rotation.y = heading;
+      updateNearCard();
+    },
+    zones: Object.keys(ZONES),
   };
 
   function tick() {
@@ -1088,11 +1213,14 @@ function init() {
 
     broadcastPos(clock.elapsedTime, moving, sprinting);
 
-    // NPC 메타봇 근접 → 상담 채팅 열기 (멀어지면 다시 트리거 가능)
+    // NPC 메타봇 근접 → 인포 안내 채팅 열기 (멀어지면 다시 트리거 가능)
     if (npcGroup && window.__metaChat) {
       const nd = Math.hypot(npcGroup.position.x - player.position.x, npcGroup.position.z - player.position.z);
-      if (nd < 2.4 && !npcNear) { npcNear = true; window.__metaChat.open(); }
-      else if (nd > 4.5) npcNear = false;
+      if (nd < 2.6 && !npcNear) {
+        npcNear = true;
+        if (window.__metaChat.openInfo) window.__metaChat.openInfo();
+        else window.__metaChat.open();
+      } else if (nd > 4.8) npcNear = false;
     }
 
     clouds.forEach((c, i) => { c.position.x += dt * (0.25 + i * 0.05); if (c.position.x > 55) c.position.x = -55; });
