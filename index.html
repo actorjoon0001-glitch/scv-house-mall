@@ -81,7 +81,24 @@
           <button type="button" class="town__fs" id="town-fs" aria-label="전체화면 전환">
             <span class="town__fs-icon" aria-hidden="true">⛶</span><span id="town-fs-label">전체화면</span>
           </button>
-          <p class="town__hud"><span class="town__keys">W A S D</span> 이동 · <span class="town__keys">SHIFT</span> 달리기 · 조이스틱은 끝까지 밀면 달리기</p>
+          <button type="button" class="town__fs town__fs--char" id="town-char" aria-label="캐릭터 변경">
+            <span class="town__fs-icon" aria-hidden="true">👤</span>캐릭터
+          </button>
+          <button type="button" class="town__jump" id="town-jump" aria-label="점프">JUMP</button>
+          <div class="town__select" id="town-select" hidden>
+            <div class="town__select-panel">
+              <p class="town__select-eyebrow">SEUM 3D TOWN</p>
+              <h3 class="town__select-title">캐릭터를 선택하세요</h3>
+              <div class="town__select-grid" id="town-select-grid"></div>
+              <label class="town__select-nick">
+                닉네임
+                <input id="town-nick" maxlength="10" placeholder="방문객" autocomplete="off" />
+              </label>
+              <button type="button" class="btn btn--primary btn--block" id="town-enter">마을 입장하기</button>
+              <p class="town__select-hint">다른 방문자들에게 선택한 캐릭터와 닉네임이 보여요.</p>
+            </div>
+          </div>
+          <p class="town__hud"><span class="town__keys">W A S D</span> 이동 · <span class="town__keys">SHIFT</span> 달리기 · <span class="town__keys">SPACE</span> 점프</p>
           <div class="town__joystick" id="town-joystick" aria-label="이동 조이스틱">
             <div class="town__stick" id="town-stick"></div>
           </div>
@@ -259,6 +276,7 @@
   <script type="importmap">
     { "imports": { "three": "./assets/three.module.min.js" } }
   </script>
+  <script src="assets/supabase.js"></script>
   <script type="module" src="assets/town.js"></script>
   <script src="script.js"></script>
 </body>
