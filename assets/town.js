@@ -29,8 +29,14 @@ visIO.observe(stage);
 
 function init() {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  // dpr 1 모니터에서도 최소 1.6배로 슈퍼샘플링해 계단현상/뭉개짐 방지
-  const pixelRatio = () => Math.min(Math.max(window.devicePixelRatio || 1, 1.6), 2.5);
+  // dpr 1 모니터에서도 최소 1.6배로 슈퍼샘플링해 계단현상/뭉개짐 방지.
+  // 단, 프레임이 안 나오는 기기는 자동 품질 조절(qLevel)이 해상도를 단계적으로 낮춘다.
+  const Q_CAPS = [2.5, 1.6, 1.2, 0.9]; // qLevel별 픽셀비 상한
+  let qLevel = 0;
+  const pixelRatio = () => {
+    const base = qLevel === 0 ? Math.max(window.devicePixelRatio || 1, 1.6) : (window.devicePixelRatio || 1);
+    return Math.min(base, Q_CAPS[qLevel]);
+  };
   renderer.setPixelRatio(pixelRatio());
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -128,16 +134,34 @@ function init() {
   roadStrip(2.4, 92, -36.5, -25);
 
   // ---------- 울타리 + 정문 (부지 경계 마감) ----------
+  // 반복 장식(포스트·나무·생울타리 등)은 InstancedMesh로 묶어 드로우콜을 최소화한다
+  const IM_TMP = { m: new THREE.Matrix4(), p: new THREE.Vector3(), q: new THREE.Quaternion(), s: new THREE.Vector3(1, 1, 1) };
+  function buildInstanced(geo, mat, items) {
+    // items: [{x,y,z, sx,sy,sz, color}]
+    const im = new THREE.InstancedMesh(geo, mat, items.length);
+    items.forEach((it, i) => {
+      IM_TMP.m.compose(
+        IM_TMP.p.set(it.x, it.y, it.z),
+        IM_TMP.q,
+        IM_TMP.s.set(it.sx || 1, it.sy || 1, it.sz || 1)
+      );
+      im.setMatrixAt(i, IM_TMP.m);
+      if (it.color) im.setColorAt(i, it.color);
+    });
+    im.instanceMatrix.needsUpdate = true;
+    if (im.instanceColor) im.instanceColor.needsUpdate = true;
+    scene.add(im);
+    return im;
+  }
   const fenceMat = new THREE.MeshStandardMaterial({ color: 0xe8e2d2, roughness: 0.7 });
+  const fencePosts = [];
   function fenceRun(x1, z1, x2, z2) {
     const len = Math.hypot(x2 - x1, z2 - z1);
     const ang = Math.atan2(x2 - x1, z2 - z1);
     const n = Math.max(1, Math.round(len / 9));
     for (let i = 0; i <= n; i++) {
       const t = i / n;
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.32, 1.5, 0.32), fenceMat);
-      post.position.set(x1 + (x2 - x1) * t, 0.75, z1 + (z2 - z1) * t);
-      scene.add(post);
+      fencePosts.push({ x: x1 + (x2 - x1) * t, y: 0.75, z: z1 + (z2 - z1) * t });
     }
     [0.62, 1.28].forEach((y) => {
       const rail = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.12, len), fenceMat);
@@ -151,6 +175,7 @@ function init() {
   fenceRun(SITE.x, SITE.zN, SITE.x, SITE.zS); // 동
   fenceRun(-SITE.x, SITE.zS, -9, SITE.zS); // 남서 (정문 왼쪽)
   fenceRun(9, SITE.zS, SITE.x, SITE.zS); // 남동 (정문 오른쪽)
+  buildInstanced(new THREE.BoxGeometry(0.32, 1.5, 0.32), fenceMat, fencePosts); // 포스트 전체 1드로우
   // 정문 아치
   const archMat = new THREE.MeshStandardMaterial({ color: 0x2f5d46, roughness: 0.5 });
   [-9, 9].forEach((dx) => {
@@ -188,57 +213,49 @@ function init() {
   parkSign.position.set(30, 3, SITE.zS + 2.4);
   scene.add(parkSign);
 
-  // ---------- 조경 (통로·경계를 따라 규칙 배치) ----------
+  // ---------- 조경 (통로·경계를 따라 규칙 배치, 전체 4드로우) ----------
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8a6a4f, roughness: 1 });
-  const leafMat = new THREE.MeshStandardMaterial({ color: 0x4e8f4e, roughness: 0.9 });
-  const leafMat2 = new THREE.MeshStandardMaterial({ color: 0x67a860, roughness: 0.9 });
-  let treeIdx = 0;
-  function placeTree(x, z) {
-    const t = new THREE.Group();
-    const h = 2 + (treeIdx % 3) * 0.5;
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, h, 6), trunkMat);
-    trunk.position.y = h / 2;
-    trunk.castShadow = true;
-    const crown = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(1 + (treeIdx % 2) * 0.35, 0),
-      treeIdx % 2 ? leafMat : leafMat2
-    );
-    crown.position.y = h + 0.5;
-    crown.castShadow = true;
-    t.add(trunk, crown);
-    t.position.set(x, 0, z);
-    scene.add(t);
-    treeIdx++;
-  }
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }); // 실제 색은 인스턴스 컬러
+  const CROWN_COLS = [new THREE.Color(0x67a860), new THREE.Color(0x4e8f4e)];
+  const treeSpots = [];
   // 동·서 울타리 바깥 가로수
   for (let z = -76; z <= 28; z += 13) {
-    placeTree(-SITE.x - 4, z);
-    placeTree(SITE.x + 4, z);
+    treeSpots.push([-SITE.x - 4, z], [SITE.x + 4, z]);
   }
   // 북쪽 울타리 바깥 가로수
-  for (let x = -65; x <= 65; x += 13) placeTree(x, SITE.zN - 5);
+  for (let x = -65; x <= 65; x += 13) treeSpots.push([x, SITE.zN - 5]);
   // 정문 좌우 가로수 (주차장 자리는 비움)
-  [-16, -29, -42, -55, -68].forEach((x) => placeTree(x, SITE.zS + 4));
-  [52, 65].forEach((x) => placeTree(x, SITE.zS + 4));
+  [-16, -29, -42, -55, -68, 52, 65].forEach((x) => treeSpots.push([x, SITE.zS + 4]));
+  buildInstanced(
+    new THREE.CylinderGeometry(0.16, 0.22, 1, 6), // 단위 높이 → sy로 키 적용
+    trunkMat,
+    treeSpots.map(([x, z], i) => ({ x, y: (2 + (i % 3) * 0.5) / 2, z, sy: 2 + (i % 3) * 0.5 }))
+  );
+  buildInstanced(
+    new THREE.IcosahedronGeometry(1, 0),
+    leafMat,
+    treeSpots.map(([x, z], i) => {
+      const h = 2 + (i % 3) * 0.5;
+      const r = 1 + (i % 2) * 0.35;
+      return { x, y: h + 0.5, z, sx: r, sy: r, sz: r, color: CROWN_COLS[i % 2] };
+    })
+  );
   // 메인 대로 양옆 생울타리 + 꽃 화단 (통로 교차부는 비움)
   const hedgeMat = new THREE.MeshStandardMaterial({ color: 0x3f7a44, roughness: 0.9 });
   const flowerMat = new THREE.MeshStandardMaterial({ color: 0xd9799b, roughness: 0.8 });
+  const hedgeSpots = [];
+  const flowerSpots = [];
   let hedgeIdx = 0;
   for (let z = 16; z >= -72; z -= 7) {
     if (AISLES.some((a) => Math.abs(z - a) < 2.6)) continue;
     [-5.3, 5.3].forEach((x) => {
-      const hg = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.5, 0.9), hedgeMat);
-      hg.position.set(x, 0.25, z);
-      hg.castShadow = true;
-      scene.add(hg);
-      if (hedgeIdx % 2 === 0) {
-        const fl = new THREE.Mesh(new THREE.BoxGeometry(2, 0.18, 0.5), flowerMat);
-        fl.position.set(x, 0.58, z);
-        scene.add(fl);
-      }
+      hedgeSpots.push({ x, y: 0.25, z });
+      if (hedgeIdx % 2 === 0) flowerSpots.push({ x, y: 0.58, z });
       hedgeIdx++;
     });
   }
+  buildInstanced(new THREE.BoxGeometry(2.6, 0.5, 0.9), hedgeMat, hedgeSpots);
+  buildInstanced(new THREE.BoxGeometry(2, 0.18, 0.5), flowerMat, flowerSpots);
 
   // ---------- 구름 ----------
   const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
@@ -402,6 +419,7 @@ function init() {
 
   // 존 바닥 포장 슬래브 + 존 색 테두리 + 입구 게이트(기둥·간판) — 존 구분이 한눈에 보이게
   // 블록 내부는 잔디가 아니라 존 색이 섞인 포장으로 마감 (박람회 부스 단지 느낌)
+  const gatePillars = [], gateBeams = [], cornerPosts = []; // 인스턴스 수집용
   Object.values(ZONES).forEach((z) => {
     const minX = Math.min(...z.cols) - XP / 2;
     const maxX = Math.max(...z.cols) + XP / 2;
@@ -432,30 +450,26 @@ function init() {
     strip(maxX - minX, 0.7, cx, back);
     strip(0.7, front - back, minX, (front + back) / 2);
     strip(0.7, front - back, maxX, (front + back) / 2);
-    // 입구 게이트: 존 색 기둥 2개 + 상단 보 + 크게 띄운 간판
-    const gateMat = new THREE.MeshStandardMaterial({ color: z.color, roughness: 0.5 });
-    [-4.8, 4.8].forEach((dx) => {
-      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.55, 4.4, 0.55), gateMat);
-      pillar.position.set(cx + dx, 2.2, front + 1.4);
-      pillar.castShadow = true;
-      scene.add(pillar);
-    });
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(10.2, 0.55, 0.55), gateMat);
-    beam.position.set(cx, 4.55, front + 1.4);
-    beam.castShadow = true;
-    scene.add(beam);
+    // 입구 게이트(존 색 기둥 2개 + 상단 보) + 모서리 포스트 — 인스턴스 배열에 수집
+    const gc = new THREE.Color(z.color);
+    gatePillars.push(
+      { x: cx - 4.8, y: 2.2, z: front + 1.4, color: gc },
+      { x: cx + 4.8, y: 2.2, z: front + 1.4, color: gc }
+    );
+    gateBeams.push({ x: cx, y: 4.55, z: front + 1.4, color: gc });
     const sign = nameSign(`${z.emoji} ${z.label}`);
     sign.scale.set(7.6, 1.9, 1);
     sign.position.set(cx, 5.8, front + 1.4);
     scene.add(sign);
-    // 모서리 포스트 (존 색 말뚝)
     [[minX, front], [maxX, front], [minX, back], [maxX, back]].forEach(([px, pz]) => {
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.7, 0.45), gateMat);
-      post.position.set(px, 0.85, pz);
-      post.castShadow = true;
-      scene.add(post);
+      cornerPosts.push({ x: px, y: 0.85, z: pz, color: gc });
     });
   });
+  // 게이트·포스트 일괄 생성 (존 색은 인스턴스 컬러, 총 3드로우)
+  const gateMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+  buildInstanced(new THREE.BoxGeometry(0.55, 4.4, 0.55), gateMat, gatePillars);
+  buildInstanced(new THREE.BoxGeometry(10.2, 0.55, 0.55), gateMat, gateBeams);
+  buildInstanced(new THREE.BoxGeometry(0.45, 1.7, 0.45), gateMat, cornerPosts);
 
   // ---------- 파트너 존 부스 (입점 업체 전시 부스, 앞줄 0~2번 칸 고정) ----------
   const PARTNER_BOOTHS = {
@@ -1370,6 +1384,28 @@ function init() {
   const clock = new THREE.Clock();
   let heading = 0;
 
+  // ---------- 자동 품질 조절 (프레임 기준 해상도 단계 조정) ----------
+  let fpsTime = 0, fpsFrames = 0, qCooldown = 0;
+  function tuneQuality(dt) {
+    fpsTime += dt;
+    fpsFrames++;
+    qCooldown -= dt;
+    if (fpsTime < 2.5) return;
+    const fps = fpsFrames / fpsTime;
+    fpsTime = 0;
+    fpsFrames = 0;
+    if (qCooldown > 0) return;
+    if (fps < 32 && qLevel < Q_CAPS.length - 1) {
+      qLevel++;
+      renderer.setPixelRatio(pixelRatio());
+      qCooldown = 4; // 연속 강등 방지
+    } else if (fps > 55 && qLevel > 0) {
+      qLevel--;
+      renderer.setPixelRatio(pixelRatio());
+      qCooldown = 8; // 승격 후 출렁임 방지
+    }
+  }
+
   // 외부(시작 화면)·디버그용 훅
   window.__seumTown = {
     teleport(x, z) { player.position.x = x; player.position.z = z; updateNearCard(); },
@@ -1396,13 +1432,16 @@ function init() {
     zones: Object.keys(ZONES),
     // 디버그·연출용 카메라 (방위각 rad, 줌 배율)
     setCam(az, zoom) { if (az != null) camAz = az; if (zoom != null) camZoom = Math.max(0.55, Math.min(3.2, zoom)); },
+    quality: () => ({ qLevel, pixelRatio: renderer.getPixelRatio() }),
     _scene: scene,
   };
 
   function tick() {
     requestAnimationFrame(tick);
-    const dt = Math.min(clock.getDelta(), 0.05);
+    const rawDt = clock.getDelta();
+    const dt = Math.min(rawDt, 0.05); // 게임 로직용 클램프 (프레임 급락 시 순간이동 방지)
     if (!running) return;
+    tuneQuality(Math.min(rawDt, 1)); // FPS 측정은 실제 프레임 간격으로
 
     let mx = 0, mz = 0;
     if (keys.has("f")) mz -= 1;
