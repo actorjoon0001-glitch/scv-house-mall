@@ -231,49 +231,91 @@ function init() {
   }
 
   const houseLots = []; // { wrap, model }
-  let seedHouse = null;
+
+  // 수퍼베이스 모델 사진으로 변환한 3D 아키타입. 슬러그 일치 모델은 자기 3D를,
+  // 나머지는 같은 카테고리의 3D를 순환 배정받는다.
+  const HOUSE_GLBS = {
+    "stay-19rb": "assets/houses/stay-19rb.glb",
+    "stay24w": "assets/houses/stay24w.glb",
+    "stay20r": "assets/houses/stay20r.glb",
+    "stay18-b": "assets/houses/stay18-b.glb",
+    "stay14": "assets/houses/stay14.glb",
+    "cube9o": "assets/houses/cube9o.glb",
+    "forest10g": "assets/houses/forest10g.glb",
+    "forest10bb": "assets/houses/forest10bb.glb",
+    "cube-g-10w": "assets/houses/cube-g-10w.glb",
+  };
+  const CAT_POOL = {
+    "전원주택": ["stay-19rb", "stay24w", "stay20r", "stay18-b"],
+    "세컨하우스": ["stay14", "stay-19rb", "stay24w"],
+    "체류형 쉼터": ["cube9o", "forest10g", "forest10bb"],
+    "특별모델": ["cube-g-10w", "cube9o"],
+  };
+  const DEFAULT_GLB = "assets/house-3d.glb";
+
+  const glbCache = {};
+  function loadGlb(url) {
+    if (!glbCache[url]) {
+      glbCache[url] = new Promise((resolve, reject) =>
+        loader.load(url, (g) => { sharpen(g.scene); resolve(g.scene); }, undefined, reject)
+      );
+    }
+    return glbCache[url];
+  }
+
+  function archetypeFor(m, idxInCat) {
+    if (m.slug && HOUSE_GLBS[m.slug]) return HOUSE_GLBS[m.slug];
+    const pool = CAT_POOL[m.category];
+    if (pool && pool.length) return HOUSE_GLBS[pool[idxInCat % pool.length]];
+    return DEFAULT_GLB;
+  }
 
   function placeModels(models) {
-    if (!seedHouse) return;
     const lots = lotPositions(models.length);
+    const catCounters = {};
     models.forEach((m, i) => {
       const lot = lots[i];
       if (!lot) return;
-      const wrap = new THREE.Group();
-      const inst = seedHouse.clone(true);
-      const h = 3.4 + ((i * 2654435761) % 100) / 100 * 1.4; // 모델별 크기 변화
-      const castsShadow = i < 12; // 안쪽 링만 그림자 캐스팅 (성능)
-      inst.traverse((o) => { if (o.isMesh) { o.castShadow = castsShadow; o.receiveShadow = true; } });
-      normalize(inst, h);
-      inst.position.y -= h * 0.045;
-      wrap.add(inst);
-      const sign = nameSign(m.name);
-      sign.position.y = h + 1.1;
-      wrap.add(sign);
-      wrap.position.set(lot.x, 0, lot.z);
-      wrap.rotation.y = lot.face;
-      wrap.userData.model = m;
-      scene.add(wrap);
-      clickTargets.push(wrap);
-      houseLots.push({ wrap, model: m });
+      const c = m.category || "_";
+      const idxInCat = catCounters[c] || 0;
+      catCounters[c] = idxInCat + 1;
+      const url = archetypeFor(m, idxInCat);
+      loadGlb(url)
+        .catch(() => loadGlb(DEFAULT_GLB))
+        .then((seed) => {
+          const wrap = new THREE.Group();
+          const inst = seed.clone(true);
+          const h = 3.4 + ((i * 2654435761) % 100) / 100 * 1.4; // 모델별 크기 변화
+          const castsShadow = i < 12; // 안쪽 링만 그림자 캐스팅 (성능)
+          inst.traverse((o) => { if (o.isMesh) { o.castShadow = castsShadow; o.receiveShadow = true; } });
+          normalize(inst, h);
+          inst.position.y -= h * 0.045;
+          wrap.add(inst);
+          const sign = nameSign(m.name);
+          sign.position.y = h + 1.1;
+          wrap.add(sign);
+          wrap.position.set(lot.x, 0, lot.z);
+          wrap.rotation.y = lot.face;
+          wrap.userData.model = m;
+          scene.add(wrap);
+          clickTargets.push(wrap);
+          houseLots.push({ wrap, model: m });
+          updateNearCard();
+        })
+        .catch(() => {});
     });
-    updateNearCard();
   }
 
-  loader.load("assets/house-3d.glb", (glb) => {
-    sharpen(glb.scene);
-    seedHouse = glb.scene;
-    fetch(
-      `${SB_URL}/rest/v1/models?select=slug,name,category,size,base_price,main_image,event_on,event_price&order=created_at.asc`,
-      { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
-    )
-      .then((r) => { if (!r.ok) throw new Error("catalog"); return r.json(); })
-      .then((data) => {
-        const models = data.filter((m) => m.name);
-        placeModels(models.length ? models : TOWN_FALLBACK);
-      })
-      .catch(() => placeModels(TOWN_FALLBACK));
-  });
+  fetch(
+    `${SB_URL}/rest/v1/models?select=slug,name,category,size,base_price,main_image,event_on,event_price&order=created_at.asc`,
+    { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
+  )
+    .then((r) => { if (!r.ok) throw new Error("catalog"); return r.json(); })
+    .then((data) => {
+      const models = data.filter((m) => m.name);
+      placeModels(models.length ? models : TOWN_FALLBACK);
+    })
+    .catch(() => placeModels(TOWN_FALLBACK));
 
   // 가까운 집 안내 카드
   let activeLot = null;
@@ -306,6 +348,7 @@ function init() {
   scene.add(player);
   let mixer = null;
   let walkAction = null;
+  let runAction = null;
 
   // 스킨드 메시는 뼈대 변형 기준으로 바운딩을 재야 크기가 맞는다
   function skinnedBox(obj) {
@@ -341,6 +384,12 @@ function init() {
       walkAction = mixer.clipAction(glb.animations[0]);
       walkAction.play();
       walkAction.paused = true;
+      // 달리기 클립 (같은 리깅에서 뽑은 GLB — 본 이름이 동일해 재사용 가능)
+      loader.load("assets/robot-run.glb", (runGlb) => {
+        if (runGlb.animations && runGlb.animations.length) {
+          runAction = mixer.clipAction(runGlb.animations[0]);
+        }
+      }, undefined, () => {});
     }
     loadingEl.hidden = true;
   }, undefined, () => {
@@ -363,11 +412,13 @@ function init() {
 
   // ---------- 입력 ----------
   const keys = new Set();
+  let shiftHeld = false;
   const KEYMAP = {
     ArrowUp: "f", KeyW: "f", ArrowDown: "b", KeyS: "b",
     ArrowLeft: "l", KeyA: "l", ArrowRight: "r", KeyD: "r",
   };
   window.addEventListener("keydown", (e) => {
+    if (e.code === "ShiftLeft" || e.code === "ShiftRight") { shiftHeld = true; return; }
     const dir = KEYMAP[e.code];
     if (!dir || !running) return;
     const tag = document.activeElement && document.activeElement.tagName;
@@ -376,6 +427,7 @@ function init() {
     if (e.code.startsWith("Arrow")) e.preventDefault();
   });
   window.addEventListener("keyup", (e) => {
+    if (e.code === "ShiftLeft" || e.code === "ShiftRight") { shiftHeld = false; return; }
     const dir = KEYMAP[e.code];
     if (dir) keys.delete(dir);
   });
@@ -436,7 +488,8 @@ function init() {
   resize();
 
   // ---------- 루프 ----------
-  const SPEED = 5.2;
+  const WALK_SPEED = 5.2;
+  const RUN_SPEED = 11;
   const camOffset = new THREE.Vector3(0, 6.2, 9.5);
   const camPos = new THREE.Vector3().copy(player.position).add(camOffset);
   const lookAt = new THREE.Vector3();
@@ -462,11 +515,14 @@ function init() {
     if (joy.active) { mx += joy.x; mz += joy.y; }
     const mag = Math.min(Math.hypot(mx, mz), 1);
     const moving = mag > 0.12;
+    // Shift 또는 조이스틱을 끝까지 밀면 달리기
+    const sprinting = moving && (shiftHeld || (joy.active && mag > 0.94));
 
     if (moving) {
       const dir = Math.atan2(mx, mz);
-      player.position.x += Math.sin(dir) * SPEED * mag * dt;
-      player.position.z += Math.cos(dir) * SPEED * mag * dt;
+      const speed = sprinting ? RUN_SPEED : WALK_SPEED;
+      player.position.x += Math.sin(dir) * speed * mag * dt;
+      player.position.z += Math.cos(dir) * speed * mag * dt;
       const d = Math.hypot(player.position.x, player.position.z);
       if (d > WORLD_R) {
         player.position.x *= WORLD_R / d;
@@ -478,10 +534,20 @@ function init() {
       while (diff < -Math.PI) diff += Math.PI * 2;
       heading += diff * Math.min(1, dt * 10);
       player.rotation.y = heading;
-      if (walkAction) { walkAction.paused = false; walkAction.timeScale = 0.7 + mag * 0.6; }
+      const wantRun = sprinting && runAction;
+      const active = wantRun ? runAction : walkAction;
+      const idle = wantRun ? walkAction : runAction;
+      if (idle && idle.isRunning()) idle.stop();
+      if (active) {
+        if (!active.isRunning()) active.play();
+        active.paused = false;
+        // 달리기 클립이 없으면 걷기 재생속도를 올려 임시 대응
+        active.timeScale = wantRun ? 1.1 : (sprinting ? 1.8 : 0.7 + mag * 0.6);
+      }
       updateNearCard();
-    } else if (walkAction) {
-      walkAction.paused = true;
+    } else {
+      if (walkAction) walkAction.paused = true;
+      if (runAction) runAction.paused = true;
     }
     if (mixer) mixer.update(dt);
 
