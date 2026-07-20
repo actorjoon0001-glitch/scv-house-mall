@@ -11,6 +11,35 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <!-- 시작 화면 (START) -->
+  <div class="start" id="start" role="dialog" aria-modal="true" aria-label="메타하우스 시작 화면">
+    <div class="start__bg" aria-hidden="true">
+      <img src="assets/hero-house.webp" alt="" />
+    </div>
+    <div class="start__panel">
+      <p class="brand brand--lg start__brand"><span class="brand__mark">메타</span><span class="brand__sub">하우스</span></p>
+      <img class="start__bot" src="assets/chars/robot.webp" alt="메타봇" />
+      <h1 class="start__title">메타봇과 함께 걷는<br />3D 주택 마을</h1>
+      <p class="start__returning" id="start-returning" hidden><strong id="start-rname"></strong>님 다시 오셨네요! 바로 입장하세요 👋</p>
+      <div class="start__chars" id="start-chars"></div>
+      <div class="start__fields">
+        <label class="start__field">
+          <span>닉네임 <em>*</em></span>
+          <input id="start-nick" maxlength="10" placeholder="방문객" autocomplete="off" />
+        </label>
+        <label class="start__field">
+          <span>신규 모델·이벤트 알림 받기 <em class="start__opt">(선택)</em></span>
+          <input id="start-phone" type="tel" maxlength="20" placeholder="010-0000-0000" autocomplete="tel" />
+        </label>
+      </div>
+      <div class="start__btns">
+        <button type="button" class="btn btn--primary" id="start-town">🎮 3D 마을 둘러보기</button>
+        <button type="button" class="btn btn--glass" id="start-products">📋 모델·가격 바로 보기</button>
+      </div>
+      <button type="button" class="start__skip" id="start-skip">그냥 둘러볼게요</button>
+    </div>
+  </div>
+
   <header class="nav" id="nav">
     <div class="container nav__inner">
       <a href="#top" class="brand">
@@ -313,5 +342,6 @@
   <script type="module" src="assets/town.js"></script>
   <script src="script.js"></script>
   <script src="assets/chat.js"></script>
+  <script src="assets/start.js"></script>
 </body>
 </html>
