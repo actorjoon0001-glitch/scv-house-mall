@@ -57,13 +57,15 @@
         if (o.desc) c.short_description = o.desc;
         if (o.image) c.main_image = o.image;
         if (o.zone) c.category = o.zone;
-        if (o.curator === "m" || o.curator === "f") c.curator = o.curator;
+        if (o.curator === "m" || o.curator === "f" || o.curator === "bot") c.curator = o.curator;
         return c;
       });
   }
 
   // ---------- 배치 계산 (관리자 지도와 3D 마을이 공유하는 단일 규칙) ----------
-  const ZONE_ORDER = ["전원주택", "세컨하우스", "체류형 쉼터", "특별모델"];
+  const ZONE_ORDER = ["전원주택", "세컨하우스", "체류형 쉼터", "특별모델", "LG가전 이벤트", "가구", "건축 자재"];
+  // 파트너 존 앞줄(0~2번 칸)은 전시 부스 자리 — 모델 배치 불가
+  const RESERVED_SLOTS = { "LG가전 이벤트": [0, 1, 2], "가구": [0, 1, 2], "건축 자재": [0, 1, 2] };
   const keyOf = (m) => m.slug || m.name;
   // 명시 배치(overrides.placement[slug] = {zone,index,rot})를 먼저 고정하고,
   // 나머지는 (존 이동 반영된) 카탈로그 순서대로 빈 칸을 채운다.
@@ -75,12 +77,16 @@
       return ZONE_ORDER.includes(m.category) ? m.category : "특별모델";
     };
     const used = {};
+    const reservedOf = (z) => {
+      if (!used[z]) used[z] = new Set(RESERVED_SLOTS[z] || []);
+      return used[z];
+    };
     const out = {};
     models.forEach((m) => {
       const p = pov[keyOf(m)];
       if (!p || p.index == null) return;
       const z = zoneOf(m);
-      used[z] = used[z] || new Set();
+      reservedOf(z);
       if (!used[z].has(p.index)) {
         used[z].add(p.index);
         out[keyOf(m)] = { zone: z, index: p.index, rot: p.rot || 0 };
@@ -90,7 +96,7 @@
       const k = keyOf(m);
       if (out[k]) return;
       const z = zoneOf(m);
-      used[z] = used[z] || new Set();
+      reservedOf(z);
       let i = 0;
       while (used[z].has(i)) i++;
       used[z].add(i);
@@ -99,5 +105,5 @@
     return out;
   }
 
-  window.SeumTownConfig = { load, save, apply, computePlacement, keyOf, ZONE_ORDER, SB_URL, SB_KEY };
+  window.SeumTownConfig = { load, save, apply, computePlacement, keyOf, ZONE_ORDER, RESERVED_SLOTS, SB_URL, SB_KEY };
 })();

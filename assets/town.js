@@ -108,7 +108,8 @@ function init() {
   // 메인 도로 (남북) + 줄 사이 통로 (동서)
   roadStrip(6, 120, 0, -26);
   const AISLES = [17.5, 6.5, -4.5, -15.5, -26.5, -37.5, -48.5, -59.5, -70.5];
-  AISLES.forEach((z) => roadStrip(82, 3, 0, z));
+  // 바깥 파트너 블록(가전·가구·자재 존)까지 통로 연장
+  AISLES.forEach((z) => roadStrip(152, 3, 0, z));
 
   // ---------- 나무 ----------
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8a6a4f, roughness: 1 });
@@ -277,6 +278,10 @@ function init() {
     "세컨하우스": { label: "세컨하우스 존", emoji: "🏠", color: 0x5e9db2, cols: [-35, -24, -13], rowStart: 12, entry: { x: -24, z: 19 } },
     // 남동 블록
     "특별모델": { label: "특별모델 존", emoji: "⛳", color: 0x9a7fc0, cols: [13, 24, 35], rowStart: 12, entry: { x: 24, z: 19 } },
+    // ---- 파트너 존 (바깥 블록: 입점 업체·이벤트 전시) ----
+    "LG가전 이벤트": { label: "LG가전 이벤트 존", emoji: "📺", color: 0xa50034, cols: [48, 59, 70], rowStart: -21, rows: 2, partner: true, entry: { x: 59, z: -14 } },
+    "가구": { label: "가구 존", emoji: "🛋️", color: 0xd08a3e, cols: [48, 59, 70], rowStart: 12, rows: 2, partner: true, entry: { x: 59, z: 19 } },
+    "건축 자재": { label: "건축 자재 존", emoji: "🧱", color: 0x60788f, cols: [-70, -59, -48], rowStart: -21, rows: 2, partner: true, entry: { x: -59, z: -14 } },
   };
   function zoneFor(cat) {
     return ZONES[cat] ? cat : "특별모델";
@@ -288,25 +293,98 @@ function init() {
     return { x: col, z: row };
   }
 
-  // 존 바닥 틴트(사각) + 입구 표지판
+  // 존 바닥 틴트 + 존 색 테두리 + 입구 게이트(기둥·간판) — 존 구분이 한눈에 보이게
   Object.values(ZONES).forEach((z) => {
     const minX = Math.min(...z.cols) - PITCH / 2;
     const maxX = Math.max(...z.cols) + PITCH / 2;
-    const rows = z.rowStart < 0 ? 6 : 3; // 북쪽 블록은 깊게 (모델 수가 많음)
+    const rows = z.rows || (z.rowStart < 0 ? 6 : 3); // 북쪽 블록은 깊게 (모델 수가 많음)
     z.rowsDeep = rows;
     const front = z.rowStart + PITCH / 2;
     const back = z.rowStart - (rows - 0.5) * PITCH;
+    const cx = (minX + maxX) / 2;
     const tint = new THREE.Mesh(
       new THREE.PlaneGeometry(maxX - minX, front - back),
-      new THREE.MeshBasicMaterial({ color: z.color, transparent: true, opacity: 0.15, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: z.color, transparent: true, opacity: 0.3, depthWrite: false })
     );
     tint.rotation.x = -Math.PI / 2;
-    tint.position.set((minX + maxX) / 2, 0.006, (front + back) / 2);
+    tint.position.set(cx, 0.006, (front + back) / 2);
     scene.add(tint);
+    // 존 둘레 테두리 띠
+    const frameMat = new THREE.MeshBasicMaterial({ color: z.color, transparent: true, opacity: 0.75, depthWrite: false });
+    const strip = (w, d, x, zz) => {
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(w, d), frameMat);
+      s.rotation.x = -Math.PI / 2;
+      s.position.set(x, 0.012, zz);
+      scene.add(s);
+    };
+    strip(maxX - minX, 0.7, cx, front);
+    strip(maxX - minX, 0.7, cx, back);
+    strip(0.7, front - back, minX, (front + back) / 2);
+    strip(0.7, front - back, maxX, (front + back) / 2);
+    // 입구 게이트: 존 색 기둥 2개 + 상단 보 + 크게 띄운 간판
+    const gateMat = new THREE.MeshStandardMaterial({ color: z.color, roughness: 0.5 });
+    [-4.8, 4.8].forEach((dx) => {
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.55, 4.4, 0.55), gateMat);
+      pillar.position.set(cx + dx, 2.2, front + 1.4);
+      pillar.castShadow = true;
+      scene.add(pillar);
+    });
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(10.2, 0.55, 0.55), gateMat);
+    beam.position.set(cx, 4.55, front + 1.4);
+    beam.castShadow = true;
+    scene.add(beam);
     const sign = nameSign(`${z.emoji} ${z.label}`);
-    sign.scale.set(6.4, 1.6, 1);
-    sign.position.set((minX + maxX) / 2, 3.1, front + 1.2);
+    sign.scale.set(7.6, 1.9, 1);
+    sign.position.set(cx, 5.8, front + 1.4);
     scene.add(sign);
+    // 모서리 포스트 (존 색 말뚝)
+    [[minX, front], [maxX, front], [minX, back], [maxX, back]].forEach(([px, pz]) => {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.7, 0.45), gateMat);
+      post.position.set(px, 0.85, pz);
+      post.castShadow = true;
+      scene.add(post);
+    });
+  });
+
+  // ---------- 파트너 존 부스 (입점 업체 전시 부스, 앞줄 0~2번 칸 고정) ----------
+  const PARTNER_BOOTHS = {
+    "LG가전 이벤트": ["📺 LG 가전 체험관", "🎉 이벤트 특가관", "🏠 스마트홈관"],
+    "가구": ["🛋️ 리빙 가구관", "🌤️ 아웃도어 가구관", "🤝 입점 문의"],
+    "건축 자재": ["🪟 단열·창호관", "🧱 마감재관", "🤝 입점 문의"],
+  };
+  Object.entries(PARTNER_BOOTHS).forEach(([zk, labels]) => {
+    const z = ZONES[zk];
+    if (!z) return;
+    const wallMat = new THREE.MeshStandardMaterial({ color: z.color, roughness: 0.7 });
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0xeae4d6, roughness: 0.9 });
+    const counterMat = new THREE.MeshStandardMaterial({ color: 0xf6f3ea, roughness: 0.6 });
+    labels.forEach((label, i) => {
+      const slot = zoneSlot(z, i);
+      const b = new THREE.Group();
+      const floor = new THREE.Mesh(new THREE.BoxGeometry(5.8, 0.24, 5.8), floorMat);
+      floor.position.y = 0.12;
+      floor.receiveShadow = true;
+      const backWall = new THREE.Mesh(new THREE.BoxGeometry(5.8, 2.7, 0.3), wallMat);
+      backWall.position.set(0, 1.59, -2.75);
+      backWall.castShadow = true;
+      const sideL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.7, 3.2), wallMat);
+      sideL.position.set(-2.75, 1.59, -1.3);
+      sideL.castShadow = true;
+      const sideR = sideL.clone();
+      sideR.position.x = 2.75;
+      const counter = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.95, 0.9), counterMat);
+      counter.position.set(0, 0.71, 1.5);
+      counter.castShadow = true;
+      const canopy = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.16, 2.8), wallMat);
+      canopy.position.set(0, 3.15, 0.7);
+      canopy.rotation.x = -0.14;
+      canopy.castShadow = true;
+      const sign = nameSign(label);
+      sign.position.y = 4;
+      b.add(floor, backWall, sideL, sideR, counter, canopy, sign);
+      b.position.set(slot.x, 0, slot.z);
+      scene.add(b);
+    });
   });
 
   // 인포메이션 데스크 (남쪽 입구 광장)
@@ -440,10 +518,11 @@ function init() {
   const CURATORS = {
     m: { glb: "assets/chars/suitman.glb", height: 1.78 },
     f: { glb: "assets/chars/suitwoman.glb", height: 1.7 },
+    bot: { glb: "assets/robot-walk.glb", height: 1.55 }, // 메타봇 큐레이터
   };
   const curatorRigs = []; // { wrap, mixer }
   function curatorGender(model, idxInCat) {
-    if (model.curator === "m" || model.curator === "f") return model.curator;
+    if (model.curator === "m" || model.curator === "f" || model.curator === "bot") return model.curator;
     return idxInCat % 2 === 0 ? "f" : "m";
   }
   function placeCurator(wrap, gender) {
@@ -1123,7 +1202,7 @@ function init() {
     mapCtx.fillStyle = "rgba(210,200,178,0.95)";
     mapCtx.fillRect(c - 3 * scale, c - 86 * scale, 6 * scale, 120 * scale);
     AISLES.forEach((z) => {
-      mapCtx.fillRect(c - 41 * scale, c + (z - 1.5) * scale, 82 * scale, 3 * scale);
+      mapCtx.fillRect(c - 76 * scale, c + (z - 1.5) * scale, 152 * scale, 3 * scale);
     });
     // 입구 광장 + 인포메이션
     mapCtx.fillStyle = "#d9cfbb";

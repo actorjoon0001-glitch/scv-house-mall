@@ -187,6 +187,7 @@
   const CURATOR_PERSONAS = {
     m: { name: "준 큐레이터", icon: "assets/chars/suitman.webp", role: "" },
     f: { name: "수아 큐레이터", icon: "assets/chars/suitwoman.webp", role: "" },
+    bot: { name: "메타봇", icon: "assets/chars/robot.webp", role: "큐레이터" },
   };
   function personaFor(model) {
     const c = model && model.character;
@@ -363,7 +364,12 @@
     ["세컨하우스", "🏠"],
     ["체류형 쉼터", "🌿"],
     ["특별모델", "⛳"],
+    ["LG가전 이벤트", "📺"],
+    ["가구", "🛋️"],
+    ["건축 자재", "🧱"],
   ];
+  // 파트너 존: 주택이 아니라 입점 업체 전시 블록 (예산 질문 대신 입점 안내)
+  const PARTNER_ZONES = ["LG가전 이벤트", "가구", "건축 자재"];
   const BUDGETS = ["5천만 이하", "5천~8천", "8천~1억", "1억 이상"];
 
   function askBudget() {
@@ -394,10 +400,15 @@
       b.textContent = `${emoji} ${cat}`;
       b.addEventListener("click", () => {
         bubble(`${cat} 보러 왔어요`, "me");
-        try { localStorage.setItem("seum_pref_use", cat); } catch (e) {}
         const canGo = window.__seumTown && window.__seumTown.gotoZone;
-        botSay(`${cat} 보러 오셨군요 ${emoji} ${cat} 존은 마을 ${zoneDirection(cat)}이에요!\n바로 데려다드릴까요? 예산대도 알려주시면 딱 맞는 집만 골라드려요.`,
-          canGo ? [{ label: `🚀 ${cat} 존으로 이동`, action: () => { closeChat(); window.__seumTown.gotoZone(cat); } }] : []);
+        const goBtn = canGo ? [{ label: `🚀 ${cat} 존으로 이동`, action: () => { closeChat(); window.__seumTown.gotoZone(cat); } }] : [];
+        if (PARTNER_ZONES.includes(cat)) {
+          botSay(`${cat} 존은 마을 ${zoneDirection(cat)}에 새로 생긴 파트너 전시 블록이에요 ${emoji}\n입점 업체를 모집 중이니 구경해보시고, 입점·제휴 문의도 환영해요!`,
+            goBtn.concat([{ label: "🤝 입점·제휴 문의", action: goContact }]));
+          return;
+        }
+        try { localStorage.setItem("seum_pref_use", cat); } catch (e) {}
+        botSay(`${cat} 보러 오셨군요 ${emoji} ${cat} 존은 마을 ${zoneDirection(cat)}이에요!\n바로 데려다드릴까요? 예산대도 알려주시면 딱 맞는 집만 골라드려요.`, goBtn);
         askBudget();
       });
       quickEl.appendChild(b);
@@ -411,7 +422,10 @@
   }
 
   function zoneDirection(cat) {
-    return { "전원주택": "북서 블록", "체류형 쉼터": "북동 블록", "세컨하우스": "남서 블록", "특별모델": "남동 블록" }[cat] || "안쪽";
+    return {
+      "전원주택": "북서 블록", "체류형 쉼터": "북동 블록", "세컨하우스": "남서 블록", "특별모델": "남동 블록",
+      "LG가전 이벤트": "북동 바깥 블록", "가구": "남동 바깥 블록", "건축 자재": "북서 바깥 블록",
+    }[cat] || "안쪽";
   }
 
   function openInfo() {

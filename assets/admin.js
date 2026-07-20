@@ -1,13 +1,16 @@
 // ============ 메타하우스 관리자 (1단계: 모델 표시 설정 · 2단계: 배치 지도) ============
 (function () {
   const CFG = window.SeumTownConfig;
-  const ZONES = ["전원주택", "세컨하우스", "체류형 쉼터", "특별모델"];
-  // 지도 표시용 존 메타 (마을과 동일한 2×2 블록, 북쪽이 위)
+  const ZONES = ["전원주택", "세컨하우스", "체류형 쉼터", "특별모델", "LG가전 이벤트", "가구", "건축 자재"];
+  // 지도 표시용 존 메타 (마을과 동일한 블록 배치, 북쪽이 위 / 아래 3개는 바깥 파트너 블록)
   const MAP_ZONES = [
     { key: "전원주택", emoji: "🏡", color: "#69b25e" },   // 북서
     { key: "체류형 쉼터", emoji: "🌿", color: "#b2a15e" }, // 북동
     { key: "세컨하우스", emoji: "🏠", color: "#5e9db2" },  // 남서
     { key: "특별모델", emoji: "⛳", color: "#9a7fc0" },    // 남동
+    { key: "건축 자재", emoji: "🧱", color: "#60788f" },   // 북서 바깥
+    { key: "LG가전 이벤트", emoji: "📺", color: "#a50034" }, // 북동 바깥
+    { key: "가구", emoji: "🛋️", color: "#d08a3e" },       // 남동 바깥
   ];
   const ROT_ARROW = { 0: "↓", 90: "→", 180: "↑", 270: "←" };
   // 관리자 비밀번호(SHA-256). 변경하려면 새 비밀번호의 sha256 hex로 교체.
@@ -88,9 +91,37 @@
     }
   }
 
+  // ---- 존 탭 필터: 목록을 존별로 나눠서 보기 ----
+  let zoneFilter = "all";
+  // 모델의 실제 소속 존 (관리자 존 오버라이드 반영, 미지정 카테고리는 특별모델)
+  function effZone(m) {
+    const o = overrides.models[m.slug];
+    const z = (o && o.zone) || m.category;
+    return ZONES.includes(z) ? z : "특별모델";
+  }
+  function renderTabs() {
+    const tabsEl = document.getElementById("zone-tabs");
+    if (!tabsEl) return;
+    const counts = {};
+    catalog.forEach((m) => { const z = effZone(m); counts[z] = (counts[z] || 0) + 1; });
+    const mk = (key, label) =>
+      `<button type="button" class="tab${zoneFilter === key ? " is-active" : ""}" data-zf="${esc(key)}">${esc(label)}</button>`;
+    tabsEl.innerHTML =
+      mk("all", `전체 ${catalog.length}`) +
+      ZONES.map((z) => mk(z, `${z} ${counts[z] || 0}`)).join("");
+    tabsEl.querySelectorAll(".tab").forEach((b) =>
+      b.addEventListener("click", () => {
+        zoneFilter = b.dataset.zf;
+        renderTabs();
+        render();
+      })
+    );
+  }
+
   function render() {
     rowsEl.innerHTML = "";
     catalog.forEach((m) => {
+      if (zoneFilter !== "all" && effZone(m) !== zoneFilter) return;
       const o = overrides.models[m.slug] || {};
       const tr = document.createElement("tr");
       if (o.hidden) tr.classList.add("is-hidden-row");
@@ -105,9 +136,10 @@
           ${ZONES.map((z) => `<option value="${z}" ${o.zone === z ? "selected" : ""}>${z}</option>`).join("")}
         </select></td>
         <td><select data-f="curator">
-          <option value="">자동</option>
-          <option value="f" ${o.curator === "f" ? "selected" : ""}>여성</option>
-          <option value="m" ${o.curator === "m" ? "selected" : ""}>남성</option>
+          <option value="">자동 (여/남 교차)</option>
+          <option value="f" ${o.curator === "f" ? "selected" : ""}>수아 큐레이터 (여)</option>
+          <option value="m" ${o.curator === "m" ? "selected" : ""}>준 큐레이터 (남)</option>
+          <option value="bot" ${o.curator === "bot" ? "selected" : ""}>메타봇 (로봇)</option>
         </select></td>
         <td><input type="text" data-f="desc" placeholder="${esc((m.short_description || "").slice(0, 30))}" value="${esc(o.desc || "")}" /></td>
         <td><input type="text" data-f="image" placeholder="원본 사진 사용" value="${esc(o.image || "")}" /></td>`;
@@ -134,7 +166,7 @@
     cleanOv(slug);
     savedMsg.textContent = "변경됨 (저장 필요)";
     savedMsg.style.color = "#f0c674";
-    if (f === "show" || f === "zone" || f === "name") renderMap(); // 지도에 영향 주는 필드
+    if (f === "show" || f === "zone" || f === "name") { renderMap(); renderTabs(); } // 지도·탭에 영향 주는 필드
   }
 
   function esc(s) {
@@ -216,6 +248,18 @@
           cell.className = "map-cell";
           cell.dataset.zone = mz.key;
           cell.dataset.index = idx;
+          // 파트너 부스 예약 칸: 모델 배치 불가
+          const reserved = (CFG.RESERVED_SLOTS && CFG.RESERVED_SLOTS[mz.key] || []).includes(idx);
+          if (reserved) {
+            cell.style.cursor = "default";
+            const chip = document.createElement("div");
+            chip.className = "map-chip";
+            chip.style.opacity = "0.55";
+            chip.innerHTML = `<span class="rot">🤝</span><span class="nm">파트너 부스</span>`;
+            cell.appendChild(chip);
+            gridEl.appendChild(cell);
+            continue;
+          }
           const k = inZone.find((k2) => plan[k2].index === idx);
           if (k) {
             const m = byKey[k];
@@ -289,6 +333,7 @@
     overrides = Object.assign({ models: {} }, loaded.data);
     if (!overrides.models) overrides.models = {};
     setStatus(loaded.source);
+    renderTabs();
     render();
     renderMap();
   }
