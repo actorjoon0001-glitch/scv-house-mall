@@ -418,24 +418,28 @@ body.town-fs-lock { overflow: hidden; }
 .town__card[hidden] { display: none; }
 .town__card {
   position: absolute;
-  right: 18px;
-  bottom: 18px;
+  left: 0;
+  top: 0;
   display: flex;
   align-items: center;
   gap: 14px;
-  max-width: min(420px, calc(100% - 36px));
+  width: max-content;
+  max-width: min(420px, 90%);
   padding: 14px;
-  background: rgba(16,19,15,0.72);
-  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(16,19,15,0.78);
+  border: 1px solid rgba(255,255,255,0.2);
   border-radius: 16px;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   color: #fff;
-  animation: town-card-in .35s var(--ease);
+  will-change: transform;
+  pointer-events: auto;
+  animation: town-card-in .3s var(--ease);
+  z-index: 2;
 }
 @keyframes town-card-in {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .town__card img {
   width: 96px;
@@ -455,7 +459,7 @@ body.town-fs-lock { overflow: hidden; }
   .town__hud { font-size: 12px; }
 }
 @media (max-width: 640px) {
-  .town__card { right: 12px; left: auto; bottom: 12px; padding: 10px; gap: 10px; }
+  .town__card { padding: 10px; gap: 10px; }
   .town__card img { width: 72px; height: 56px; }
   .town__card-name { font-size: 15px; }
 }

@@ -299,7 +299,7 @@ function init() {
           wrap.userData.model = m;
           scene.add(wrap);
           clickTargets.push(wrap);
-          houseLots.push({ wrap, model: m });
+          houseLots.push({ wrap, model: m, h });
           updateNearCard();
         })
         .catch(() => {});
@@ -341,6 +341,24 @@ function init() {
       cardLink.hidden = false;
     } else cardLink.hidden = true;
     cardEl.hidden = false;
+    positionCard();
+  }
+
+  // 카드를 해당 집 앞(3D 위치를 화면 좌표로 투영)에 붙인다
+  const cardAnchor = new THREE.Vector3();
+  function positionCard() {
+    if (!activeLot || !cardEl || cardEl.hidden) return;
+    const { wrap, h } = activeLot;
+    cardAnchor.set(wrap.position.x, h * 0.72, wrap.position.z).project(camera);
+    if (cardAnchor.z > 1) { cardEl.style.opacity = "0"; return; }
+    const w = stage.clientWidth, ht = stage.clientHeight;
+    let x = (cardAnchor.x + 1) / 2 * w;
+    let y = (1 - cardAnchor.y) / 2 * ht;
+    const half = Math.min(220, w * 0.45);
+    x = Math.max(half + 8, Math.min(w - half - 8, x));
+    y = Math.max(120, Math.min(ht - 20, y));
+    cardEl.style.opacity = "1";
+    cardEl.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -100%)`;
   }
 
   // ---------- 캐릭터 (세움봇) ----------
@@ -590,6 +608,7 @@ function init() {
     lookAt.lerp(new THREE.Vector3(player.position.x, player.position.y + 1.2, player.position.z), 1 - Math.pow(0.0005, dt));
     camera.lookAt(lookAt);
 
+    positionCard();
     renderer.render(scene, camera);
   }
   tick();
