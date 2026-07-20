@@ -686,6 +686,7 @@ body.town-fs-lock { overflow: hidden; }
 .town__card-spec { margin: 0; font-size: 12px; color: rgba(255,255,255,0.7); }
 .town__card-price { margin: 2px 0 0; font-size: 14px; font-weight: 700; }
 .town__card .btn { flex-shrink: 0; }
+.town__card-btns { display: grid; gap: 6px; flex-shrink: 0; }
 @media (pointer: coarse) {
   .town__hud { font-size: 12px; }
 }
@@ -1050,6 +1051,12 @@ body.town-fs-lock .chat__fab, body.town-fs-lock .chat__panel { display: none; }
 .chat__msg--bot { background: rgba(255,255,255,0.1); border-bottom-left-radius: 4px; align-self: flex-start; }
 .chat__msg--me { background: var(--accent); border-bottom-right-radius: 4px; align-self: flex-end; }
 .chat__msg--typing { color: rgba(255,255,255,0.5); letter-spacing: 0.2em; }
+.chat__img {
+  max-width: 78%;
+  border-radius: 12px;
+  align-self: flex-start;
+  border: 1px solid rgba(255,255,255,0.15);
+}
 .chat__ctas { display: flex; flex-wrap: wrap; gap: 6px; align-self: flex-start; }
 .chat__cta {
   padding: 8px 14px;

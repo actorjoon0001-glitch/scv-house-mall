@@ -118,6 +118,27 @@ loadModels();
 
 // ============ LEAD FORM (Netlify Forms) ============
 const form = document.getElementById("lead-form");
+
+// 3D 타운(큐레이터·인포)에서 넘어온 관심 정보로 폼 프리필
+try {
+  const interestModel = localStorage.getItem("seum_interest_model");
+  const prefUse = localStorage.getItem("seum_pref_use");
+  const prefBudget = localStorage.getItem("seum_pref_budget");
+  const memoEl = document.getElementById("memo");
+  if (memoEl && !memoEl.value && (interestModel || prefUse)) {
+    memoEl.value = [interestModel ? `관심 모델: ${interestModel}` : "", prefUse ? `용도: ${prefUse}` : ""]
+      .filter(Boolean)
+      .join(" / ");
+  }
+  const interestSel = document.getElementById("interest");
+  if (interestSel && prefUse) {
+    [...interestSel.options].forEach((o) => { if (o.value.startsWith(prefUse.slice(0, 3))) interestSel.value = o.value; });
+  }
+  const budgetSel = document.getElementById("budget");
+  if (budgetSel && prefBudget) {
+    [...budgetSel.options].forEach((o) => { if (o.value === prefBudget) budgetSel.value = o.value; });
+  }
+} catch (e) {}
 if (form) {
   form.addEventListener("submit", (e) => {
     e.preventDefault();
