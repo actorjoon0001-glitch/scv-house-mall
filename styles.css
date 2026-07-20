@@ -307,6 +307,79 @@ button { background: none; border: 0; cursor: pointer; }
   font-size: 14px;
   letter-spacing: 0.06em;
 }
+/* ---- 3D TOWN 독립 페이지 ---- */
+body.town-page {
+  overflow: hidden;
+  background: #10130f;
+}
+.town-page .town__stage {
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+  border-radius: 0;
+  border: 0;
+}
+.town-page #town-fs { right: 118px; }
+.town__exit {
+  right: 14px;
+  text-decoration: none;
+  background: rgba(160,50,40,0.55);
+}
+.town__exit:hover { background: rgba(160,50,40,0.8); }
+.town__nickchip {
+  position: absolute;
+  top: 60px;
+  left: 14px;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #d9f4e5;
+  background: rgba(16,19,15,0.5);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 9999px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 3;
+  pointer-events: none;
+}
+.town__nickchip[hidden] { display: none; }
+.town-page .chat__fab { bottom: auto; top: 56px; right: 14px; width: 44px; height: 44px; }
+.town-page .chat__panel { bottom: auto; top: 110px; right: 14px; }
+
+/* ---- 랜딩의 타운 입장 배너 ---- */
+.townbanner { background: #10130f; color: #fff; }
+.townbanner__inner {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: clamp(28px, 5vw, 60px);
+  align-items: center;
+}
+.townbanner .head__title { color: #fff; }
+.townbanner__thumb {
+  position: relative;
+  display: block;
+  border-radius: calc(var(--r) + 6px);
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.14);
+}
+.townbanner__thumb img { width: 100%; display: block; transition: transform .5s var(--ease); }
+.townbanner__thumb:hover img { transform: scale(1.04); }
+.townbanner__play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 54px;
+  background: rgba(10,13,10,0.25);
+  transition: background .25s var(--ease);
+}
+.townbanner__thumb:hover .townbanner__play { background: rgba(10,13,10,0.12); }
+.townbanner__sub { color: rgba(255,255,255,0.72); margin: 14px 0 22px; font-size: 15px; }
+@media (max-width: 900px) {
+  .townbanner__inner { grid-template-columns: 1fr; }
+}
+
 /* ---- 3D TOWN (game) ---- */
 .town__stage {
   position: relative;

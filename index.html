@@ -46,7 +46,7 @@
         <span class="brand__mark">메타</span><span class="brand__sub">하우스</span>
       </a>
       <nav class="nav__links" aria-label="Primary">
-        <a href="#viewer">3D 타운</a>
+        <a href="town.html">3D 타운</a>
         <a href="#products">제품</a>
         <a href="#why">메타하우스가 다른 이유</a>
         <a href="#gallery">시공사례</a>
@@ -86,71 +86,27 @@
           </ul>
         </div>
       </div>
-      <a href="#viewer" class="hero__scroll" aria-label="아래로 스크롤">
+      <a href="#town-banner" class="hero__scroll" aria-label="아래로 스크롤">
         <span class="hero__scroll-label">SCROLL</span>
         <span class="hero__scroll-line"></span>
       </a>
     </section>
 
-    <!-- METAHOUSE 3D TOWN -->
-    <section class="viewer town" id="viewer">
-      <div class="container">
-        <div class="head">
-          <p class="eyebrow eyebrow--light">METAHOUSE 3D TOWN</p>
-          <h2 class="head__title">메타봇과 함께 걷는 3D 타운</h2>
-          <p class="viewer__sub">
-            메타하우스의 건축 마스코트 <strong>메타봇</strong>과 함께 마을을 걸어보세요.
-            카탈로그의 <strong>실제 판매 모델 전체</strong>가 마을에 놓여 있고,
-            집에 가까이 가면 실사진과 가격이 나타납니다. 집을 클릭하면 상세 페이지로 이동합니다.
+    <!-- 3D TOWN 입장 배너 -->
+    <section class="section townbanner" id="town-banner">
+      <div class="container townbanner__inner">
+        <a class="townbanner__thumb" href="town.html" aria-label="3D 마을 입장">
+          <img src="assets/town-preview.webp" alt="메타하우스 3D 타운 미리보기" loading="lazy" />
+          <span class="townbanner__play" aria-hidden="true">🎮</span>
+        </a>
+        <div class="townbanner__copy">
+          <p class="eyebrow">METAHOUSE 3D TOWN</p>
+          <h2 class="head__title">메타봇과 함께 걷는<br/>3D 주택 마을</h2>
+          <p class="townbanner__sub">
+            실제 판매 모델 전체가 놓인 마을을 게임처럼 걸어다니며 구경하세요.
+            집에 가까이 가면 실사진과 가격이 나타나고, 다른 방문자들과 함께 걸을 수 있어요.
           </p>
-        </div>
-        <div class="town__stage" id="town-stage">
-          <canvas id="town-canvas"></canvas>
-          <div class="town__loading" id="town-loading">3D 타운 불러오는 중…</div>
-          <button type="button" class="town__fs" id="town-fs" aria-label="전체화면 전환">
-            <span class="town__fs-icon" aria-hidden="true">⛶</span><span id="town-fs-label">전체화면</span>
-          </button>
-          <button type="button" class="town__fs town__fs--char" id="town-char" aria-label="캐릭터 변경">
-            <span class="town__fs-icon" aria-hidden="true">👤</span>캐릭터
-          </button>
-          <button type="button" class="town__jump" id="town-jump" aria-label="점프">JUMP</button>
-          <div class="town__select" id="town-select" hidden>
-            <div class="town__select-panel">
-              <p class="town__select-eyebrow">METAHOUSE 3D TOWN</p>
-              <h3 class="town__select-title">캐릭터를 선택하세요</h3>
-              <div class="town__select-grid" id="town-select-grid"></div>
-              <div class="town__select-row">
-                <span class="town__select-label">포인트 컬러</span>
-                <div class="town__colors" id="town-colors"></div>
-              </div>
-              <div class="town__select-row">
-                <span class="town__select-label">키</span>
-                <input type="range" id="town-scale" min="90" max="115" value="100" />
-                <span class="town__scale-val" id="town-scale-val">100%</span>
-              </div>
-              <label class="town__select-nick">
-                닉네임
-                <input id="town-nick" maxlength="10" placeholder="방문객" autocomplete="off" />
-              </label>
-              <button type="button" class="btn btn--primary btn--block" id="town-enter">마을 입장하기</button>
-              <p class="town__select-hint">다른 방문자들에게 선택한 캐릭터와 닉네임이 보여요.</p>
-            </div>
-          </div>
-          <p class="town__hud"><span class="town__keys">W A S D</span> 이동 · <span class="town__keys">SHIFT</span> 달리기 · <span class="town__keys">SPACE</span> 점프 · 휠 줌 · 드래그 회전</p>
-          <canvas class="town__map" id="town-map" width="160" height="160" aria-hidden="true"></canvas>
-          <div class="town__joystick" id="town-joystick" aria-label="이동 조이스틱">
-            <div class="town__stick" id="town-stick"></div>
-          </div>
-          <div class="town__card" id="town-card" hidden>
-            <img id="town-card-img" alt="모델 사진" hidden />
-            <div class="town__card-body">
-              <span class="town__card-tag" id="town-card-tag"></span>
-              <h3 class="town__card-name" id="town-card-name"></h3>
-              <p class="town__card-spec" id="town-card-spec"></p>
-              <p class="town__card-price" id="town-card-price"></p>
-            </div>
-            <a class="btn btn--primary btn--sm" id="town-card-link" target="_blank" rel="noopener" hidden>상세보기</a>
-          </div>
+          <a class="btn btn--primary" href="town.html">🎮 3D 마을 둘러보기 &rarr;</a>
         </div>
       </div>
     </section>
@@ -335,11 +291,6 @@
     </div>
   </div>
 
-  <script type="importmap">
-    { "imports": { "three": "./assets/three.module.min.js" } }
-  </script>
-  <script src="assets/supabase.js"></script>
-  <script type="module" src="assets/town.js"></script>
   <script src="script.js"></script>
   <script src="assets/chat.js"></script>
   <script src="assets/start.js"></script>

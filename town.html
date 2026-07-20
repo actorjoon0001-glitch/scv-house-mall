@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="메타하우스 3D 타운 — 메타봇과 함께 실제 판매 모델이 놓인 3D 주택 마을을 걸어보세요." />
+  <title>메타하우스 3D 타운</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="town-page">
+  <div class="town__stage" id="town-stage">
+    <canvas id="town-canvas"></canvas>
+    <div class="town__loading" id="town-loading">3D 타운 불러오는 중…</div>
+
+    <!-- HUD: 좌상단 캐릭터·닉네임 / 우상단 전체화면·나가기 -->
+    <button type="button" class="town__fs town__fs--char" id="town-char" aria-label="캐릭터 변경">
+      <span class="town__fs-icon" aria-hidden="true">👤</span>캐릭터
+    </button>
+    <div class="town__nickchip" id="town-nick-chip" hidden></div>
+    <button type="button" class="town__fs" id="town-fs" aria-label="전체화면 전환">
+      <span class="town__fs-icon" aria-hidden="true">⛶</span><span id="town-fs-label">전체화면</span>
+    </button>
+    <a class="town__fs town__exit" href="index.html" aria-label="마을에서 나가기">
+      <span class="town__fs-icon" aria-hidden="true">✕</span>나가기
+    </a>
+
+    <button type="button" class="town__jump" id="town-jump" aria-label="점프">JUMP</button>
+
+    <!-- 캐릭터 선택 오버레이 -->
+    <div class="town__select" id="town-select" hidden>
+      <div class="town__select-panel">
+        <p class="town__select-eyebrow">METAHOUSE 3D TOWN</p>
+        <h3 class="town__select-title">캐릭터를 선택하세요</h3>
+        <div class="town__select-grid" id="town-select-grid"></div>
+        <div class="town__select-row">
+          <span class="town__select-label">포인트 컬러</span>
+          <div class="town__colors" id="town-colors"></div>
+        </div>
+        <div class="town__select-row">
+          <span class="town__select-label">키</span>
+          <input type="range" id="town-scale" min="90" max="115" value="100" />
+          <span class="town__scale-val" id="town-scale-val">100%</span>
+        </div>
+        <label class="town__select-nick">
+          닉네임
+          <input id="town-nick" maxlength="10" placeholder="방문객" autocomplete="off" />
+        </label>
+        <button type="button" class="btn btn--primary btn--block" id="town-enter">마을 입장하기</button>
+        <p class="town__select-hint">다른 방문자들에게 선택한 캐릭터와 닉네임이 보여요.</p>
+      </div>
+    </div>
+
+    <p class="town__hud"><span class="town__keys">W A S D</span> 이동 · <span class="town__keys">SHIFT</span> 달리기 · <span class="town__keys">SPACE</span> 점프 · 휠 줌 · 드래그 회전 · 모바일은 조이스틱</p>
+    <canvas class="town__map" id="town-map" width="160" height="160" aria-hidden="true"></canvas>
+    <div class="town__joystick" id="town-joystick" aria-label="이동 조이스틱">
+      <div class="town__stick" id="town-stick"></div>
+    </div>
+    <div class="town__card" id="town-card" hidden>
+      <img id="town-card-img" alt="모델 사진" hidden />
+      <div class="town__card-body">
+        <span class="town__card-tag" id="town-card-tag"></span>
+        <h3 class="town__card-name" id="town-card-name"></h3>
+        <p class="town__card-spec" id="town-card-spec"></p>
+        <p class="town__card-price" id="town-card-price"></p>
+      </div>
+      <a class="btn btn--primary btn--sm" id="town-card-link" target="_blank" rel="noopener" hidden>상세보기</a>
+    </div>
+  </div>
+
+  <!-- 메타봇 상담 채팅 -->
+  <div class="chat" id="chat">
+    <button type="button" class="chat__fab" id="chat-fab" aria-label="메타봇 상담 열기">
+      <img src="assets/chars/robot.webp" alt="메타봇" />
+    </button>
+    <div class="chat__panel" id="chat-panel" hidden>
+      <div class="chat__head">
+        <img src="assets/chars/robot.webp" alt="" />
+        <div class="chat__head-t">
+          <strong>메타봇 🤖</strong>
+          <span>무엇이든 물어보세요</span>
+        </div>
+        <button type="button" class="chat__close" id="chat-close" aria-label="채팅 닫기">✕</button>
+      </div>
+      <div class="chat__body" id="chat-body"></div>
+      <div class="chat__quick" id="chat-quick"></div>
+      <form class="chat__inputrow" id="chat-form">
+        <input id="chat-input" placeholder="궁금한 걸 물어보세요…" autocomplete="off" maxlength="200" />
+        <button type="submit" class="chat__send" aria-label="보내기">➤</button>
+      </form>
+    </div>
+  </div>
+
+  <script type="importmap">
+    { "imports": { "three": "./assets/three.module.min.js" } }
+  </script>
+  <script src="assets/supabase.js"></script>
+  <script type="module" src="assets/town.js"></script>
+  <script src="assets/chat.js"></script>
+</body>
+</html>
