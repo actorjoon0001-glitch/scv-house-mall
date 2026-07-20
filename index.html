@@ -29,9 +29,17 @@
   <main id="top">
     <!-- HERO -->
     <section class="hero">
+      <div class="hero__bg" aria-hidden="true">
+        <img class="hero__still" src="assets/hero-house.webp" alt="" loading="eager" fetchpriority="high" />
+        <video class="hero__video" autoplay muted loop playsinline preload="metadata" poster="assets/hero-house.webp">
+          <source src="assets/hero-video.mp4" type="video/mp4" />
+        </video>
+        <div class="hero__scrim"></div>
+      </div>
       <div class="container hero__inner">
         <div class="hero__content">
-          <p class="eyebrow">이동식 주택 · 체류형 쉼터 · 특수공간</p>
+          <p class="hero__badge"><span class="hero__badge-dot"></span>3D ARCHITECTURAL FILM</p>
+          <p class="eyebrow eyebrow--light">이동식 주택 · 체류형 쉼터 · 특수공간</p>
           <h1 class="hero__title">집을 짓는<br/>가장 쉬운 방법.</h1>
           <p class="hero__sub">
             ㈜세움디자인하우징은 공장에서 정밀하게 제작한 주택을
@@ -39,13 +47,19 @@
           </p>
           <div class="hero__cta">
             <a href="#contact" class="btn btn--primary">무료 상담 신청</a>
-            <a href="#products" class="btn btn--ghost">제품 둘러보기</a>
+            <a href="#products" class="btn btn--glass">제품 둘러보기</a>
           </div>
-        </div>
-        <div class="hero__media">
-          <img src="https://images.unsplash.com/photo-1449844908441-8829872d2607?w=1000&q=80&auto=format&fit=crop" alt="세움 이동식 주택" loading="eager" />
+          <ul class="hero__stats">
+            <li><strong>공장 직영</strong><span>정밀 제작 시스템</span></li>
+            <li><strong>약 30일</strong><span>제작 후 현장 설치</span></li>
+            <li><strong>전국 시공</strong><span>부지·인허가 상담</span></li>
+          </ul>
         </div>
       </div>
+      <a href="#products" class="hero__scroll" aria-label="아래로 스크롤">
+        <span class="hero__scroll-label">SCROLL</span>
+        <span class="hero__scroll-line"></span>
+      </a>
     </section>
 
     <!-- PRODUCTS -->
@@ -100,10 +114,10 @@
           <h2 class="head__title">전국에 놓인 세움</h2>
         </div>
         <div class="gallery">
-          <figure class="gallery__item"><img src="https://images.unsplash.com/photo-1416331108676-a22ccb276e35?w=800&q=80&auto=format&fit=crop" alt="시공사례" loading="lazy" /></figure>
-          <figure class="gallery__item"><img src="https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&q=80&auto=format&fit=crop" alt="시공사례" loading="lazy" /></figure>
-          <figure class="gallery__item"><img src="https://images.unsplash.com/photo-1510798831971-661eb04b3739?w=800&q=80&auto=format&fit=crop" alt="시공사례" loading="lazy" /></figure>
-          <figure class="gallery__item"><img src="https://images.unsplash.com/photo-1449844908441-8829872d2607?w=800&q=80&auto=format&fit=crop" alt="시공사례" loading="lazy" /></figure>
+          <figure class="gallery__item"><img src="assets/hero-house.webp" alt="이동식 주택 야경 시공사례" loading="lazy" /></figure>
+          <figure class="gallery__item"><img src="assets/gallery-deck.webp" alt="우드 데크 디테일" loading="lazy" /></figure>
+          <figure class="gallery__item"><img src="assets/gallery-interior.webp" alt="이동식 주택 인테리어" loading="lazy" /></figure>
+          <figure class="gallery__item"><img src="assets/product-cabin.webp" alt="체류형 쉼터 시공사례" loading="lazy" /></figure>
         </div>
       </div>
     </section>

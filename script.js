@@ -1,17 +1,17 @@
 // ============ MODEL DATA (실제 세움 라인업) ============
 const products = [
   { id: 1, tag: "이동식 주택", name: "STAY 19RB", size: "19평 · 63㎡", spec: "방 3 · 욕실 2", cat: "stay",
-    img: "https://images.unsplash.com/photo-1449844908441-8829872d2607?w=800&q=80&auto=format&fit=crop" },
+    img: "assets/product-mobile-house.webp" },
   { id: 2, tag: "이동식 주택", name: "STAY 16GB", size: "16평 · 53㎡", spec: "방 2 · 욕실 1", cat: "stay",
-    img: "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800&q=80&auto=format&fit=crop" },
+    img: "assets/product-stay16.webp" },
   { id: 3, tag: "이동식 주택", name: "STAY 28", size: "28평 · 92㎡", spec: "방 3 · 욕실 2", cat: "stay",
-    img: "https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=800&q=80&auto=format&fit=crop" },
+    img: "assets/product-stay28.webp" },
   { id: 4, tag: "체류형 쉼터", name: "FOREST-P 10W", size: "10평 · 33㎡", spec: "원룸 · 데크", cat: "forest",
-    img: "https://images.unsplash.com/photo-1416331108676-a22ccb276e35?w=800&q=80&auto=format&fit=crop" },
+    img: "assets/product-cabin.webp" },
   { id: 5, tag: "체류형 쉼터", name: "FOREST 6", size: "6평 · 20㎡", spec: "원룸 · 농막형", cat: "forest",
-    img: "https://images.unsplash.com/photo-1523217582562-09d0def993a6?w=800&q=80&auto=format&fit=crop" },
+    img: "assets/product-forest6.webp" },
   { id: 6, tag: "특수공간", name: "CUBE-G 10W", size: "10평 · 33㎡", spec: "스크린골프 · 큐브", cat: "cube",
-    img: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=800&q=80&auto=format&fit=crop" },
+    img: "assets/product-cube.webp" },
 ];
 
 const grid = document.getElementById("products-grid");
@@ -101,10 +101,10 @@ document
   .forEach((el) => el.classList.add("reveal"));
 observeReveal();
 
-// ============ NAV SHADOW ON SCROLL ============
+// ============ NAV STATE ON SCROLL ============
 const nav = document.getElementById("nav");
 const onScroll = () => {
-  nav.style.boxShadow = window.scrollY > 8 ? "0 6px 24px rgba(20,20,20,.08)" : "none";
+  nav.classList.toggle("is-solid", window.scrollY > 40);
 };
 window.addEventListener("scroll", onScroll, { passive: true });
 onScroll();
