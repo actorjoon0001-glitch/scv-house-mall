@@ -2,6 +2,7 @@
 // 상쾌환 스타일의 미니 3D 타운: 세움봇이 하우스 사이를 걸어다닌다.
 import * as THREE from "three";
 import { GLTFLoader } from "./GLTFLoader.js";
+import { clone as skeletonClone } from "./SkeletonUtils.js";
 
 const stage = document.getElementById("town-stage");
 const canvas = document.getElementById("town-canvas");
@@ -361,12 +362,25 @@ function init() {
     cardEl.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -100%)`;
   }
 
-  // ---------- 캐릭터 (세움봇) ----------
+  // ---------- 캐릭터 시스템 ----------
   const player = new THREE.Group();
   scene.add(player);
-  let mixer = null;
-  let walkAction = null;
-  let runAction = null;
+
+  const CHARACTERS = {
+    robot: { label: "세움봇", walk: "assets/robot-walk.glb", run: "assets/robot-run.glb", height: 1.9 },
+    kid: { label: "아이", walk: "assets/chars/kid.glb", height: 1.25 },
+    woman: { label: "어른", walk: "assets/chars/woman.glb", height: 1.7 },
+    grandpa: { label: "할아버지", walk: "assets/chars/grandpa.glb", height: 1.68 },
+    grandma: { label: "할머니", walk: "assets/chars/grandma.glb", height: 1.6 },
+  };
+
+  const myId = (crypto.randomUUID && crypto.randomUUID()) || "u" + Math.random().toString(36).slice(2);
+  let myChar = null;
+  let myNick = "";
+  try {
+    myChar = localStorage.getItem("seum_char");
+    myNick = localStorage.getItem("seum_nick") || "";
+  } catch (e) {}
 
   // 스킨드 메시는 뼈대 변형 기준으로 바운딩을 재야 크기가 맞는다
   function skinnedBox(obj) {
@@ -383,35 +397,48 @@ function init() {
     return box;
   }
 
-  // 로봇 GLB가 없으면 심플 대체 로봇으로 진행
-  loader.load("assets/robot-walk.glb", (glb) => {
-    const bot = glb.scene;
-    sharpen(bot);
-    bot.traverse((o) => { if (o.isMesh) { o.castShadow = true; } });
-    const box = skinnedBox(bot);
-    const size = box.getSize(new THREE.Vector3());
-    const s = 1.9 / size.y;
-    bot.scale.setScalar(s);
-    const box2 = skinnedBox(bot);
-    bot.position.y -= box2.min.y;
-    const c = box2.getCenter(new THREE.Vector3());
-    bot.position.x -= c.x; bot.position.z -= c.z;
-    player.add(bot);
-    if (glb.animations && glb.animations.length) {
-      mixer = new THREE.AnimationMixer(bot);
-      walkAction = mixer.clipAction(glb.animations[0]);
-      walkAction.play();
-      walkAction.paused = true;
-      // 달리기 클립 (같은 리깅에서 뽑은 GLB — 본 이름이 동일해 재사용 가능)
-      loader.load("assets/robot-run.glb", (runGlb) => {
-        if (runGlb.animations && runGlb.animations.length) {
-          runAction = mixer.clipAction(runGlb.animations[0]);
-        }
-      }, undefined, () => {});
+  // 캐릭터 GLB 캐시 (scene+animations 통째로)
+  const charCache = {};
+  function loadCharAsset(url) {
+    if (!charCache[url]) {
+      charCache[url] = new Promise((resolve, reject) =>
+        loader.load(url, (g) => { sharpen(g.scene); resolve(g); }, undefined, reject)
+      );
     }
-    loadingEl.hidden = true;
-  }, undefined, () => {
-    // 폴백: 캡슐 로봇
+    return charCache[url];
+  }
+
+  // 같은 캐릭터를 여러 명이 써도 되도록 스켈레톤 클론으로 인스턴스 생성
+  function buildCharInstance(charKey) {
+    const def = CHARACTERS[charKey] || CHARACTERS.robot;
+    return loadCharAsset(def.walk).then((gltf) => {
+      const inst = skeletonClone(gltf.scene);
+      inst.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      const box = skinnedBox(inst);
+      const size = box.getSize(new THREE.Vector3());
+      inst.scale.setScalar(def.height / Math.max(size.y, 0.01));
+      const box2 = skinnedBox(inst);
+      inst.position.y -= box2.min.y;
+      const c = box2.getCenter(new THREE.Vector3());
+      inst.position.x -= c.x; inst.position.z -= c.z;
+      const mx = new THREE.AnimationMixer(inst);
+      let walk = null;
+      if (gltf.animations && gltf.animations.length) {
+        walk = mx.clipAction(gltf.animations[0]);
+        walk.play();
+        walk.paused = true;
+      }
+      const rig = { obj: inst, mixer: mx, walk, run: null };
+      if (def.run) {
+        loadCharAsset(def.run)
+          .then((rg) => { if (rg.animations && rg.animations.length) rig.run = mx.clipAction(rg.animations[0]); })
+          .catch(() => {});
+      }
+      return rig;
+    });
+  }
+
+  function capsuleFallback() {
     const g = new THREE.Group();
     const bodyMat = new THREE.MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.4 });
     const greenMat = new THREE.MeshStandardMaterial({ color: 0x2f5d46, roughness: 0.5 });
@@ -422,11 +449,165 @@ function init() {
     const visor = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), greenMat);
     visor.position.set(0, 1.97, 0.2); visor.scale.z = 0.6;
     g.add(body, head, visor);
-    player.add(g);
-    loadingEl.hidden = true;
-  });
+    return { obj: g, mixer: null, walk: null, run: null };
+  }
+
+  let playerRig = null;
+  function setPlayerCharacter(charKey) {
+    myChar = CHARACTERS[charKey] ? charKey : "robot";
+    try { localStorage.setItem("seum_char", myChar); } catch (e) {}
+    buildCharInstance(myChar)
+      .catch(() => capsuleFallback())
+      .then((rig) => {
+        while (player.children.length) player.remove(player.children[0]);
+        player.add(rig.obj);
+        playerRig = rig;
+        loadingEl.hidden = true;
+        if (rtChannel) {
+          try { rtChannel.track({ char: myChar, nick: myNick || "방문객" }); } catch (e) {}
+        }
+      });
+  }
 
   player.position.set(0, 0, 4);
+
+  // ---------- 멀티플레이 (Supabase Realtime) ----------
+  const remotes = new Map(); // id -> { group, rig, char, nick, target }
+  let rtChannel = null;
+
+  function spawnRemote(id, charKey, nick) {
+    const group = new THREE.Group();
+    group.position.set((Math.random() - 0.5) * 4, 0, 4 + Math.random() * 3);
+    scene.add(group);
+    const entry = { group, rig: null, char: charKey, nick, target: null };
+    remotes.set(id, entry);
+    buildCharInstance(charKey)
+      .catch(() => capsuleFallback())
+      .then((rig) => {
+        if (!remotes.has(id) || remotes.get(id) !== entry) return;
+        group.add(rig.obj);
+        const label = nameSign(nick || "방문객");
+        label.scale.set(2.4, 0.6, 1);
+        label.position.y = (CHARACTERS[charKey] ? CHARACTERS[charKey].height : 1.8) + 0.55;
+        group.add(label);
+        entry.rig = rig;
+      });
+  }
+
+  function removeRemote(id) {
+    const r = remotes.get(id);
+    if (r) { scene.remove(r.group); remotes.delete(id); }
+  }
+
+  function joinRealtime() {
+    if (rtChannel || !window.supabase || !window.supabase.createClient) return;
+    try {
+      const client = window.supabase.createClient(SB_URL, SB_KEY);
+      rtChannel = client.channel("seum-town-v1", {
+        config: { presence: { key: myId }, broadcast: { self: false } },
+      });
+      rtChannel.on("presence", { event: "sync" }, () => {
+        const state = rtChannel.presenceState();
+        Object.entries(state).forEach(([id, metas]) => {
+          if (id === myId) return;
+          const meta = (metas && metas[0]) || {};
+          const existing = remotes.get(id);
+          if (!existing) {
+            spawnRemote(id, meta.char || "robot", meta.nick || "방문객");
+          } else if (existing.char !== (meta.char || "robot")) {
+            removeRemote(id);
+            spawnRemote(id, meta.char || "robot", meta.nick || "방문객");
+          }
+        });
+        [...remotes.keys()].forEach((id) => { if (!state[id]) removeRemote(id); });
+      });
+      rtChannel.on("broadcast", { event: "pos" }, ({ payload }) => {
+        const r = remotes.get(payload.id);
+        if (r) r.target = payload;
+      });
+      rtChannel.subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          try { rtChannel.track({ char: myChar || "robot", nick: myNick || "방문객" }); } catch (e) {}
+        }
+      });
+    } catch (e) {
+      rtChannel = null;
+    }
+  }
+
+  let lastSend = 0;
+  let wasMoving = false;
+  function broadcastPos(now, moving, sprinting) {
+    if (!rtChannel) return;
+    if (!moving && !wasMoving && now - lastSend < 2) return; // 정지 중엔 2초 하트비트
+    if (now - lastSend < 0.12) return;
+    lastSend = now;
+    wasMoving = moving;
+    try {
+      rtChannel.send({
+        type: "broadcast",
+        event: "pos",
+        payload: {
+          id: myId,
+          x: +player.position.x.toFixed(2),
+          z: +player.position.z.toFixed(2),
+          y: +player.position.y.toFixed(2),
+          h: +heading.toFixed(2),
+          m: moving ? 1 : 0,
+          run: sprinting ? 1 : 0,
+        },
+      });
+    } catch (e) {}
+  }
+
+  // ---------- 캐릭터 선택 UI ----------
+  const selEl = document.getElementById("town-select");
+  const selGrid = document.getElementById("town-select-grid");
+  const nickInput = document.getElementById("town-nick");
+  const enterBtn = document.getElementById("town-enter");
+  const charBtn = document.getElementById("town-char");
+  let selChar = myChar || "robot";
+
+  function renderSelect() {
+    if (!selGrid) return;
+    selGrid.innerHTML = Object.entries(CHARACTERS)
+      .map(([k, d]) => `
+        <button type="button" class="town__char${k === selChar ? " is-sel" : ""}" data-char="${k}">
+          <img src="assets/chars/${k}.webp" alt="${d.label}" loading="lazy" />
+          <span>${d.label}</span>
+        </button>`)
+      .join("");
+    selGrid.querySelectorAll(".town__char").forEach((b) =>
+      b.addEventListener("click", () => {
+        selChar = b.dataset.char;
+        selGrid.querySelectorAll(".town__char").forEach((x) => x.classList.toggle("is-sel", x === b));
+      })
+    );
+  }
+  function openSelect() {
+    if (!selEl) return;
+    renderSelect();
+    if (nickInput) nickInput.value = myNick;
+    selEl.hidden = false;
+  }
+  if (enterBtn) {
+    enterBtn.addEventListener("click", () => {
+      myNick = ((nickInput && nickInput.value) || "").trim().slice(0, 10) || "방문객";
+      try { localStorage.setItem("seum_nick", myNick); } catch (e) {}
+      selEl.hidden = true;
+      setPlayerCharacter(selChar);
+      joinRealtime();
+    });
+  }
+  if (charBtn) charBtn.addEventListener("click", openSelect);
+
+  if (myChar) {
+    setPlayerCharacter(myChar);
+    joinRealtime();
+  } else {
+    setPlayerCharacter("robot");
+    openSelect();
+  }
 
   // ---------- 입력 ----------
   const keys = new Set();
@@ -435,12 +616,22 @@ function init() {
     ArrowUp: "f", KeyW: "f", ArrowDown: "b", KeyS: "b",
     ArrowLeft: "l", KeyA: "l", ArrowRight: "r", KeyD: "r",
   };
+  // 점프
+  let vy = 0;
+  let airborne = false;
+  function doJump() {
+    if (!airborne) { vy = 9.4; airborne = true; }
+  }
+  const jumpBtn = document.getElementById("town-jump");
+  if (jumpBtn) jumpBtn.addEventListener("pointerdown", (e) => { doJump(); e.preventDefault(); });
+
   window.addEventListener("keydown", (e) => {
     if (e.code === "ShiftLeft" || e.code === "ShiftRight") { shiftHeld = true; return; }
-    const dir = KEYMAP[e.code];
-    if (!dir || !running) return;
     const tag = document.activeElement && document.activeElement.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (e.code === "Space" && running) { doJump(); e.preventDefault(); return; }
+    const dir = KEYMAP[e.code];
+    if (!dir || !running) return;
     keys.add(dir);
     if (e.code.startsWith("Arrow")) e.preventDefault();
   });
@@ -591,9 +782,9 @@ function init() {
       while (diff < -Math.PI) diff += Math.PI * 2;
       heading += diff * Math.min(1, dt * 10);
       player.rotation.y = heading;
-      const wantRun = sprinting && runAction;
-      const active = wantRun ? runAction : walkAction;
-      const idle = wantRun ? walkAction : runAction;
+      const wantRun = sprinting && playerRig && playerRig.run;
+      const active = playerRig ? (wantRun ? playerRig.run : playerRig.walk) : null;
+      const idle = playerRig ? (wantRun ? playerRig.walk : playerRig.run) : null;
       if (idle && idle.isRunning()) idle.stop();
       if (active) {
         if (!active.isRunning()) active.play();
@@ -602,11 +793,53 @@ function init() {
         active.timeScale = wantRun ? 1.1 : (sprinting ? 1.8 : 0.7 + mag * 0.6);
       }
       updateNearCard();
-    } else {
-      if (walkAction) walkAction.paused = true;
-      if (runAction) runAction.paused = true;
+    } else if (playerRig) {
+      if (playerRig.walk) playerRig.walk.paused = true;
+      if (playerRig.run) playerRig.run.paused = true;
     }
-    if (mixer) mixer.update(dt);
+
+    // 점프 물리
+    if (airborne) {
+      vy -= 24 * dt;
+      player.position.y += vy * dt;
+      if (player.position.y <= 0) { player.position.y = 0; vy = 0; airborne = false; }
+    }
+
+    if (playerRig && playerRig.mixer) playerRig.mixer.update(dt);
+
+    // 원격 방문자 보간·애니메이션
+    remotes.forEach((r) => {
+      const t = r.target;
+      if (t) {
+        r.group.position.x += (t.x - r.group.position.x) * Math.min(1, dt * 10);
+        r.group.position.z += (t.z - r.group.position.z) * Math.min(1, dt * 10);
+        r.group.position.y += ((t.y || 0) - r.group.position.y) * Math.min(1, dt * 12);
+        if (typeof t.h === "number") {
+          let diff = t.h - r.group.rotation.y;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          r.group.rotation.y += diff * Math.min(1, dt * 8);
+        }
+        if (r.rig) {
+          const act = t.run && r.rig.run ? r.rig.run : r.rig.walk;
+          const other = act === r.rig.run ? r.rig.walk : r.rig.run;
+          if (t.m) {
+            if (other && other.isRunning()) other.stop();
+            if (act) {
+              if (!act.isRunning()) act.play();
+              act.paused = false;
+              act.timeScale = t.run && !r.rig.run ? 1.8 : 1.1;
+            }
+          } else {
+            if (r.rig.walk) r.rig.walk.paused = true;
+            if (r.rig.run) r.rig.run.paused = true;
+          }
+        }
+      }
+      if (r.rig && r.rig.mixer) r.rig.mixer.update(dt);
+    });
+
+    broadcastPos(clock.elapsedTime, moving, sprinting);
 
     clouds.forEach((c, i) => { c.position.x += dt * (0.25 + i * 0.05); if (c.position.x > 55) c.position.x = -55; });
 
