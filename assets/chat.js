@@ -183,9 +183,22 @@
   // 나중에 카탈로그에 모델별 character 필드(예: {name, icon, tone})가 생기면
   // 그 값이 자동으로 우선 적용된다 — 집마다 코드를 만들지 않는다.
   const DEFAULT_PERSONA = { name: "메타봇", icon: "assets/chars/robot.webp", role: "큐레이터" };
+  // 집 앞 큐레이터(정장 상담사) 페르소나 — 성별은 타운에서 배정(model.__curator)
+  const CURATOR_PERSONAS = {
+    m: { name: "준 큐레이터", icon: "assets/chars/suitman.webp", role: "" },
+    f: { name: "수아 큐레이터", icon: "assets/chars/suitwoman.webp", role: "" },
+  };
   function personaFor(model) {
     const c = model && model.character;
-    return c && typeof c === "object" ? Object.assign({}, DEFAULT_PERSONA, c) : DEFAULT_PERSONA;
+    if (c && typeof c === "object") return Object.assign({}, DEFAULT_PERSONA, c);
+    const g = model && model.__curator;
+    if (g && CURATOR_PERSONAS[g]) return Object.assign({}, DEFAULT_PERSONA, CURATOR_PERSONAS[g]);
+    return DEFAULT_PERSONA;
+  }
+
+  const headImg = panel.querySelector(".chat__head img");
+  function setHeadIcon(src) {
+    if (headImg) headImg.src = src;
   }
 
   const headTitle = panel.querySelector(".chat__head-t strong");
@@ -334,12 +347,13 @@
     curatorTurns = 0;
     nudged = false;
     clearBody();
-    setHeader(`${p.name} · ${model.name} ${p.role}`, `${model.category || "메타하우스"} 전문 안내`);
+    setHeader(`${p.name} · ${model.name}${p.role ? " " + p.role : ""}`, `${model.category || "메타하우스"} 전문 안내`);
+    setHeadIcon(p.icon);
     panel.hidden = false;
     fab.classList.add("is-open");
     if (model.main_image) imgBubble(model.main_image);
     const price = modelPrice(model);
-    botSay(`여긴 ${model.name}이에요! ${model.size ? model.size + " · " : ""}${price ? price : "가격 상담"} 🏠\n이 집에 대해 뭐든 물어보세요!`);
+    botSay(`안녕하세요, ${model.name} 담당 ${p.name}예요 😊\n${model.size ? model.size + " · " : ""}${price ? price : "가격 상담"} — 이 집에 대해 뭐든 물어보세요!`);
     renderCuratorQuick(model);
   }
 
@@ -405,6 +419,7 @@
     curModel = null;
     clearBody();
     setHeader("메타봇 🤖 · 마을 안내", "인포메이션");
+    setHeadIcon(DEFAULT_PERSONA.icon);
     panel.hidden = false;
     fab.classList.add("is-open");
     botSay("어서 오세요! 메타하우스 3D 마을 인포메이션이에요 🤖\n어떤 용도의 집을 보러 오셨어요? 맞는 존으로 안내해드릴게요!");
@@ -423,6 +438,7 @@
     if (document.getElementById("town-stage") && mode !== "general") return openInfo();
     mode = "general";
     setHeader("메타봇 🤖", "무엇이든 물어보세요");
+    setHeadIcon(DEFAULT_PERSONA.icon);
     panel.hidden = false;
     fab.classList.add("is-open");
     if (!greeted) {
