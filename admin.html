@@ -75,6 +75,14 @@
     .map-chip.is-pin { border-color: #7fd4a8; }
     .selmsg { font-size: 13px; color: #cdd; }
     .btn[disabled] { opacity: 0.4; cursor: default; }
+    /* ---- 존 탭 (모델 목록 필터) ---- */
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 14px; }
+    .tab {
+      padding: 7px 14px; border-radius: 999px; border: 1px solid #3a4136;
+      background: #1b1f17; color: #bcc; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .tab:hover { border-color: #7fd4a8; }
+    .tab.is-active { background: #2f5d46; border-color: #2f5d46; color: #fff; }
   </style>
 </head>
 <body>
@@ -101,6 +109,8 @@
       <span style="flex:1"></span>
       <a class="btn btn--ghost" href="town.html" target="_blank">3D 마을 미리보기 ↗</a>
     </div>
+
+    <div class="tabs" id="zone-tabs"></div>
 
     <table>
       <thead>
