@@ -55,6 +55,11 @@
 
   function goContact() {
     closeChat();
+    // 타운 페이지에는 상담 폼이 없으므로 랜딩의 폼으로 이동
+    if (!document.getElementById("contact")) {
+      window.location.href = "index.html#contact";
+      return;
+    }
     goSection("#contact");
     setTimeout(() => {
       const name = document.getElementById("name");
@@ -114,8 +119,21 @@
       reply: () =>
         `전원주택·세컨하우스·체류형 쉼터·특별모델까지 ${modelCount()} 모델이 있어요! 🏠\n3D 타운에서 메타봇이랑 같이 직접 구경할 수도 있어요.`,
       ctas: [
-        { label: "🏘️ 3D 타운 구경하기", action: () => { closeChat(); goSection("#viewer"); } },
-        { label: "📋 라인업 보기", action: () => { closeChat(); goSection("#products"); } },
+        {
+          label: "🏘️ 3D 타운 구경하기",
+          action: () => {
+            closeChat();
+            if (!document.getElementById("town-stage")) window.location.href = "town.html";
+          },
+        },
+        {
+          label: "📋 라인업 보기",
+          action: () => {
+            closeChat();
+            if (document.getElementById("products")) goSection("#products");
+            else window.location.href = "index.html#products";
+          },
+        },
       ],
     },
     consult: {

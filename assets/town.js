@@ -524,6 +524,14 @@ function init() {
     return { obj: g, mixer: null, walk: null, run: null };
   }
 
+  const nickChip = document.getElementById("town-nick-chip");
+  function updateNickChip() {
+    if (!nickChip) return;
+    const label = CHARACTERS[myChar] ? CHARACTERS[myChar].label : "";
+    nickChip.textContent = `${myNick || "방문객"} · ${label}`;
+    nickChip.hidden = false;
+  }
+
   let playerRig = null;
   function setPlayerCharacter(charKey) {
     myChar = CHARACTERS[charKey] ? charKey : "robot";
@@ -537,6 +545,7 @@ function init() {
         playerRig = rig;
         attachBalloon(player, myColor, CHARACTERS[myChar].height);
         player.scale.setScalar(myScale);
+        updateNickChip();
         loadingEl.hidden = true;
         if (rtChannel) {
           try { rtChannel.track({ char: myChar, nick: myNick || "방문객", color: myColor, scale: myScale }); } catch (e) {}

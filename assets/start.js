@@ -105,21 +105,8 @@
     }
     persist(nick);
     maybeSendLead(nick);
-    hide();
-    const viewer = document.getElementById("viewer");
-    if (viewer) viewer.scrollIntoView({ behavior: "smooth" });
-    // 타운이 이미 떠 있으면 즉시 반영, 아니면 초기화 시 localStorage로 자동 입장
-    const apply = () => {
-      if (window.__seumTown && window.__seumTown.setCharacter) {
-        window.__seumTown.setCharacter(selChar, nick);
-        return true;
-      }
-      return false;
-    };
-    if (!apply()) {
-      let tries = 0;
-      const t = setInterval(() => { if (apply() || ++tries > 40) clearInterval(t); }, 250);
-    }
+    // 독립 3D 타운 페이지로 이동 (캐릭터·닉네임은 localStorage로 전달)
+    window.location.href = "town.html";
   }
 
   function goProducts() {
