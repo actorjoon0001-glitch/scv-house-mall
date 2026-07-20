@@ -2,14 +2,18 @@
 // 카탈로그 원본은 건드리지 않고, 마을/랜딩 "표시용" 설정만 별도 저장한다.
 // 저장소: Supabase town_settings 테이블 (없으면 localStorage 폴백).
 (function () {
+  // 카탈로그(모델 원본) 읽기용 — 기존 카탈로그 프로젝트
   const SB_URL = "https://aypugjvzvwinnmpquguj.supabase.co";
   const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5cHVnanZ6dndpbm5tcHF1Z3VqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1NjQ0ODIsImV4cCI6MjA4OTE0MDQ4Mn0.yLBG31-8VGWai9Rpv9RtVxZwwWMsKI_syGs0QN7PkUU";
+  // 마을 표시 설정 저장용 — 전용 프로젝트 (scv-3Dhouse)
+  const SETTINGS_URL = "https://zjbaeoqvzbkdctwcrgfd.supabase.co";
+  const SETTINGS_KEY = "sb_publishable_k_gQuXbUVRwmFnfCzNGmMg_UvLhesnZ";
   const LS_KEY = "seum_town_overrides";
-  const HEADERS = { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` };
+  const HEADERS = { apikey: SETTINGS_KEY, Authorization: `Bearer ${SETTINGS_KEY}` };
 
   async function load() {
     try {
-      const r = await fetch(`${SB_URL}/rest/v1/town_settings?id=eq.main&select=data`, { headers: HEADERS });
+      const r = await fetch(`${SETTINGS_URL}/rest/v1/town_settings?id=eq.main&select=data`, { headers: HEADERS });
       if (!r.ok) throw new Error("no table");
       const rows = await r.json();
       return { source: "supabase", data: (rows[0] && rows[0].data) || {} };
@@ -24,7 +28,7 @@
 
   async function save(data) {
     try {
-      const r = await fetch(`${SB_URL}/rest/v1/town_settings`, {
+      const r = await fetch(`${SETTINGS_URL}/rest/v1/town_settings`, {
         method: "POST",
         headers: Object.assign({ "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" }, HEADERS),
         body: JSON.stringify({ id: "main", data }),
