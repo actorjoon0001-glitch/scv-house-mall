@@ -62,5 +62,42 @@
       });
   }
 
-  window.SeumTownConfig = { load, save, apply, SB_URL, SB_KEY };
+  // ---------- 배치 계산 (관리자 지도와 3D 마을이 공유하는 단일 규칙) ----------
+  const ZONE_ORDER = ["전원주택", "세컨하우스", "체류형 쉼터", "특별모델"];
+  const keyOf = (m) => m.slug || m.name;
+  // 명시 배치(overrides.placement[slug] = {zone,index,rot})를 먼저 고정하고,
+  // 나머지는 (존 이동 반영된) 카탈로그 순서대로 빈 칸을 채운다.
+  function computePlacement(models, ov) {
+    const pov = (ov && ov.placement) || {};
+    const zoneOf = (m) => {
+      const p = pov[keyOf(m)];
+      if (p && ZONE_ORDER.includes(p.zone)) return p.zone;
+      return ZONE_ORDER.includes(m.category) ? m.category : "특별모델";
+    };
+    const used = {};
+    const out = {};
+    models.forEach((m) => {
+      const p = pov[keyOf(m)];
+      if (!p || p.index == null) return;
+      const z = zoneOf(m);
+      used[z] = used[z] || new Set();
+      if (!used[z].has(p.index)) {
+        used[z].add(p.index);
+        out[keyOf(m)] = { zone: z, index: p.index, rot: p.rot || 0 };
+      }
+    });
+    models.forEach((m) => {
+      const k = keyOf(m);
+      if (out[k]) return;
+      const z = zoneOf(m);
+      used[z] = used[z] || new Set();
+      let i = 0;
+      while (used[z].has(i)) i++;
+      used[z].add(i);
+      out[k] = { zone: z, index: i, rot: (pov[k] && pov[k].rot) || 0 };
+    });
+    return out;
+  }
+
+  window.SeumTownConfig = { load, save, apply, computePlacement, keyOf, ZONE_ORDER, SB_URL, SB_KEY };
 })();
