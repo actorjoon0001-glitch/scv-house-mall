@@ -460,13 +460,17 @@ function init() {
       .catch(() => {});
   }
 
-  fetch(
-    `${SB_URL}/rest/v1/models?select=slug,name,category,size,base_price,main_image,event_on,event_price,rooms,bathrooms,short_description,features,badge&order=created_at.asc`,
-    { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
-  )
-    .then((r) => { if (!r.ok) throw new Error("catalog"); return r.json(); })
-    .then((data) => {
-      const models = data.filter((m) => m.name);
+  Promise.all([
+    fetch(
+      `${SB_URL}/rest/v1/models?select=slug,name,category,size,base_price,main_image,event_on,event_price,rooms,bathrooms,short_description,features,badge&order=created_at.asc`,
+      { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
+    ).then((r) => { if (!r.ok) throw new Error("catalog"); return r.json(); }),
+    window.SeumTownConfig ? window.SeumTownConfig.load().catch(() => ({ data: {} })) : Promise.resolve({ data: {} }),
+  ])
+    .then(([data, cfg]) => {
+      let models = data.filter((m) => m.name);
+      // 관리자 표시 설정 병합 (숨김/이름/가격/존/큐레이터 등)
+      if (window.SeumTownConfig) models = window.SeumTownConfig.apply(models, cfg.data || {});
       placeModels(models.length ? models : TOWN_FALLBACK);
     })
     .catch(() => placeModels(TOWN_FALLBACK));
