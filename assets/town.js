@@ -373,20 +373,32 @@ function init() {
     return DEFAULT_GLB;
   }
 
-  function placeModels(models) {
-    // 용도(category)별 존으로 그룹핑 후 존 내부 슬롯에 배치
-    const byZone = {};
-    models.forEach((m) => {
-      const zc = zoneFor(m.category);
-      (byZone[zc] = byZone[zc] || []).push(m);
-    });
+  function placeModels(models, ovData) {
+    // 배치 규칙은 관리자 지도와 공유 (town-config.js computePlacement):
+    // 관리자가 고정한 칸(placement)을 우선 반영하고, 나머지는 존 내 빈 칸 자동 채움.
+    const CFG = window.SeumTownConfig;
     const placement = [];
-    Object.entries(byZone).forEach(([zc, list]) => {
-      const zone = ZONES[zc];
-      list.forEach((m, i) => placement.push([m, zoneSlot(zone, i)]));
-    });
+    if (CFG && CFG.computePlacement) {
+      const plan = CFG.computePlacement(models, ovData || {});
+      models.forEach((m) => {
+        const p = plan[CFG.keyOf(m)];
+        const zone = ZONES[p.zone] || ZONES["특별모델"];
+        placement.push([m, zoneSlot(zone, p.index), p.rot || 0]);
+      });
+    } else {
+      // 폴백: 용도(category)별 존으로 그룹핑 후 순서대로
+      const byZone = {};
+      models.forEach((m) => {
+        const zc = zoneFor(m.category);
+        (byZone[zc] = byZone[zc] || []).push(m);
+      });
+      Object.entries(byZone).forEach(([zc, list]) => {
+        const zone = ZONES[zc];
+        list.forEach((m, i) => placement.push([m, zoneSlot(zone, i), 0]));
+      });
+    }
     const catCounters = {};
-    placement.forEach(([m, lot], i) => {
+    placement.forEach(([m, lot, rot], i) => {
       const c = m.category || "_";
       const idxInCat = catCounters[c] || 0;
       catCounters[c] = idxInCat + 1;
@@ -406,7 +418,8 @@ function init() {
           sign.position.y = h + 1.05;
           wrap.add(sign);
           wrap.position.set(lot.x, 0, lot.z);
-          wrap.rotation.y = 0; // 전 세대 남쪽 통로를 향해 정면 통일
+          // 기본 0도 = 남쪽 통로 정면. 관리자 배치에서 90도 단위 회전 가능 (90=동, 180=북, 270=서)
+          wrap.rotation.y = THREE.MathUtils.degToRad(rot || 0);
           wrap.userData.model = m;
           scene.add(wrap);
           clickTargets.push(wrap);
@@ -471,9 +484,9 @@ function init() {
       let models = data.filter((m) => m.name);
       // 관리자 표시 설정 병합 (숨김/이름/가격/존/큐레이터 등)
       if (window.SeumTownConfig) models = window.SeumTownConfig.apply(models, cfg.data || {});
-      placeModels(models.length ? models : TOWN_FALLBACK);
+      placeModels(models.length ? models : TOWN_FALLBACK, cfg.data || {});
     })
-    .catch(() => placeModels(TOWN_FALLBACK));
+    .catch(() => placeModels(TOWN_FALLBACK, {}));
 
   // 가까운 집 안내 카드
   let activeLot = null;
