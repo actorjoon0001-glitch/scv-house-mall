@@ -481,7 +481,7 @@ body.town-fs-lock { overflow: hidden; }
 }
 .town__select-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 10px;
   margin-bottom: 18px;
 }
@@ -508,6 +508,27 @@ body.town-fs-lock { overflow: hidden; }
   border-radius: 10px;
   background: #e9e9e6;
 }
+.town__select-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+.town__select-label { font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.75); }
+.town__colors { display: flex; gap: 8px; flex-wrap: wrap; }
+.town__color {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.25);
+  cursor: pointer;
+  transition: transform .12s var(--ease), border-color .12s var(--ease);
+}
+.town__color:hover { transform: scale(1.12); }
+.town__color.is-sel { border-color: #fff; transform: scale(1.15); box-shadow: 0 0 0 3px rgba(127,212,168,0.45); }
+.town__select-row input[type="range"] { width: min(220px, 50%); accent-color: #7fd4a8; }
+.town__scale-val { font-size: 13px; font-weight: 700; color: #9fdcbb; min-width: 42px; text-align: left; }
 .town__select-nick {
   display: flex;
   align-items: center;
