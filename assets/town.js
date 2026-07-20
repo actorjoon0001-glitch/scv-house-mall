@@ -411,10 +411,53 @@ function init() {
           scene.add(wrap);
           clickTargets.push(wrap);
           houseLots.push({ wrap, model: m, h });
+          // 이 집 담당 큐레이터 배치 (성별은 데이터 우선, 없으면 규칙 자동)
+          m.__curator = curatorGender(m, idxInCat);
+          placeCurator(wrap, m.__curator);
           updateNearCard();
         })
         .catch(() => {});
     });
+  }
+
+  // ---------- 집 앞 큐레이터 (정장 상담사, 남/녀) ----------
+  // 겉모습만 사람 캐릭터로 교체 — 안내 로직(카탈로그 데이터 큐레이터)은 chat.js 그대로.
+  // 성별 배정: 모델에 curator 필드('m'|'f')가 있으면 수동 지정값 사용,
+  // 없으면 존 내 순서대로 남/녀 교차 자동 배정. 새 모델도 같은 규칙 적용.
+  const CURATORS = {
+    m: { glb: "assets/chars/suitman.glb", height: 1.78 },
+    f: { glb: "assets/chars/suitwoman.glb", height: 1.7 },
+  };
+  const curatorRigs = []; // { wrap, mixer }
+  function curatorGender(model, idxInCat) {
+    if (model.curator === "m" || model.curator === "f") return model.curator;
+    return idxInCat % 2 === 0 ? "f" : "m";
+  }
+  function placeCurator(wrap, gender) {
+    const def = CURATORS[gender];
+    if (!def) return;
+    loadCharAsset(def.glb)
+      .then((gltf) => {
+        const inst = skeletonClone(gltf.scene);
+        inst.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+        const box = skinnedBox(inst);
+        const size = box.getSize(new THREE.Vector3());
+        inst.scale.setScalar(def.height / Math.max(size.y, 0.01));
+        const box2 = skinnedBox(inst);
+        inst.position.y -= box2.min.y;
+        const cc = box2.getCenter(new THREE.Vector3());
+        inst.position.x -= cc.x; inst.position.z -= cc.z;
+        const mx = new THREE.AnimationMixer(inst);
+        if (gltf.animations && gltf.animations.length) {
+          mx.clipAction(gltf.animations[0]).play(); // 대기(Idle) 모션
+        }
+        const g = new THREE.Group();
+        g.add(inst);
+        g.position.set(3, 0, 4.5); // 부지 앞쪽 오른편, 통로를 향해
+        wrap.add(g);
+        curatorRigs.push({ wrap, mixer: mx });
+      })
+      .catch(() => {});
   }
 
   fetch(
@@ -1191,6 +1234,14 @@ function init() {
     }
 
     if (playerRig && playerRig.mixer) playerRig.mixer.update(dt);
+
+    // 근처 큐레이터만 대기 모션 재생 (성능)
+    curatorRigs.forEach((r) => {
+      const wp = r.wrap.position;
+      if (Math.abs(wp.x - player.position.x) < 30 && Math.abs(wp.z - player.position.z) < 30) {
+        r.mixer.update(dt);
+      }
+    });
 
     // 원격 방문자 보간·애니메이션
     remotes.forEach((r) => {
