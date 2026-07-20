@@ -19,7 +19,6 @@
   const phoneEl = document.getElementById("start-phone");
   const townBtn = document.getElementById("start-town");
   const prodBtn = document.getElementById("start-products");
-  const skipBtn = document.getElementById("start-skip");
   const returningEl = document.getElementById("start-returning");
   const rNameEl = document.getElementById("start-rname");
 
@@ -120,7 +119,6 @@
 
   if (townBtn) townBtn.addEventListener("click", enterTown);
   if (prodBtn) prodBtn.addEventListener("click", goProducts);
-  if (skipBtn) skipBtn.addEventListener("click", hide);
 
   document.body.classList.add("start-lock");
 })();

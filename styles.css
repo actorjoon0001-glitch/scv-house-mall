@@ -961,6 +961,7 @@ body.start-lock { overflow: hidden; }
 }
 .start__btns { display: grid; gap: 10px; }
 .start__skip {
+  display: inline-block;
   margin-top: 14px;
   font-size: 13px;
   color: rgba(255,255,255,0.55);
