@@ -17,7 +17,7 @@
         <span class="brand__mark">세움</span><span class="brand__sub">디자인하우징</span>
       </a>
       <nav class="nav__links" aria-label="Primary">
-        <a href="#viewer">3D 하우스</a>
+        <a href="#viewer">3D 타운</a>
         <a href="#products">제품</a>
         <a href="#why">세움이 다른 이유</a>
         <a href="#gallery">시공사례</a>
@@ -63,35 +63,24 @@
       </a>
     </section>
 
-    <!-- INTERACTIVE 3D VIEWER -->
-    <section class="viewer" id="viewer">
+    <!-- SEUM 3D TOWN -->
+    <section class="viewer town" id="viewer">
       <div class="container">
         <div class="head">
-          <p class="eyebrow eyebrow--light">INTERACTIVE 3D</p>
-          <h2 class="head__title">360°로 돌려보는 세움 하우스</h2>
-          <p class="viewer__sub">사진이 아니라 실제 3D 모델입니다. 마우스로 드래그하고, 휠로 확대해 보세요.</p>
+          <p class="eyebrow eyebrow--light">SEUM 3D TOWN</p>
+          <h2 class="head__title">세움봇과 함께 걷는 3D 타운</h2>
+          <p class="viewer__sub">
+            세움의 건축 마스코트 <strong>세움봇</strong>을 움직여 마을에 놓인 하우스들을 둘러보세요.
+            하우스를 클릭하면 제품 소개로 이동합니다.
+          </p>
         </div>
-        <div class="viewer__stage">
-          <model-viewer
-            src="assets/house-3d.glb"
-            alt="세움 이동식 주택 3D 모델"
-            camera-controls
-            auto-rotate
-            auto-rotate-delay="0"
-            rotation-per-second="10deg"
-            shadow-intensity="1.2"
-            shadow-softness="0.8"
-            exposure="1.05"
-            camera-orbit="30deg 76deg 100%"
-            min-camera-orbit="auto 50deg 60%"
-            max-camera-orbit="auto 95deg 160%"
-            interaction-prompt="none"
-            ar
-            ar-modes="webxr scene-viewer quick-look"
-            loading="lazy">
-            <div class="viewer__loading" slot="poster">3D 모델 불러오는 중…</div>
-          </model-viewer>
-          <p class="viewer__hint"><span>⟲</span> 드래그해서 회전 · 휠/핀치로 확대 · 모바일에서는 AR로 내 부지에 놓아보기</p>
+        <div class="town__stage" id="town-stage">
+          <canvas id="town-canvas"></canvas>
+          <div class="town__loading" id="town-loading">3D 타운 불러오는 중…</div>
+          <p class="town__hud"><span class="town__keys">W A S D</span> 또는 방향키로 이동 · 모바일은 조이스틱</p>
+          <div class="town__joystick" id="town-joystick" aria-hidden="true">
+            <div class="town__stick" id="town-stick"></div>
+          </div>
         </div>
       </div>
     </section>
@@ -252,7 +241,10 @@
     </div>
   </footer>
 
-  <script type="module" src="assets/model-viewer.min.js"></script>
+  <script type="importmap">
+    { "imports": { "three": "./assets/three.module.min.js" } }
+  </script>
+  <script type="module" src="assets/town.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
