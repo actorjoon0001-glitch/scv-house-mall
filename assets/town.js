@@ -2,6 +2,7 @@
 // 상쾌환 스타일의 미니 3D 타운: 메타봇이 하우스 사이를 걸어다닌다.
 import * as THREE from "three";
 import { GLTFLoader } from "./GLTFLoader.js";
+import { RGBELoader } from "./RGBELoader.js";
 import { clone as skeletonClone } from "./SkeletonUtils.js";
 
 const stage = document.getElementById("town-stage");
@@ -44,7 +45,9 @@ function init() {
   const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 220);
 
   // ---------- 조명 ----------
-  scene.add(new THREE.HemisphereLight(0xdff0ff, 0x7da06a, 1.0));
+  // HDRI 로드 전 폴백 조명 (로드되면 HDRI가 주광을 맡고 아래 값은 축소됨)
+  const hemi = new THREE.HemisphereLight(0xdff0ff, 0x7da06a, 1.0);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff2df, 2.2);
   sun.position.set(18, 30, 14);
   sun.castShadow = true;
@@ -53,6 +56,26 @@ function init() {
   sun.shadow.camera.top = 48; sun.shadow.camera.bottom = -48;
   sun.shadow.bias = -0.0004;
   scene.add(sun);
+
+  // ---------- HDRI 하늘·환경광 (Poly Haven kloofendal_48d_partly_cloudy_puresky, CC0) ----------
+  // 좁은 화면/데이터 절약 모드는 1K, 그 외 2K
+  const hdrFile =
+    window.innerWidth < 700 || (navigator.connection && navigator.connection.saveData)
+      ? "assets/hdri/sky_1k.hdr"
+      : "assets/hdri/sky_2k.hdr";
+  new RGBELoader().load(
+    hdrFile,
+    (tex) => {
+      tex.mapping = THREE.EquirectangularReflectionMapping;
+      scene.background = tex;
+      scene.environment = tex; // 집·바닥·캐릭터에 자연광
+      hemi.intensity = 0.25;   // HDRI가 주광을 맡으므로 보조광 축소
+      sun.intensity = 1.7;     // 그림자용 태양광은 유지
+      scene.fog.color.set(0xe7eef4); // 안개 색을 지평선 톤에 맞춤
+    },
+    undefined,
+    () => {} // 실패 시 기존 단색 하늘·조명 유지
+  );
 
   // ---------- 바닥 ----------
   const WORLD_R = 52;
@@ -134,6 +157,17 @@ function init() {
   const loader = new GLTFLoader();
   const clickTargets = [];
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
+
+  // 바닥 잔디 질감 (Poly Haven leafy_grass, CC0)
+  new THREE.TextureLoader().load("assets/hdri/grass_diff_1k.jpg", (t) => {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(26, 26);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = maxAniso;
+    ground.material.map = t;
+    ground.material.color.set(0xb2d795); // 기존 밝은 잔디 톤 유지용 틴트
+    ground.material.needsUpdate = true;
+  });
 
   // 비스듬한 각도에서 텍스처가 뭉개지지 않도록 이방성 필터링 적용
   function sharpen(obj) {
