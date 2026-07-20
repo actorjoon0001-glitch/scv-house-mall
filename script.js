@@ -105,6 +105,11 @@ async function loadModels() {
     if (!res.ok) throw new Error("catalog fetch failed");
     const data = await res.json();
     allModels = data.filter((m) => m.main_image && m.name);
+    // 관리자 표시 설정 병합
+    if (window.SeumTownConfig) {
+      const cfg = await window.SeumTownConfig.load().catch(() => ({ data: {} }));
+      allModels = window.SeumTownConfig.apply(allModels, cfg.data || {});
+    }
     if (!allModels.length) throw new Error("catalog empty");
   } catch (e) {
     allModels = FALLBACK_MODELS;
