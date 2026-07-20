@@ -17,6 +17,7 @@
         <span class="brand__mark">세움</span><span class="brand__sub">디자인하우징</span>
       </a>
       <nav class="nav__links" aria-label="Primary">
+        <a href="#viewer">3D 하우스</a>
         <a href="#products">제품</a>
         <a href="#why">세움이 다른 이유</a>
         <a href="#gallery">시공사례</a>
@@ -56,10 +57,43 @@
           </ul>
         </div>
       </div>
-      <a href="#products" class="hero__scroll" aria-label="아래로 스크롤">
+      <a href="#viewer" class="hero__scroll" aria-label="아래로 스크롤">
         <span class="hero__scroll-label">SCROLL</span>
         <span class="hero__scroll-line"></span>
       </a>
+    </section>
+
+    <!-- INTERACTIVE 3D VIEWER -->
+    <section class="viewer" id="viewer">
+      <div class="container">
+        <div class="head">
+          <p class="eyebrow eyebrow--light">INTERACTIVE 3D</p>
+          <h2 class="head__title">360°로 돌려보는 세움 하우스</h2>
+          <p class="viewer__sub">사진이 아니라 실제 3D 모델입니다. 마우스로 드래그하고, 휠로 확대해 보세요.</p>
+        </div>
+        <div class="viewer__stage">
+          <model-viewer
+            src="assets/house-3d.glb"
+            alt="세움 이동식 주택 3D 모델"
+            camera-controls
+            auto-rotate
+            auto-rotate-delay="0"
+            rotation-per-second="10deg"
+            shadow-intensity="1.2"
+            shadow-softness="0.8"
+            exposure="1.05"
+            camera-orbit="30deg 76deg 100%"
+            min-camera-orbit="auto 50deg 60%"
+            max-camera-orbit="auto 95deg 160%"
+            interaction-prompt="none"
+            ar
+            ar-modes="webxr scene-viewer quick-look"
+            loading="lazy">
+            <div class="viewer__loading" slot="poster">3D 모델 불러오는 중…</div>
+          </model-viewer>
+          <p class="viewer__hint"><span>⟲</span> 드래그해서 회전 · 휠/핀치로 확대 · 모바일에서는 AR로 내 부지에 놓아보기</p>
+        </div>
+      </div>
     </section>
 
     <!-- PRODUCTS -->
@@ -218,6 +252,7 @@
     </div>
   </footer>
 
+  <script type="module" src="assets/model-viewer.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
