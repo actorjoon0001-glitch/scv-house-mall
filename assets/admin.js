@@ -11,7 +11,7 @@
   ];
   const ROT_ARROW = { 0: "↓", 90: "→", 180: "↑", 270: "←" };
   // 관리자 비밀번호(SHA-256). 변경하려면 새 비밀번호의 sha256 hex로 교체.
-  const PASS_HASH = "8229c51fcf2de11d4a910c0d74001df6d5bfb22b054efadd6a8da63f9f4a7cc3";
+  const PASS_HASH = "55d1e430cb1d46e334d643153b69ba7b996ce912a0c6f2d54d4c1769b9dea609";
 
   const gate = document.getElementById("gate");
   const app = document.getElementById("app");
