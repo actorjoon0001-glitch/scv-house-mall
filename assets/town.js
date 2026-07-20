@@ -1,5 +1,5 @@
-// ============ SEUM 3D TOWN ============
-// 상쾌환 스타일의 미니 3D 타운: 세움봇이 하우스 사이를 걸어다닌다.
+// ============ METAHOUSE 3D TOWN ============
+// 상쾌환 스타일의 미니 3D 타운: 메타봇이 하우스 사이를 걸어다닌다.
 import * as THREE from "three";
 import { GLTFLoader } from "./GLTFLoader.js";
 import { clone as skeletonClone } from "./SkeletonUtils.js";
@@ -331,7 +331,7 @@ function init() {
     activeLot = best;
     if (!best) { cardEl.hidden = true; return; }
     const m = best.model;
-    cardTag.textContent = m.category || "세움 모델";
+    cardTag.textContent = m.category || "메타하우스 모델";
     cardName.textContent = m.name;
     cardSpec.textContent = m.size || "";
     cardPrice.textContent = fmtPrice(m);
@@ -367,7 +367,7 @@ function init() {
   scene.add(player);
 
   const CHARACTERS = {
-    robot: { label: "세움봇", walk: "assets/robot-walk.glb", run: "assets/robot-run.glb", height: 1.9 },
+    robot: { label: "메타봇", walk: "assets/robot-walk.glb", run: "assets/robot-run.glb", height: 1.9 },
     kid: { label: "아이", walk: "assets/chars/kid.glb", height: 1.25 },
     woman: { label: "어른", walk: "assets/chars/woman.glb", height: 1.7 },
     grandpa: { label: "할아버지", walk: "assets/chars/grandpa.glb", height: 1.68 },

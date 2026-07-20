@@ -73,7 +73,7 @@ function render() {
         ${badge ? `<span class="product__badge">${esc(badge)}</span>` : ""}
       </a>
       <div class="product__info">
-        <span class="product__tag">${esc(m.category || "세움 모델")}</span>
+        <span class="product__tag">${esc(m.category || "메타하우스 모델")}</span>
         <h3 class="product__name">${esc(m.name)}</h3>
         <p class="product__spec">${esc(m.size || "")}${m.rooms ? ` · 방 ${m.rooms}` : ""}${m.bathrooms ? ` · 욕실 ${m.bathrooms}` : ""}</p>
         <p class="product__price">${fmtPrice(m)}</p>
