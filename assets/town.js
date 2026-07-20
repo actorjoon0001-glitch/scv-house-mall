@@ -27,7 +27,9 @@ visIO.observe(stage);
 
 function init() {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // dpr 1 모니터에서도 최소 1.6배로 슈퍼샘플링해 계단현상/뭉개짐 방지
+  const pixelRatio = () => Math.min(Math.max(window.devicePixelRatio || 1, 1.6), 2.5);
+  renderer.setPixelRatio(pixelRatio());
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -122,6 +124,19 @@ function init() {
   // ---------- 모델 로드 ----------
   const loader = new GLTFLoader();
   const clickTargets = [];
+  const maxAniso = renderer.capabilities.getMaxAnisotropy();
+
+  // 비스듬한 각도에서 텍스처가 뭉개지지 않도록 이방성 필터링 적용
+  function sharpen(obj) {
+    obj.traverse((o) => {
+      if (o.isMesh && o.material) {
+        const m = o.material;
+        [m.map, m.normalMap, m.roughnessMap, m.metalnessMap, m.aoMap].forEach((t) => {
+          if (t) { t.anisotropy = maxAniso; t.needsUpdate = true; }
+        });
+      }
+    });
+  }
 
   function normalize(obj, targetH) {
     const box = new THREE.Box3().setFromObject(obj);
@@ -144,6 +159,7 @@ function init() {
     { pos: [0, -21], rot: 0, h: 5.0, label: "STAY 28" },
   ];
   loader.load("assets/house-3d.glb", (glb) => {
+    sharpen(glb.scene);
     HOUSES.forEach((cfg) => {
       const wrap = new THREE.Group();
       const inst = glb.scene.clone(true);
@@ -183,6 +199,7 @@ function init() {
   // 로봇 GLB가 없으면 심플 대체 로봇으로 진행
   loader.load("assets/robot-walk.glb", (glb) => {
     const bot = glb.scene;
+    sharpen(bot);
     bot.traverse((o) => { if (o.isMesh) { o.castShadow = true; } });
     const box = skinnedBox(bot);
     const size = box.getSize(new THREE.Vector3());
@@ -277,6 +294,7 @@ function init() {
   // ---------- 리사이즈 ----------
   function resize() {
     const w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setPixelRatio(pixelRatio()); // 창 이동/브라우저 줌으로 dpr가 바뀌어도 유지
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
