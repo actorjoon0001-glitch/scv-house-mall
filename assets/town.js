@@ -968,10 +968,20 @@ function init() {
   const clock = new THREE.Clock();
   let heading = 0;
 
-  // 디버그/테스트 훅 (프로덕션 동작에 영향 없음)
+  // 외부(시작 화면)·디버그용 훅
   window.__seumTown = {
     teleport(x, z) { player.position.x = x; player.position.z = z; updateNearCard(); },
     lots: houseLots,
+    // 시작 화면에서 캐릭터·닉네임을 정하고 바로 입장시킬 때 사용
+    setCharacter(charKey, nick) {
+      if (nick) {
+        myNick = nick;
+        try { localStorage.setItem("seum_nick", nick); } catch (e) {}
+      }
+      if (selEl) selEl.hidden = true;
+      setPlayerCharacter(charKey && CHARACTERS[charKey] ? charKey : myChar || "robot");
+      joinRealtime();
+    },
   };
 
   function tick() {
