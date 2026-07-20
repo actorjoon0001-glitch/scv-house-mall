@@ -109,6 +109,7 @@ async function loadModels() {
   } catch (e) {
     allModels = FALLBACK_MODELS;
   }
+  window.__seumModels = allModels; // 메타봇 챗봇 등에서 가격·모델 수 참조
   renderChips();
   render();
 }

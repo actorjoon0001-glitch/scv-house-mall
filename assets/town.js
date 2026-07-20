@@ -690,6 +690,24 @@ function init() {
     openSelect();
   }
 
+  // 광장의 안내 NPC 메타봇 — 다가가면 상담 채팅이 열린다
+  let npcGroup = null;
+  let npcNear = false;
+  buildCharInstance("robot")
+    .then((rig) => {
+      const npc = new THREE.Group();
+      npc.add(rig.obj);
+      const label = nameSign("메타봇 상담 🤖");
+      label.scale.set(2.8, 0.7, 1);
+      label.position.y = 2.5;
+      npc.add(label);
+      npc.position.set(3.4, 0, -3.4);
+      npc.rotation.y = Math.atan2(0 - 3.4, 4 + 3.4);
+      scene.add(npc);
+      npcGroup = npc;
+    })
+    .catch(() => {});
+
   // ---------- 입력 ----------
   const keys = new Set();
   let shiftHeld = false;
@@ -1016,6 +1034,13 @@ function init() {
     });
 
     broadcastPos(clock.elapsedTime, moving, sprinting);
+
+    // NPC 메타봇 근접 → 상담 채팅 열기 (멀어지면 다시 트리거 가능)
+    if (npcGroup && window.__metaChat) {
+      const nd = Math.hypot(npcGroup.position.x - player.position.x, npcGroup.position.z - player.position.z);
+      if (nd < 2.4 && !npcNear) { npcNear = true; window.__metaChat.open(); }
+      else if (nd > 4.5) npcNear = false;
+    }
 
     clouds.forEach((c, i) => { c.position.x += dt * (0.25 + i * 0.05); if (c.position.x > 55) c.position.x = -55; });
 

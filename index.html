@@ -283,11 +283,35 @@
     </div>
   </footer>
 
+  <!-- 메타봇 상담 채팅 -->
+  <div class="chat" id="chat">
+    <button type="button" class="chat__fab" id="chat-fab" aria-label="메타봇 상담 열기">
+      <img src="assets/chars/robot.webp" alt="메타봇" />
+    </button>
+    <div class="chat__panel" id="chat-panel" hidden>
+      <div class="chat__head">
+        <img src="assets/chars/robot.webp" alt="" />
+        <div class="chat__head-t">
+          <strong>메타봇 🤖</strong>
+          <span>무엇이든 물어보세요</span>
+        </div>
+        <button type="button" class="chat__close" id="chat-close" aria-label="채팅 닫기">✕</button>
+      </div>
+      <div class="chat__body" id="chat-body"></div>
+      <div class="chat__quick" id="chat-quick"></div>
+      <form class="chat__inputrow" id="chat-form">
+        <input id="chat-input" placeholder="궁금한 걸 물어보세요…" autocomplete="off" maxlength="200" />
+        <button type="submit" class="chat__send" aria-label="보내기">➤</button>
+      </form>
+    </div>
+  </div>
+
   <script type="importmap">
     { "imports": { "three": "./assets/three.module.min.js" } }
   </script>
   <script src="assets/supabase.js"></script>
   <script type="module" src="assets/town.js"></script>
   <script src="script.js"></script>
+  <script src="assets/chat.js"></script>
 </body>
 </html>
