@@ -368,19 +368,57 @@ function init() {
 
   const CHARACTERS = {
     robot: { label: "메타봇", walk: "assets/robot-walk.glb", run: "assets/robot-run.glb", height: 1.9 },
-    kid: { label: "아이", walk: "assets/chars/kid.glb", height: 1.25 },
-    woman: { label: "어른", walk: "assets/chars/woman.glb", height: 1.7 },
+    boy: { label: "남자아이", walk: "assets/chars/kid.glb", height: 1.25, img: "kid" },
+    girl: { label: "여자아이", walk: "assets/chars/girl.glb", height: 1.22 },
+    woman: { label: "여성", walk: "assets/chars/woman.glb", height: 1.7 },
+    man: { label: "남성", walk: "assets/chars/man.glb", height: 1.78 },
     grandpa: { label: "할아버지", walk: "assets/chars/grandpa.glb", height: 1.68 },
     grandma: { label: "할머니", walk: "assets/chars/grandma.glb", height: 1.6 },
   };
+  // 예전 키(kid) 저장값 호환
+  const CHAR_ALIAS = { kid: "boy" };
+
+  const CUSTOM_COLORS = ["#e74c3c", "#f39c12", "#f6d743", "#2ecc71", "#3498db", "#9b59b6", "#ff7fb2", "#f4f4f0"];
 
   const myId = (crypto.randomUUID && crypto.randomUUID()) || "u" + Math.random().toString(36).slice(2);
   let myChar = null;
   let myNick = "";
+  let myColor = CUSTOM_COLORS[4];
+  let myScale = 1;
   try {
     myChar = localStorage.getItem("seum_char");
+    if (myChar && CHAR_ALIAS[myChar]) myChar = CHAR_ALIAS[myChar];
+    if (myChar && !CHARACTERS[myChar]) myChar = null;
     myNick = localStorage.getItem("seum_nick") || "";
+    myColor = localStorage.getItem("seum_color") || myColor;
+    myScale = parseFloat(localStorage.getItem("seum_scale")) || 1;
   } catch (e) {}
+
+  // 포인트 컬러 풍선 액세서리
+  function makeBalloon(hex, charH) {
+    const g = new THREE.Group();
+    const string = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.012, 0.012, 0.55, 5),
+      new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.9 })
+    );
+    string.position.y = 0.275;
+    const ball = new THREE.Mesh(
+      new THREE.SphereGeometry(0.24, 18, 18),
+      new THREE.MeshStandardMaterial({ color: new THREE.Color(hex), roughness: 0.35 })
+    );
+    ball.position.y = 0.72;
+    ball.scale.y = 1.12;
+    g.add(string, ball);
+    g.position.set(0.42, charH * 0.86, -0.1);
+    g.userData.baseY = g.position.y;
+    return g;
+  }
+  function attachBalloon(group, hex, charH) {
+    if (group.userData.balloon) group.remove(group.userData.balloon);
+    const b = makeBalloon(hex, charH);
+    group.add(b);
+    group.userData.balloon = b;
+  }
 
   // 스킨드 메시는 뼈대 변형 기준으로 바운딩을 재야 크기가 맞는다
   function skinnedBox(obj) {
@@ -460,11 +498,14 @@ function init() {
       .catch(() => capsuleFallback())
       .then((rig) => {
         while (player.children.length) player.remove(player.children[0]);
+        player.userData.balloon = null;
         player.add(rig.obj);
         playerRig = rig;
+        attachBalloon(player, myColor, CHARACTERS[myChar].height);
+        player.scale.setScalar(myScale);
         loadingEl.hidden = true;
         if (rtChannel) {
-          try { rtChannel.track({ char: myChar, nick: myNick || "방문객" }); } catch (e) {}
+          try { rtChannel.track({ char: myChar, nick: myNick || "방문객", color: myColor, scale: myScale }); } catch (e) {}
         }
       });
   }
@@ -475,21 +516,27 @@ function init() {
   const remotes = new Map(); // id -> { group, rig, char, nick, target }
   let rtChannel = null;
 
-  function spawnRemote(id, charKey, nick) {
+  function spawnRemote(id, meta) {
+    const charKey = CHARACTERS[meta.char] ? meta.char : "robot";
     const group = new THREE.Group();
     group.position.set((Math.random() - 0.5) * 4, 0, 4 + Math.random() * 3);
     scene.add(group);
-    const entry = { group, rig: null, char: charKey, nick, target: null };
+    const metaKey = `${charKey}|${meta.color || ""}|${meta.scale || 1}|${meta.nick || ""}`;
+    const entry = { group, rig: null, metaKey, target: null };
     remotes.set(id, entry);
     buildCharInstance(charKey)
       .catch(() => capsuleFallback())
       .then((rig) => {
         if (!remotes.has(id) || remotes.get(id) !== entry) return;
         group.add(rig.obj);
-        const label = nameSign(nick || "방문객");
+        const h = CHARACTERS[charKey] ? CHARACTERS[charKey].height : 1.8;
+        const label = nameSign(meta.nick || "방문객");
         label.scale.set(2.4, 0.6, 1);
-        label.position.y = (CHARACTERS[charKey] ? CHARACTERS[charKey].height : 1.8) + 0.55;
+        label.position.y = h + 0.55;
         group.add(label);
+        if (meta.color) attachBalloon(group, meta.color, h);
+        const sc = parseFloat(meta.scale);
+        if (sc && sc > 0.5 && sc < 2) group.scale.setScalar(sc);
         entry.rig = rig;
       });
   }
@@ -511,12 +558,13 @@ function init() {
         Object.entries(state).forEach(([id, metas]) => {
           if (id === myId) return;
           const meta = (metas && metas[0]) || {};
+          const metaKey = `${CHARACTERS[meta.char] ? meta.char : "robot"}|${meta.color || ""}|${meta.scale || 1}|${meta.nick || ""}`;
           const existing = remotes.get(id);
           if (!existing) {
-            spawnRemote(id, meta.char || "robot", meta.nick || "방문객");
-          } else if (existing.char !== (meta.char || "robot")) {
+            spawnRemote(id, meta);
+          } else if (existing.metaKey !== metaKey) {
             removeRemote(id);
-            spawnRemote(id, meta.char || "robot", meta.nick || "방문객");
+            spawnRemote(id, meta);
           }
         });
         [...remotes.keys()].forEach((id) => { if (!state[id]) removeRemote(id); });
@@ -527,7 +575,7 @@ function init() {
       });
       rtChannel.subscribe((status) => {
         if (status === "SUBSCRIBED") {
-          try { rtChannel.track({ char: myChar || "robot", nick: myNick || "방문객" }); } catch (e) {}
+          try { rtChannel.track({ char: myChar || "robot", nick: myNick || "방문객", color: myColor, scale: myScale }); } catch (e) {}
         }
       });
     } catch (e) {
@@ -568,12 +616,18 @@ function init() {
   const charBtn = document.getElementById("town-char");
   let selChar = myChar || "robot";
 
+  const colorsEl = document.getElementById("town-colors");
+  const scaleEl = document.getElementById("town-scale");
+  const scaleValEl = document.getElementById("town-scale-val");
+  let selColor = myColor;
+  let selScale = myScale;
+
   function renderSelect() {
     if (!selGrid) return;
     selGrid.innerHTML = Object.entries(CHARACTERS)
       .map(([k, d]) => `
         <button type="button" class="town__char${k === selChar ? " is-sel" : ""}" data-char="${k}">
-          <img src="assets/chars/${k}.webp" alt="${d.label}" loading="lazy" />
+          <img src="assets/chars/${d.img || k}.webp" alt="${d.label}" loading="lazy" />
           <span>${d.label}</span>
         </button>`)
       .join("");
@@ -583,6 +637,27 @@ function init() {
         selGrid.querySelectorAll(".town__char").forEach((x) => x.classList.toggle("is-sel", x === b));
       })
     );
+    if (colorsEl) {
+      colorsEl.innerHTML = CUSTOM_COLORS
+        .map((c) => `<button type="button" class="town__color${c === selColor ? " is-sel" : ""}" data-color="${c}" style="background:${c}" aria-label="포인트 컬러 ${c}"></button>`)
+        .join("");
+      colorsEl.querySelectorAll(".town__color").forEach((b) =>
+        b.addEventListener("click", () => {
+          selColor = b.dataset.color;
+          colorsEl.querySelectorAll(".town__color").forEach((x) => x.classList.toggle("is-sel", x === b));
+        })
+      );
+    }
+    if (scaleEl) {
+      scaleEl.value = Math.round(selScale * 100);
+      if (scaleValEl) scaleValEl.textContent = `${Math.round(selScale * 100)}%`;
+    }
+  }
+  if (scaleEl) {
+    scaleEl.addEventListener("input", () => {
+      selScale = scaleEl.value / 100;
+      if (scaleValEl) scaleValEl.textContent = `${scaleEl.value}%`;
+    });
   }
   function openSelect() {
     if (!selEl) return;
@@ -593,7 +668,13 @@ function init() {
   if (enterBtn) {
     enterBtn.addEventListener("click", () => {
       myNick = ((nickInput && nickInput.value) || "").trim().slice(0, 10) || "방문객";
-      try { localStorage.setItem("seum_nick", myNick); } catch (e) {}
+      myColor = selColor;
+      myScale = Math.min(1.15, Math.max(0.9, selScale));
+      try {
+        localStorage.setItem("seum_nick", myNick);
+        localStorage.setItem("seum_color", myColor);
+        localStorage.setItem("seum_scale", String(myScale));
+      } catch (e) {}
       selEl.hidden = true;
       setPlayerCharacter(selChar);
       joinRealtime();
@@ -842,6 +923,19 @@ function init() {
     broadcastPos(clock.elapsedTime, moving, sprinting);
 
     clouds.forEach((c, i) => { c.position.x += dt * (0.25 + i * 0.05); if (c.position.x > 55) c.position.x = -55; });
+
+    // 풍선 둥실거림
+    const bobT = clock.elapsedTime;
+    const bob = (g, phase) => {
+      const b = g.userData.balloon;
+      if (b) {
+        b.position.y = b.userData.baseY + Math.sin(bobT * 1.8 + phase) * 0.05;
+        b.rotation.z = Math.sin(bobT * 1.3 + phase) * 0.08;
+      }
+    };
+    bob(player, 0);
+    let ph = 1;
+    remotes.forEach((r) => bob(r.group, ph++));
 
     camPos.lerp(new THREE.Vector3().copy(player.position).add(camOffset), 1 - Math.pow(0.001, dt));
     camera.position.copy(camPos);
