@@ -450,24 +450,31 @@ function init() {
     if (dir) keys.delete(dir);
   });
 
-  // 터치 조이스틱
+  // 조이스틱 (터치 + 마우스 공용, 포인터 이벤트)
   const joy = { active: false, x: 0, y: 0 };
-  function joyMove(touch) {
+  function joyMove(e) {
     const rect = joyBase.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
-    let dx = touch.clientX - cx, dy = touch.clientY - cy;
+    let dx = e.clientX - cx, dy = e.clientY - cy;
     const max = rect.width / 2 - 14;
     const len = Math.hypot(dx, dy);
     if (len > max) { dx = (dx / len) * max; dy = (dy / len) * max; }
     joyStick.style.transform = `translate(${dx}px, ${dy}px)`;
     joy.x = dx / max; joy.y = dy / max;
   }
-  joyBase.addEventListener("touchstart", (e) => { joy.active = true; joyMove(e.touches[0]); e.preventDefault(); }, { passive: false });
-  joyBase.addEventListener("touchmove", (e) => { joyMove(e.touches[0]); e.preventDefault(); }, { passive: false });
-  ["touchend", "touchcancel"].forEach((ev) =>
-    joyBase.addEventListener(ev, () => { joy.active = false; joy.x = joy.y = 0; joyStick.style.transform = "translate(0,0)"; })
-  );
+  function joyEnd() {
+    joy.active = false; joy.x = joy.y = 0;
+    joyStick.style.transform = "translate(0,0)";
+  }
+  joyBase.addEventListener("pointerdown", (e) => {
+    joy.active = true;
+    joyBase.setPointerCapture(e.pointerId);
+    joyMove(e);
+    e.preventDefault();
+  });
+  joyBase.addEventListener("pointermove", (e) => { if (joy.active) joyMove(e); });
+  ["pointerup", "pointercancel"].forEach((ev) => joyBase.addEventListener(ev, joyEnd));
 
   // 하우스 클릭 → 제품 섹션으로
   const ray = new THREE.Raycaster();
