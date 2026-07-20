@@ -487,6 +487,38 @@ function init() {
   window.addEventListener("resize", resize);
   resize();
 
+  // ---------- 전체화면 ----------
+  const fsBtn = document.getElementById("town-fs");
+  const fsLabel = document.getElementById("town-fs-label");
+  function fsActive() {
+    return document.fullscreenElement === stage || stage.classList.contains("is-fs");
+  }
+  function syncFs() {
+    const on = fsActive();
+    if (fsLabel) fsLabel.textContent = on ? "닫기" : "전체화면";
+    document.body.classList.toggle("town-fs-lock", stage.classList.contains("is-fs"));
+    resize();
+    setTimeout(resize, 120); // 전환 애니메이션 후 최종 크기 반영
+  }
+  function enterFs() {
+    if (stage.requestFullscreen) {
+      stage.requestFullscreen().catch(() => { stage.classList.add("is-fs"); syncFs(); });
+    } else {
+      stage.classList.add("is-fs");
+      syncFs();
+    }
+  }
+  function exitFs() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    stage.classList.remove("is-fs");
+    syncFs();
+  }
+  if (fsBtn) fsBtn.addEventListener("click", () => (fsActive() ? exitFs() : enterFs()));
+  document.addEventListener("fullscreenchange", syncFs);
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && stage.classList.contains("is-fs")) exitFs();
+  });
+
   // ---------- 루프 ----------
   const WALK_SPEED = 5.2;
   const RUN_SPEED = 11;
