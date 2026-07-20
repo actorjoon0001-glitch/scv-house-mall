@@ -748,12 +748,47 @@ function init() {
   joyBase.addEventListener("pointermove", (e) => { if (joy.active) joyMove(e); });
   ["pointerup", "pointercancel"].forEach((ev) => joyBase.addEventListener(ev, joyEnd));
 
-  // 하우스 클릭 → 제품 섹션으로
+  // 카메라 줌(휠/핀치)·회전(드래그)
+  let camAz = 0;
+  let camZoom = 1;
+  canvas.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    camZoom = Math.min(4.4, Math.max(0.55, camZoom * (1 + e.deltaY * 0.0012)));
+  }, { passive: false });
+
+  let orbit = null;
+  let pinch = null;
+  canvas.addEventListener("touchstart", (e) => {
+    if (e.touches.length === 2) {
+      pinch = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    }
+  }, { passive: true });
+  canvas.addEventListener("touchmove", (e) => {
+    if (pinch && e.touches.length === 2) {
+      const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      camZoom = Math.min(4.4, Math.max(0.55, camZoom * (pinch / d)));
+      pinch = d;
+    }
+  }, { passive: true });
+  canvas.addEventListener("touchend", () => { pinch = null; });
+
+  // 하우스 클릭 → 상세 / 드래그 → 시점 회전
   const ray = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   let downAt = null;
-  canvas.addEventListener("pointerdown", (e) => { downAt = [e.clientX, e.clientY]; });
+  canvas.addEventListener("pointerdown", (e) => {
+    downAt = [e.clientX, e.clientY];
+    orbit = { px: e.clientX, az0: camAz };
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (orbit && (e.buttons || e.pointerType === "touch")) {
+      camAz = orbit.az0 + (e.clientX - orbit.px) * 0.006;
+    }
+  });
+  canvas.addEventListener("pointercancel", () => { orbit = null; });
   canvas.addEventListener("pointerup", (e) => {
+    orbit = null;
     if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return;
     const rect = canvas.getBoundingClientRect();
     pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -821,6 +856,62 @@ function init() {
   const RUN_SPEED = 11;
   const camOffset = new THREE.Vector3(0, 6.2, 9.5);
   const camPos = new THREE.Vector3().copy(player.position).add(camOffset);
+
+  // 미니맵
+  const mapCanvas = document.getElementById("town-map");
+  const mapCtx = mapCanvas ? mapCanvas.getContext("2d") : null;
+  let mapTimer = 0;
+  function drawMap() {
+    const S = mapCanvas.width;
+    const c = S / 2;
+    const scale = (S / 2 - 8) / (WORLD_R + 12);
+    mapCtx.clearRect(0, 0, S, S);
+    mapCtx.save();
+    mapCtx.beginPath();
+    mapCtx.arc(c, c, S / 2 - 3, 0, Math.PI * 2);
+    mapCtx.clip();
+    mapCtx.fillStyle = "#8fbe75";
+    mapCtx.fillRect(0, 0, S, S);
+    mapCtx.strokeStyle = "rgba(210,200,178,0.95)";
+    mapCtx.lineWidth = 4;
+    [21.5, 31.5].forEach((r) => {
+      mapCtx.beginPath();
+      mapCtx.arc(c, c, r * scale, 0, Math.PI * 2);
+      mapCtx.stroke();
+    });
+    mapCtx.fillStyle = "#d9cfbb";
+    mapCtx.beginPath();
+    mapCtx.arc(c, c, 7.5 * scale, 0, Math.PI * 2);
+    mapCtx.fill();
+    // 집
+    mapCtx.fillStyle = "#274b38";
+    houseLots.forEach((l) => {
+      mapCtx.fillRect(c + l.wrap.position.x * scale - 2.4, c + l.wrap.position.z * scale - 2.4, 4.8, 4.8);
+    });
+    // 다른 방문자
+    mapCtx.fillStyle = "#f39c12";
+    remotes.forEach((r) => {
+      mapCtx.beginPath();
+      mapCtx.arc(c + r.group.position.x * scale, c + r.group.position.z * scale, 3, 0, Math.PI * 2);
+      mapCtx.fill();
+    });
+    // 내 위치 (진행 방향 화살표)
+    mapCtx.save();
+    mapCtx.translate(c + player.position.x * scale, c + player.position.z * scale);
+    mapCtx.rotate(Math.PI - heading);
+    mapCtx.fillStyle = "#e74c3c";
+    mapCtx.strokeStyle = "#fff";
+    mapCtx.lineWidth = 1.5;
+    mapCtx.beginPath();
+    mapCtx.moveTo(0, -6.5);
+    mapCtx.lineTo(4.4, 4.6);
+    mapCtx.lineTo(-4.4, 4.6);
+    mapCtx.closePath();
+    mapCtx.fill();
+    mapCtx.stroke();
+    mapCtx.restore();
+    mapCtx.restore();
+  }
   const lookAt = new THREE.Vector3();
   const clock = new THREE.Clock();
   let heading = 0;
@@ -848,7 +939,11 @@ function init() {
     const sprinting = moving && (shiftHeld || (joy.active && mag > 0.94));
 
     if (moving) {
-      const dir = Math.atan2(mx, mz);
+      // 입력을 카메라 방향 기준으로 회전 (시점을 돌려도 W = 화면 앞)
+      const ca = Math.cos(camAz), sa = Math.sin(camAz);
+      const wx = mx * ca + mz * sa;
+      const wz = -mx * sa + mz * ca;
+      const dir = Math.atan2(wx, wz);
       const speed = sprinting ? RUN_SPEED : WALK_SPEED;
       player.position.x += Math.sin(dir) * speed * mag * dt;
       player.position.z += Math.cos(dir) * speed * mag * dt;
@@ -937,10 +1032,20 @@ function init() {
     let ph = 1;
     remotes.forEach((r) => bob(r.group, ph++));
 
+    // 시점: 줌·회전 반영
+    camOffset.set(Math.sin(camAz) * 9.5 * camZoom, 6.2 * camZoom, Math.cos(camAz) * 9.5 * camZoom);
+    scene.fog.near = 40 * Math.max(1, camZoom);
+    scene.fog.far = 95 * Math.max(1, camZoom);
     camPos.lerp(new THREE.Vector3().copy(player.position).add(camOffset), 1 - Math.pow(0.001, dt));
     camera.position.copy(camPos);
     lookAt.lerp(new THREE.Vector3(player.position.x, player.position.y + 1.2, player.position.z), 1 - Math.pow(0.0005, dt));
     camera.lookAt(lookAt);
+
+    // 미니맵 갱신 (0.15초 간격)
+    if (mapCtx) {
+      mapTimer += dt;
+      if (mapTimer > 0.15) { mapTimer = 0; drawMap(); }
+    }
 
     positionCard();
     renderer.render(scene, camera);

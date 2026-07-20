@@ -441,8 +441,28 @@ body.town-fs-lock { overflow: hidden; }
 }
 .town__jump:active { background: rgba(47,93,70,0.85); transform: scale(0.93); }
 
+/* 미니맵 */
+.town__map {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.35);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+  background: rgba(16,19,15,0.4);
+  pointer-events: none;
+  z-index: 3;
+}
+@media (max-width: 640px) {
+  .town__map { width: 96px; height: 96px; left: 10px; bottom: 10px; }
+}
+
 /* 캐릭터 선택 오버레이 */
 .town__select[hidden] { display: none; }
+/* 스테이지의 touch-action:none이 패널 스크롤/슬라이더를 막지 않도록 복원 */
+.town__select, .town__select * { touch-action: auto; }
 .town__select {
   position: absolute;
   inset: 0;
