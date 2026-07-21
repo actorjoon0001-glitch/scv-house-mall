@@ -4,6 +4,10 @@ import * as THREE from "three";
 import { GLTFLoader } from "./GLTFLoader.js";
 import { RGBELoader } from "./RGBELoader.js";
 import { clone as skeletonClone } from "./SkeletonUtils.js";
+import { EffectComposer } from "./postprocessing/EffectComposer.js";
+import { RenderPass } from "./postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "./postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "./postprocessing/OutputPass.js";
 
 const stage = document.getElementById("town-stage");
 const canvas = document.getElementById("town-canvas");
@@ -57,6 +61,32 @@ function init() {
 
   const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 220);
 
+  // ---------- PBR 지면 텍스처 (ambientCG CC0, 512px 축소판 — 모바일 로딩 부담 최소화) ----------
+  THREE.Cache.enabled = true; // 같은 텍스처 파일 재요청 방지
+  const texLoader = new THREE.TextureLoader();
+  const texAniso = renderer.capabilities.getMaxAnisotropy();
+  function pbrTex(url, srgb, rx, ry) {
+    const t = texLoader.load(url);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(rx, ry);
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = texAniso;
+    return t;
+  }
+
+  // ---------- 후처리: 은은한 블룸 (고사양 티어 전용, 실패 시 기본 렌더 폴백) ----------
+  let composer = null;
+  try {
+    const rt = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, samples: 4 });
+    composer = new EffectComposer(renderer, rt);
+    composer.addPass(new RenderPass(scene, camera));
+    // 과하면 촌스러워지므로 강도 0.16, 문턱 0.9로 햇빛·조명만 살짝 번지게
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), 0.16, 0.5, 0.9));
+    composer.addPass(new OutputPass());
+  } catch (e) {
+    composer = null;
+  }
+
   // ---------- 조명 ----------
   // HDRI 로드 전 폴백 조명 (로드되면 HDRI가 주광을 맡고 아래 값은 축소됨)
   const hemi = new THREE.HemisphereLight(0xdff0ff, 0x7da06a, 1.0);
@@ -65,10 +95,12 @@ function init() {
   sun.position.set(18, 30, 14);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
-  sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
+  // 그림자 카메라를 플레이어 주변에만 집중시켜 같은 해상도로 훨씬 선명한 그림자 (tick에서 추적)
+  sun.shadow.camera.left = -36; sun.shadow.camera.right = 36;
+  sun.shadow.camera.top = 36; sun.shadow.camera.bottom = -36;
   sun.shadow.bias = -0.0004;
   scene.add(sun);
+  scene.add(sun.target);
 
   // ---------- HDRI 하늘·환경광 (Poly Haven kloofendal_48d_partly_cloudy_puresky, CC0) ----------
   // 좁은 화면/데이터 절약 모드는 1K, 그 외 2K
@@ -97,23 +129,8 @@ function init() {
   let nightMode = false;
   let lampGroup = null;
   function buildLamps() {
-    // 메인 대로 가로등 (기둥·전구 인스턴스 + 포인트라이트 5개)
+    // 밤 전용 가로등 불빛 (기둥·전구는 소품 섹션에서 상시 표시)
     lampGroup = new THREE.Group();
-    const poleMat = new THREE.MeshStandardMaterial({ color: 0x3a3f3a, roughness: 0.8 });
-    const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffe6b0 });
-    const spots = [];
-    for (let z = 18; z >= -66; z -= 14) spots.push([-5.2, z], [5.2, z]);
-    const pIm = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.07, 0.09, 1, 6), poleMat, spots.length);
-    const bIm = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 8, 8), bulbMat, spots.length);
-    spots.forEach(([x, z], i) => {
-      IM_TMP.m.compose(IM_TMP.p.set(x, 1.7, z), IM_TMP.q, IM_TMP.s.set(1, 3.4, 1));
-      pIm.setMatrixAt(i, IM_TMP.m);
-      IM_TMP.m.compose(IM_TMP.p.set(x, 3.55, z), IM_TMP.q, IM_TMP.s.set(1, 1, 1));
-      bIm.setMatrixAt(i, IM_TMP.m);
-    });
-    pIm.instanceMatrix.needsUpdate = true;
-    bIm.instanceMatrix.needsUpdate = true;
-    lampGroup.add(pIm, bIm);
     for (let z = 12; z >= -60; z -= 18) {
       const pl = new THREE.PointLight(0xffd9a0, 15, 26, 2);
       pl.position.set(0, 3.6, z);
@@ -126,6 +143,9 @@ function init() {
     nightMode = on;
     if (on && !lampGroup) buildLamps();
     if (lampGroup) lampGroup.visible = on;
+    // 가로등 전구 발광 (밤 + 블룸에서 은은히 번짐)
+    lampBulbMat.emissive.set(on ? 0xffdf9e : 0x000000);
+    lampBulbMat.emissiveIntensity = on ? 1.6 : 1;
     if (on) {
       scene.background = new THREE.Color(0x0b1322);
       scene.environment = null;
@@ -322,20 +342,33 @@ function init() {
   outerGround.position.y = -0.02;
   outerGround.receiveShadow = true;
   scene.add(outerGround);
-  // 대지 잔디 (정돈된 밝은 톤)
+  // 대지 잔디 (정돈된 밝은 톤, PBR 잔디 텍스처 + 노멀)
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(SITE.x * 2, SITE.zS - SITE.zN),
-    new THREE.MeshStandardMaterial({ color: 0x93c178, roughness: 1 })
+    new THREE.MeshStandardMaterial({
+      color: 0xb2d795,
+      roughness: 1,
+      map: pbrTex("assets/hdri/grass_diff_1k.jpg", true, 28, 23),
+      normalMap: pbrTex("assets/tex/grass_n.jpg", false, 28, 23),
+    })
   );
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(0, 0, (SITE.zN + SITE.zS) / 2);
   ground.receiveShadow = true;
   scene.add(ground);
 
-  // ---------- 통로 (곧은 격자 포장) ----------
-  const pathMat = new THREE.MeshStandardMaterial({ color: 0xcdc2ac, roughness: 1 });
+  // ---------- 통로 (곧은 격자 포장, PBR 포장석 텍스처) ----------
+  // 조각마다 크기가 달라 타일링이 일정하도록 스트립별 텍스처 반복값을 계산한다
   function roadStrip(w, d, x, z) {
-    const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d), pathMat);
+    const p = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, d),
+      new THREE.MeshStandardMaterial({
+        color: 0xe3dbc8,
+        roughness: 0.95,
+        map: pbrTex("assets/tex/paving_c.jpg", true, Math.max(1, w / 2.6), Math.max(1, d / 2.6)),
+        normalMap: pbrTex("assets/tex/paving_n.jpg", false, Math.max(1, w / 2.6), Math.max(1, d / 2.6)),
+      })
+    );
     p.rotation.x = -Math.PI / 2;
     p.position.set(x, 0.02, z);
     p.receiveShadow = true;
@@ -344,7 +377,12 @@ function init() {
   // 입구 광장 (부지 정면 중앙 — 여기서 메인 축이 북쪽으로 뻗는다)
   const plaza = new THREE.Mesh(
     new THREE.CircleGeometry(7, 40),
-    new THREE.MeshStandardMaterial({ color: 0xd9cfbb, roughness: 1 })
+    new THREE.MeshStandardMaterial({
+      color: 0xe8dfca,
+      roughness: 0.95,
+      map: pbrTex("assets/tex/paving_c.jpg", true, 5.4, 5.4),
+      normalMap: pbrTex("assets/tex/paving_n.jpg", false, 5.4, 5.4),
+    })
   );
   plaza.rotation.x = -Math.PI / 2;
   plaza.position.set(0, 0.024, 26);
@@ -361,11 +399,12 @@ function init() {
 
   // ---------- 울타리 + 정문 (부지 경계 마감) ----------
   // 반복 장식(포스트·나무·생울타리 등)은 InstancedMesh로 묶어 드로우콜을 최소화한다
-  const IM_TMP = { m: new THREE.Matrix4(), p: new THREE.Vector3(), q: new THREE.Quaternion(), s: new THREE.Vector3(1, 1, 1) };
+  const IM_TMP = { m: new THREE.Matrix4(), p: new THREE.Vector3(), q: new THREE.Quaternion(), s: new THREE.Vector3(1, 1, 1), up: new THREE.Vector3(0, 1, 0) };
   function buildInstanced(geo, mat, items) {
-    // items: [{x,y,z, sx,sy,sz, color}]
+    // items: [{x,y,z, sx,sy,sz, ry, color}]
     const im = new THREE.InstancedMesh(geo, mat, items.length);
     items.forEach((it, i) => {
+      IM_TMP.q.setFromAxisAngle(IM_TMP.up, it.ry || 0);
       IM_TMP.m.compose(
         IM_TMP.p.set(it.x, it.y, it.z),
         IM_TMP.q,
@@ -483,6 +522,96 @@ function init() {
   buildInstanced(new THREE.BoxGeometry(2.6, 0.5, 0.9), hedgeMat, hedgeSpots);
   buildInstanced(new THREE.BoxGeometry(2, 0.18, 0.5), flowerMat, flowerSpots);
 
+  // ---------- 소품 (살아있는 박람회장: 통로 축·교차점 기준 규칙 배치, 전부 인스턴싱) ----------
+  // 배치 규칙: 가로등=메인 대로 일정 간격 / 벤치·쓰레기통=통로 교차점 / 화분=존 게이트 양옆
+  // 밀도는 PROP_CFG로 조절 — 추후 관리자 오버라이드(ov.props)로 확장 가능한 구조
+  const PROP_CFG = {
+    lampEvery: 14,                          // 가로등 간격 (메인 대로)
+    benchZ: [19.5, 8.5, -13.5, -35.5],      // 벤치를 놓는 통로 (교차점 근처)
+  };
+  const npcWalkers = []; // NPC 방문객 (applyQuality에서 저사양 시 수 축소)
+  // 가로등 전구 재질 — 밤 모드에서 emissive를 켜 빛나게 (블룸과 연동)
+  const lampBulbMat = new THREE.MeshStandardMaterial({ color: 0xf5efdf, roughness: 0.4 });
+  {
+    // 가로등 기둥·전구 — 낮에도 보이는 거리시설 (조명은 밤 모드에서만 켜짐)
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x3a3f3a, roughness: 0.8 });
+    const lampSpots = [];
+    for (let z = 18; z >= -66; z -= PROP_CFG.lampEvery) lampSpots.push([-5.2, z], [5.2, z]);
+    buildInstanced(
+      new THREE.CylinderGeometry(0.07, 0.09, 1, 6),
+      poleMat,
+      lampSpots.map(([x, z]) => ({ x, y: 1.7, z, sy: 3.4 }))
+    );
+    buildInstanced(
+      new THREE.SphereGeometry(0.16, 8, 8),
+      lampBulbMat,
+      lampSpots.map(([x, z]) => ({ x, y: 3.55, z }))
+    );
+    // 벤치(앉는 판+등받이+다리) + 쓰레기통 — 통로 교차점 양옆, 길을 바라보게
+    const woodMat = new THREE.MeshStandardMaterial({ color: 0x8a6a4f, roughness: 0.85 });
+    const binMat = new THREE.MeshStandardMaterial({ color: 0x2f5d46, roughness: 0.7 });
+    const seats = [], backs = [], legs = [], bins = [];
+    PROP_CFG.benchZ.forEach((z) => {
+      [[-8.4, Math.PI / 2], [8.4, -Math.PI / 2]].forEach(([x, ry]) => {
+        seats.push({ x, y: 0.42, z, ry });
+        backs.push({ x: x + (x < 0 ? -0.2 : 0.2), y: 0.72, z, ry });
+        legs.push({ x, y: 0.2, z: z - 0.55, ry }, { x, y: 0.2, z: z + 0.55, ry });
+        bins.push({ x, y: 0.35, z: z + 1.6 });
+      });
+    });
+    // 광장 벤치 3개 (인포 데스크를 바라보게)
+    [[-4.5, 30.5, 0], [4.5, 30.5, 0], [6, 23, -Math.PI / 2]].forEach(([x, z, ry]) => {
+      seats.push({ x, y: 0.42, z, ry });
+      backs.push({ x, y: 0.72, z: z + (ry === 0 ? 0.2 : 0), ry });
+      legs.push({ x: x - 0.55, y: 0.2, z, ry }, { x: x + 0.55, y: 0.2, z, ry });
+    });
+    buildInstanced(new THREE.BoxGeometry(1.5, 0.09, 0.48), woodMat, seats);
+    buildInstanced(new THREE.BoxGeometry(1.5, 0.5, 0.09), woodMat, backs);
+    buildInstanced(new THREE.BoxGeometry(0.4, 0.4, 0.08), poleMat, legs);
+    buildInstanced(new THREE.CylinderGeometry(0.22, 0.18, 0.7, 8), binMat, bins);
+    // 정문 진입로 깃발 (존 색 배너 — 박람회 느낌)
+    const flagPoleMat = new THREE.MeshStandardMaterial({ color: 0xd8d4c8, roughness: 0.5 });
+    const flagCols = [0x69b25e, 0xb2a15e, 0x5e9db2, 0x9a7fc0];
+    [-11, 11].forEach((x, side) => {
+      [37.5, 42.5].forEach((z, i) => {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 4.6, 6), flagPoleMat);
+        pole.position.set(x, 2.3, z);
+        scene.add(pole);
+        const flag = new THREE.Mesh(
+          new THREE.PlaneGeometry(1.15, 0.72),
+          new THREE.MeshStandardMaterial({ color: flagCols[side * 2 + i], roughness: 0.7, side: THREE.DoubleSide })
+        );
+        flag.position.set(x + (x < 0 ? 0.62 : -0.62), 4.05, z);
+        flag.rotation.y = x < 0 ? 0 : Math.PI;
+        scene.add(flag);
+      });
+    });
+  }
+
+  // ---------- NPC 방문객 (통로·광장을 오가는 사람들 — 마을이 붐비는 느낌) ----------
+  // 통로 축을 따라 왕복 (집 부지 안으로는 들어가지 않음)
+  const NPC_WALKS = [
+    { char: "woman", path: [[-26, 19.5], [26, 19.5]], speed: 1.1 },
+    { char: "man", path: [[26, 8.5], [-26, 8.5]], speed: 1.25 },
+    { char: "boy", path: [[1.8, 22], [1.8, -30]], speed: 1.6 },
+    { char: "girl", path: [[-21, -13.5], [21, -13.5]], speed: 1.0 },
+    { char: "grandpa", path: [[13, 25.5], [30, 25.5]], speed: 0.75 },
+  ];
+  function spawnWalkers() {
+    NPC_WALKS.forEach((cfg, i) => {
+      buildCharInstance(cfg.char)
+        .then((rig) => {
+          const g = new THREE.Group();
+          g.add(rig.obj);
+          g.position.set(cfg.path[0][0], 0, cfg.path[0][1]);
+          scene.add(g);
+          if (rig.walk) rig.walk.paused = false; // 항상 걷기 모션
+          npcWalkers.push({ g, rig, cfg, wp: 1 });
+        })
+        .catch(() => {});
+    });
+  }
+
   // ---------- 구름 ----------
   const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
   const clouds = [];
@@ -503,17 +632,6 @@ function init() {
   const loader = new GLTFLoader();
   const clickTargets = [];
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
-
-  // 바닥 잔디 질감 (Poly Haven leafy_grass, CC0)
-  new THREE.TextureLoader().load("assets/hdri/grass_diff_1k.jpg", (t) => {
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(26, 26);
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = maxAniso;
-    ground.material.map = t;
-    ground.material.color.set(0xb2d795); // 기존 밝은 잔디 톤 유지용 틴트
-    ground.material.needsUpdate = true;
-  });
 
   // 비스듬한 각도에서 텍스처가 뭉개지지 않도록 이방성 필터링 적용
   function sharpen(obj) {
@@ -718,7 +836,12 @@ function init() {
     const slabCol = new THREE.Color(z.color).lerp(new THREE.Color(0x9a968a), 0.35);
     const slab = new THREE.Mesh(
       new THREE.PlaneGeometry(maxX - minX, front - back),
-      new THREE.MeshStandardMaterial({ color: slabCol, roughness: 1 })
+      new THREE.MeshStandardMaterial({
+        color: slabCol,
+        roughness: 1,
+        map: pbrTex("assets/tex/concrete_c.jpg", true, (maxX - minX) / 5.5, (front - back) / 5.5),
+        normalMap: pbrTex("assets/tex/concrete_n.jpg", false, (maxX - minX) / 5.5, (front - back) / 5.5),
+      })
     );
     slab.rotation.x = -Math.PI / 2;
     slab.position.set(cx, 0.008, (front + back) / 2);
@@ -756,6 +879,18 @@ function init() {
   buildInstanced(new THREE.BoxGeometry(0.55, 4.4, 0.55), gateMat, gatePillars);
   buildInstanced(new THREE.BoxGeometry(10.2, 0.55, 0.55), gateMat, gateBeams);
   buildInstanced(new THREE.BoxGeometry(0.45, 1.7, 0.45), gateMat, cornerPosts);
+  // 존 게이트 양옆 화분 (테라코타 + 관목) — 쉬어가는 지점 연출
+  const pots = [], bushes = [];
+  Object.values(ZONES).forEach((z) => {
+    const cx = (Math.min(...z.cols) + Math.max(...z.cols)) / 2;
+    const front = z.rowStart + PITCH / 2;
+    [-6.4, 6.4].forEach((dx) => {
+      pots.push({ x: cx + dx, y: 0.3, z: front + 1.4 });
+      bushes.push({ x: cx + dx, y: 0.85, z: front + 1.4 });
+    });
+  });
+  buildInstanced(new THREE.CylinderGeometry(0.34, 0.26, 0.6, 8), new THREE.MeshStandardMaterial({ color: 0xb9714f, roughness: 0.8 }), pots);
+  buildInstanced(new THREE.IcosahedronGeometry(0.42, 0), new THREE.MeshStandardMaterial({ color: 0x4e8f4e, roughness: 0.9 }), bushes);
   buildBooths(zoneOvData);
   }
   let zoneOvData = {}; // buildZoneDecor 호출 전에 설정됨
@@ -846,7 +981,12 @@ function init() {
   }
 
   const houseLots = []; // { wrap, model }
-  const padMat = new THREE.MeshStandardMaterial({ color: 0xd9d4c6, roughness: 0.95 }); // 부지 패드 (콘크리트)
+  const padMat = new THREE.MeshStandardMaterial({
+    color: 0xe4dfd2,
+    roughness: 0.92,
+    map: pbrTex("assets/tex/concrete_c.jpg", true, 2.4, 2.4),
+    normalMap: pbrTex("assets/tex/concrete_n.jpg", false, 2.4, 2.4),
+  }); // 부지 패드 (콘크리트 PBR)
 
   // 수퍼베이스 모델 사진으로 변환한 3D 아키타입. 슬러그 일치 모델은 자기 3D를,
   // 나머지는 같은 카테고리의 3D를 순환 배정받는다.
@@ -1007,8 +1147,9 @@ function init() {
       zoneOvData = cfg.data || {};
       buildZoneDecor();
       placeModels(models.length ? models : TOWN_FALLBACK, cfg.data || {});
+      spawnWalkers();
     })
-    .catch(() => { buildZoneDecor(); placeModels(TOWN_FALLBACK, {}); });
+    .catch(() => { buildZoneDecor(); placeModels(TOWN_FALLBACK, {}); spawnWalkers(); });
 
   // 가까운 집 안내 카드
   let activeLot = null;
@@ -1569,6 +1710,10 @@ function init() {
     const w = stage.clientWidth, h = stage.clientHeight;
     renderer.setPixelRatio(pixelRatio()); // 창 이동/브라우저 줌으로 dpr가 바뀌어도 유지
     renderer.setSize(w, h, false);
+    if (composer) {
+      composer.setPixelRatio(renderer.getPixelRatio());
+      composer.setSize(w, h);
+    }
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
   }
@@ -1729,13 +1874,24 @@ function init() {
     if (qCooldown > 0) return;
     if (fps < 32 && qLevel < Q_CAPS.length - 1) {
       qLevel++;
-      renderer.setPixelRatio(pixelRatio());
+      applyQuality();
       qCooldown = 4; // 연속 강등 방지
     } else if (fps > 55 && qLevel > 0) {
       qLevel--;
-      renderer.setPixelRatio(pixelRatio());
+      applyQuality();
       qCooldown = 8; // 승격 후 출렁임 방지
     }
+  }
+  // 품질 티어 일괄 적용: 해상도 + 그림자 + 후처리
+  function applyQuality() {
+    renderer.setPixelRatio(pixelRatio());
+    if (composer) {
+      composer.setPixelRatio(renderer.getPixelRatio());
+      composer.setSize(stage.clientWidth, stage.clientHeight);
+    }
+    sun.castShadow = qLevel < 2; // 저사양: 그림자 끔
+    // 저사양: NPC 방문객 수 축소 (앞의 2명만)
+    npcWalkers.forEach((w, i) => { if (w.g) w.g.visible = qLevel < 2 || i < 2; });
   }
 
   // 외부(시작 화면)·디버그용 훅
@@ -1916,7 +2072,30 @@ function init() {
     }
 
     positionCard();
-    renderer.render(scene, camera);
+    // NPC 방문객: 통로 왕복 + 가까울 때만 애니메이션 (성능)
+    npcWalkers.forEach((w) => {
+      if (!w.g.visible) return;
+      const [tx, tz] = w.cfg.path[w.wp];
+      const dx = tx - w.g.position.x, dz = tz - w.g.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < 0.3) { w.wp = (w.wp + 1) % w.cfg.path.length; return; }
+      const sp = w.cfg.speed * dt;
+      w.g.position.x += (dx / dist) * sp;
+      w.g.position.z += (dz / dist) * sp;
+      const ang = Math.atan2(dx, dz);
+      let diff = ang - w.g.rotation.y;
+      diff = ((diff + Math.PI) % (Math.PI * 2)) - Math.PI;
+      w.g.rotation.y += diff * Math.min(1, dt * 8);
+      if (w.rig.mixer && Math.abs(w.g.position.x - player.position.x) < 45 && Math.abs(w.g.position.z - player.position.z) < 45) {
+        w.rig.mixer.update(dt);
+      }
+    });
+    // 태양·그림자 카메라를 플레이어 주변으로 이동 (선명한 그림자 유지)
+    sun.position.set(player.position.x + 18, 30, player.position.z + 14);
+    sun.target.position.set(player.position.x, 0, player.position.z);
+    // 고사양 티어: 블룸 후처리, 그 외: 기본 렌더
+    if (composer && qLevel === 0) composer.render();
+    else renderer.render(scene, camera);
   }
   tick();
 }

@@ -42,7 +42,9 @@
     h2 { font-size: 18px; margin: 44px 0 4px; }
     /* ---- 배치 지도 (위에서 본 마을, 북쪽이 위) ---- */
     .mapwrap {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 18px 46px; position: relative;
+      /* 실제 마을 지형과 동일한 배치: 서쪽바깥 | 서쪽 | 동쪽 | 동쪽바깥 (위=북쪽) */
+      display: grid; grid-template-columns: 0.85fr 1fr 1fr 0.85fr; gap: 18px 30px; position: relative;
+      grid-template-areas: "za nw ne zb" ". sw se zc";
       background: #171b13; border: 1px solid #2a2f26; border-radius: 14px; padding: 20px 20px 46px;
     }
     .mapwrap::before {
