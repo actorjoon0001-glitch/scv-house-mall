@@ -1009,25 +1009,27 @@ function init() {
     scene.add(infoDesk);
   }
 
-  // ---------- 빌드룸 포털 (광장 동측 — 다가가면 입장 버튼) ----------
+  // ---------- 빌드룸 포털 (광장 남동측 가장자리 — 통로·집·큐레이터를 가리지 않는 자리) ----------
+  // 입장 직후(스폰 남쪽 광장) 오른쪽에 바로 보이되, 동선 한복판은 피한다.
   const portalGroup = new THREE.Group();
   let portalRing = null;
   {
     portalRing = new THREE.Mesh(
-      new THREE.TorusGeometry(1.5, 0.16, 12, 40),
+      new THREE.TorusGeometry(0.85, 0.1, 12, 40),
       new THREE.MeshStandardMaterial({ color: 0x1fa25a, emissive: 0x2fe08a, emissiveIntensity: 1.3, roughness: 0.4 })
     );
-    portalRing.position.y = 2.2;
+    portalRing.position.y = 1.45;
     const base = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.2, 1.35, 0.24, 20),
+      new THREE.CylinderGeometry(0.75, 0.9, 0.18, 20),
       new THREE.MeshStandardMaterial({ color: 0xd9d2c0, roughness: 0.9 })
     );
-    base.position.y = 0.12;
+    base.position.y = 0.09;
+    // 라벨은 링 안에 붙여 한 덩어리로 읽히게 (작게)
     const portalSign = nameSign("🔨 내 집 지어보기");
-    portalSign.scale.set(4.6, 1.15, 1);
-    portalSign.position.y = 4.3;
+    portalSign.scale.set(2.2, 0.55, 1);
+    portalSign.position.y = 1.45;
     portalGroup.add(portalRing, base, portalSign);
-    portalGroup.position.set(9, 0, 26);
+    portalGroup.position.set(11, 0, 30.5);
     scene.add(portalGroup);
   }
 
