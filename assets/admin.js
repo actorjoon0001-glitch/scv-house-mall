@@ -13,6 +13,12 @@
     { key: "가구", emoji: "🛋️", color: "#d08a3e" },       // 남동 바깥
   ];
   const ROT_ARROW = { 0: "↓", 90: "→", 180: "↑", 270: "←" };
+  // 파트너 존 부스 기본 이름 (town.js PARTNER_BOOTHS와 동일)
+  const DEFAULT_BOOTHS = {
+    "LG가전 이벤트": ["📺 LG 가전 체험관", "🎉 이벤트 특가관", "🏠 스마트홈관"],
+    "가구": ["🛋️ 리빙 가구관", "🌤️ 아웃도어 가구관", "🤝 입점 문의"],
+    "건축 자재": ["🪟 단열·창호관", "🧱 마감재관", "🤝 입점 문의"],
+  };
   // 관리자 비밀번호(SHA-256). 변경하려면 새 비밀번호의 sha256 hex로 교체.
   const PASS_HASH = "55d1e430cb1d46e334d643153b69ba7b996ce912a0c6f2d54d4c1769b9dea609";
 
@@ -38,7 +44,10 @@
   async function tryLogin() {
     const h = await sha256(gatePass.value || "");
     if (h === PASS_HASH) {
-      try { sessionStorage.setItem("seum_admin_ok", "1"); } catch (e) {}
+      try {
+        sessionStorage.setItem("seum_admin_ok", "1");
+        sessionStorage.setItem("seum_admin_pw", gatePass.value); // 리드 조회 RPC 인증에 사용
+      } catch (e) {}
       gate.hidden = true;
       app.hidden = false;
       boot();
@@ -234,10 +243,11 @@
       const inZone = Object.keys(plan).filter((k) => plan[k].zone === mz.key);
       const maxIdx = inZone.reduce((a, k) => Math.max(a, plan[k].index), -1);
       const rows = Math.max(3, Math.ceil((maxIdx + 2) / 3) + 1); // 여유 한 줄 (북쪽 확장)
+      const zc = (overrides.zones && overrides.zones[mz.key] && overrides.zones[mz.key].color) || mz.color;
       const zoneEl = document.createElement("div");
       zoneEl.className = "map-zone";
-      zoneEl.style.borderColor = mz.color;
-      zoneEl.innerHTML = `<h3 style="color:${mz.color}">${mz.emoji} ${esc(mz.key)} 존 · ${inZone.length}개</h3>`;
+      zoneEl.style.borderColor = zc;
+      zoneEl.innerHTML = `<h3 style="color:${zc}">${mz.emoji} ${esc(mz.key)} 존 · ${inZone.length}개</h3>`;
       const gridEl = document.createElement("div");
       gridEl.className = "map-grid";
       // 줄은 북쪽(위)부터: index가 큰 줄이 위, 0~2번 줄(통로 쪽)이 아래
@@ -296,6 +306,67 @@
     });
   }
 
+  // ---------- 3단계: 존 관리 (표시 이름·색상·부스명) ----------
+  function renderZones() {
+    const panel = document.getElementById("zones-panel");
+    if (!panel) return;
+    const zov = overrides.zones || {};
+    const bov = overrides.booths || {};
+    panel.innerHTML = "";
+    MAP_ZONES.forEach((mz) => {
+      const o = zov[mz.key] || {};
+      const color = o.color || mz.color;
+      const card = document.createElement("div");
+      card.className = "zone-card";
+      card.style.borderLeftColor = color;
+      const boothRows = DEFAULT_BOOTHS[mz.key]
+        ? DEFAULT_BOOTHS[mz.key]
+            .map((def, i) => {
+              const v = (bov[mz.key] && bov[mz.key][i]) || "";
+              return `<div class="row"><label>부스 ${i + 1}</label><input type="text" data-booth="${i}" maxlength="20" placeholder="${esc(def)}" value="${esc(v)}" /></div>`;
+            })
+            .join("")
+        : "";
+      card.innerHTML = `
+        <h3 style="color:${color}">${mz.emoji} ${esc(mz.key)}</h3>
+        <div class="row"><label>표시 이름</label><input type="text" data-zf="label" maxlength="20" placeholder="${esc(mz.key)} 존" value="${esc(o.label || "")}" /></div>
+        <div class="row"><label>존 색상</label><input type="color" data-zf="color" value="${color}" />
+          <button type="button" class="btn btn--ghost" data-zf="reset" style="padding:6px 12px;font-size:12px">기본색</button></div>
+        ${boothRows}`;
+      const setZ = (patch) => {
+        if (!overrides.zones) overrides.zones = {};
+        overrides.zones[mz.key] = Object.assign({}, overrides.zones[mz.key], patch);
+        Object.keys(overrides.zones[mz.key]).forEach((k) => {
+          if (!overrides.zones[mz.key][k]) delete overrides.zones[mz.key][k];
+        });
+        if (!Object.keys(overrides.zones[mz.key]).length) delete overrides.zones[mz.key];
+        markDirty();
+      };
+      card.querySelector('[data-zf="label"]').addEventListener("input", (e) => setZ({ label: e.target.value.trim() }));
+      card.querySelector('[data-zf="color"]').addEventListener("change", (e) => {
+        setZ({ color: e.target.value });
+        renderZones();
+        renderMap();
+      });
+      card.querySelector('[data-zf="reset"]').addEventListener("click", () => {
+        setZ({ color: "" });
+        renderZones();
+        renderMap();
+      });
+      card.querySelectorAll("[data-booth]").forEach((inp) =>
+        inp.addEventListener("input", () => {
+          if (!overrides.booths) overrides.booths = {};
+          const arr = overrides.booths[mz.key] || ["", "", ""];
+          arr[Number(inp.dataset.booth)] = inp.value.trim();
+          overrides.booths[mz.key] = arr;
+          if (arr.every((v) => !v)) delete overrides.booths[mz.key];
+          markDirty();
+        })
+      );
+      panel.appendChild(card);
+    });
+  }
+
   if (rotBtn) {
     rotBtn.addEventListener("click", () => {
       if (!selKey) return;
@@ -336,7 +407,98 @@
     renderTabs();
     render();
     renderMap();
+    renderZones();
+    loadDash();
   }
+
+  // ---------- 방문 통계 · 상담 리드 대시보드 ----------
+  const DASH_SQL =
+    "-- 리드·통계 저장용. Supabase(scv-3Dhouse) SQL Editor에서 한 번 실행하세요:\n" +
+    "create table if not exists town_leads (\n" +
+    "  id bigint generated always as identity primary key,\n" +
+    "  created_at timestamptz default now(),\n" +
+    "  name text, phone text, interest text, memo text, source text\n" +
+    ");\n" +
+    "alter table town_leads enable row level security;\n" +
+    "create policy \"leads insert\" on town_leads for insert with check (true);\n\n" +
+    "create table if not exists town_events (\n" +
+    "  id bigint generated always as identity primary key,\n" +
+    "  created_at timestamptz default now(),\n" +
+    "  type text, name text\n" +
+    ");\n" +
+    "alter table town_events enable row level security;\n" +
+    "create policy \"events insert\" on town_events for insert with check (true);\n" +
+    "create policy \"events read\" on town_events for select using (true);\n\n" +
+    "create or replace function get_leads(pass text)\n" +
+    "returns setof town_leads language plpgsql security definer set search_path = public as $$\n" +
+    "begin\n" +
+    "  if pass is distinct from '931122' then raise exception 'unauthorized'; end if;\n" +
+    "  return query select * from town_leads order by created_at desc limit 500;\n" +
+    "end $$;";
+
+  async function loadDash() {
+    const chips = document.getElementById("stat-chips");
+    const sql2 = document.getElementById("sqlbox2");
+    const table = document.getElementById("leads-table");
+    const rows = document.getElementById("leads-rows");
+    const empty = document.getElementById("leads-empty");
+    if (!chips) return;
+    chips.innerHTML = `<span class="note">불러오는 중…</span>`;
+    let needSql = false;
+    // 방문 통계
+    try {
+      const evs = await CFG.getEvents();
+      const now = Date.now();
+      const dayMs = 86400e3;
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const visits = evs.filter((e) => e.type === "visit");
+      const vToday = visits.filter((e) => new Date(e.created_at) >= today).length;
+      const v7 = visits.filter((e) => now - new Date(e.created_at).getTime() < 7 * dayMs).length;
+      const top = (type, n) => {
+        const cnt = {};
+        evs.filter((e) => e.type === type && now - new Date(e.created_at).getTime() < 7 * dayMs)
+          .forEach((e) => { cnt[e.name] = (cnt[e.name] || 0) + 1; });
+        return Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, n);
+      };
+      const topZones = top("zone", 3).map(([n, c]) => `${n} ${c}`).join(" · ") || "-";
+      const topModels = top("model", 3).map(([n, c]) => `${n} ${c}`).join(" · ") || "-";
+      chips.innerHTML =
+        `<span class="statchip">오늘 방문 <b>${vToday}</b></span>` +
+        `<span class="statchip">7일 방문 <b>${v7}</b></span>` +
+        `<span class="statchip">인기 존(7일) <b>${esc(topZones)}</b></span>` +
+        `<span class="statchip">관심 모델(7일) <b>${esc(topModels)}</b></span>`;
+    } catch (e) {
+      chips.innerHTML = `<span class="note">통계 테이블이 아직 없습니다 (아래 SQL 실행 필요)</span>`;
+      needSql = true;
+    }
+    // 상담 리드
+    try {
+      const pw = sessionStorage.getItem("seum_admin_pw") || "";
+      const leads = await CFG.getLeads(pw);
+      rows.innerHTML = leads.map((l) => `
+        <tr>
+          <td style="white-space:nowrap">${esc(new Date(l.created_at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }))}</td>
+          <td>${esc(l.name || "")}</td>
+          <td style="white-space:nowrap">${esc(l.phone || "")}</td>
+          <td>${esc(l.interest || "")}</td>
+          <td>${esc(l.memo || "")}</td>
+          <td>${esc(l.source || "")}</td>
+        </tr>`).join("");
+      table.hidden = leads.length === 0;
+      empty.hidden = leads.length !== 0;
+    } catch (e) {
+      table.hidden = true;
+      empty.hidden = false;
+      empty.textContent = "리드 테이블이 아직 없거나 인증에 실패했습니다. (아래 SQL 실행 후, 로그아웃했다면 다시 로그인)";
+      needSql = true;
+    }
+    if (sql2) {
+      sql2.style.display = needSql ? "block" : "none";
+      sql2.textContent = DASH_SQL;
+    }
+  }
+  const dashBtn = document.getElementById("dash-refresh");
+  if (dashBtn) dashBtn.addEventListener("click", loadDash);
 
   document.getElementById("save-btn").addEventListener("click", async () => {
     savedMsg.textContent = "저장 중…";

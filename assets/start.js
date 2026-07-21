@@ -70,6 +70,10 @@
   function maybeSendLead(nick) {
     const phone = ((phoneEl && phoneEl.value) || "").trim();
     if (!phone) return;
+    // 관리자 대시보드용 리드 백업 저장
+    if (window.SeumTownConfig && window.SeumTownConfig.addLead) {
+      window.SeumTownConfig.addLead({ name: nick || "방문객", phone, interest: "신규 모델·이벤트 알림", memo: "시작 화면 알림 신청", source: "시작화면" });
+    }
     const body = new URLSearchParams({
       "form-name": "상담신청",
       name: nick || "방문객",

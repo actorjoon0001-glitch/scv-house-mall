@@ -42,6 +42,56 @@
     }
   }
 
+  // ---------- 상담 리드 + 방문 이벤트 (전용 프로젝트 town_leads/town_events) ----------
+  // 리드 조회는 RLS로 막고 get_leads(pass) RPC(관리자 비밀번호 확인)로만 연다.
+  async function addLead(lead) {
+    try {
+      const r = await fetch(`${SETTINGS_URL}/rest/v1/town_leads`, {
+        method: "POST",
+        headers: Object.assign({ "Content-Type": "application/json" }, HEADERS),
+        body: JSON.stringify({
+          name: (lead.name || "").slice(0, 40),
+          phone: (lead.phone || "").slice(0, 30),
+          interest: (lead.interest || "").slice(0, 60),
+          memo: (lead.memo || "").slice(0, 300),
+          source: (lead.source || "").slice(0, 30),
+        }),
+      });
+      return r.ok;
+    } catch (e) { return false; }
+  }
+  const loggedEvents = new Set(); // 세션당 같은 이벤트 1회
+  function logEvent(type, name) {
+    const key = `${type}|${name || ""}`;
+    if (loggedEvents.has(key)) return;
+    loggedEvents.add(key);
+    try {
+      fetch(`${SETTINGS_URL}/rest/v1/town_events`, {
+        method: "POST",
+        headers: Object.assign({ "Content-Type": "application/json" }, HEADERS),
+        body: JSON.stringify({ type: String(type).slice(0, 20), name: String(name || "").slice(0, 60) }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch (e) {}
+  }
+  async function getLeads(pass) {
+    const r = await fetch(`${SETTINGS_URL}/rest/v1/rpc/get_leads`, {
+      method: "POST",
+      headers: Object.assign({ "Content-Type": "application/json" }, HEADERS),
+      body: JSON.stringify({ pass: pass || "" }),
+    });
+    if (!r.ok) throw new Error("leads " + r.status);
+    return r.json();
+  }
+  async function getEvents() {
+    const r = await fetch(
+      `${SETTINGS_URL}/rest/v1/town_events?select=type,name,created_at&order=created_at.desc&limit=2000`,
+      { headers: HEADERS }
+    );
+    if (!r.ok) throw new Error("events " + r.status);
+    return r.json();
+  }
+
   // 카탈로그 모델 목록에 표시 설정을 병합 (숨김 제외, 필드 오버라이드)
   function apply(models, ov) {
     const mo = (ov && ov.models) || {};
@@ -105,5 +155,8 @@
     return out;
   }
 
-  window.SeumTownConfig = { load, save, apply, computePlacement, keyOf, ZONE_ORDER, RESERVED_SLOTS, SB_URL, SB_KEY };
+  window.SeumTownConfig = {
+    load, save, apply, computePlacement, keyOf, ZONE_ORDER, RESERVED_SLOTS, SB_URL, SB_KEY,
+    addLead, logEvent, getLeads, getEvents,
+  };
 })();

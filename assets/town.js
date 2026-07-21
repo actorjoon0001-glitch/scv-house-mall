@@ -69,10 +69,13 @@ function init() {
     window.innerWidth < 700 || (navigator.connection && navigator.connection.saveData)
       ? "assets/hdri/sky_1k.hdr"
       : "assets/hdri/sky_2k.hdr";
+  let skyTex = null; // 낮 하늘 HDRI (밤 모드에서 복귀할 때 사용)
   new RGBELoader().load(
     hdrFile,
     (tex) => {
       tex.mapping = THREE.EquirectangularReflectionMapping;
+      skyTex = tex;
+      if (nightMode) return; // 밤 모드 중이면 낮 복귀 때 적용
       scene.background = tex;
       scene.environment = tex; // 집·바닥·캐릭터에 자연광
       hemi.intensity = 0.25;   // HDRI가 주광을 맡으므로 보조광 축소
@@ -82,6 +85,220 @@ function init() {
     undefined,
     () => {} // 실패 시 기존 단색 하늘·조명 유지
   );
+
+  // ---------- 밤/낮 모드 ----------
+  let nightMode = false;
+  let lampGroup = null;
+  function buildLamps() {
+    // 메인 대로 가로등 (기둥·전구 인스턴스 + 포인트라이트 5개)
+    lampGroup = new THREE.Group();
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x3a3f3a, roughness: 0.8 });
+    const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffe6b0 });
+    const spots = [];
+    for (let z = 18; z >= -66; z -= 14) spots.push([-5.2, z], [5.2, z]);
+    const pIm = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.07, 0.09, 1, 6), poleMat, spots.length);
+    const bIm = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 8, 8), bulbMat, spots.length);
+    spots.forEach(([x, z], i) => {
+      IM_TMP.m.compose(IM_TMP.p.set(x, 1.7, z), IM_TMP.q, IM_TMP.s.set(1, 3.4, 1));
+      pIm.setMatrixAt(i, IM_TMP.m);
+      IM_TMP.m.compose(IM_TMP.p.set(x, 3.55, z), IM_TMP.q, IM_TMP.s.set(1, 1, 1));
+      bIm.setMatrixAt(i, IM_TMP.m);
+    });
+    pIm.instanceMatrix.needsUpdate = true;
+    bIm.instanceMatrix.needsUpdate = true;
+    lampGroup.add(pIm, bIm);
+    for (let z = 12; z >= -60; z -= 18) {
+      const pl = new THREE.PointLight(0xffd9a0, 15, 26, 2);
+      pl.position.set(0, 3.6, z);
+      lampGroup.add(pl);
+    }
+    lampGroup.visible = false;
+    scene.add(lampGroup);
+  }
+  function setNight(on) {
+    nightMode = on;
+    if (on && !lampGroup) buildLamps();
+    if (lampGroup) lampGroup.visible = on;
+    if (on) {
+      scene.background = new THREE.Color(0x0b1322);
+      scene.environment = null;
+      scene.fog.color.set(0x0b1322);
+      hemi.color.set(0x2c3d58);
+      hemi.groundColor.set(0x1a2030);
+      hemi.intensity = 0.5;
+      sun.color.set(0x9db8e8); // 달빛
+      sun.intensity = 0.55;
+      renderer.toneMappingExposure = 0.95;
+    } else {
+      hemi.color.set(0xdff0ff);
+      hemi.groundColor.set(0x7da06a);
+      sun.color.set(0xfff2df);
+      if (skyTex) {
+        scene.background = skyTex;
+        scene.environment = skyTex;
+        hemi.intensity = 0.25;
+        sun.intensity = 1.7;
+        scene.fog.color.set(0xe7eef4);
+      } else {
+        scene.background = new THREE.Color(0xbfe0f5);
+        hemi.intensity = 1.0;
+        sun.intensity = 2.2;
+        scene.fog.color.set(0xbfe0f5);
+      }
+      renderer.toneMappingExposure = 1.05;
+    }
+    const nb = document.getElementById("town-night");
+    if (nb) nb.textContent = on ? "☀️" : "🌙";
+  }
+  {
+    const nb = document.getElementById("town-night");
+    if (nb) nb.addEventListener("click", () => setNight(!nightMode));
+  }
+
+  // ---------- 사운드 (WebAudio 신스 BGM + 발소리, 외부 파일 없음) ----------
+  let soundOn = true;
+  try { soundOn = localStorage.getItem("seum_sound") !== "0"; } catch (e) {}
+  let audioCtx = null, masterGain = null, noiseBuf = null;
+  function initAudio() {
+    if (audioCtx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audioCtx = new AC();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = soundOn ? 1 : 0;
+    masterGain.connect(audioCtx.destination);
+    // 발소리용 노이즈 버퍼
+    noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.08, audioCtx.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    // 잔잔한 패드 BGM (3화음, 8초마다 코드 전환)
+    const pad = audioCtx.createGain();
+    pad.gain.value = 0.05;
+    const lp = audioCtx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 750;
+    pad.connect(lp).connect(masterGain);
+    const CHORDS = [[220, 277.2, 329.6], [196, 246.9, 293.7], [174.6, 220, 261.6], [196, 246.9, 329.6]];
+    const oscs = CHORDS[0].map((f) => {
+      const o = audioCtx.createOscillator();
+      o.type = "triangle";
+      o.frequency.value = f;
+      const g = audioCtx.createGain();
+      g.gain.value = 0.33;
+      o.connect(g).connect(pad);
+      o.start();
+      return o;
+    });
+    let ci = 0;
+    setInterval(() => {
+      ci = (ci + 1) % CHORDS.length;
+      oscs.forEach((o, i) => o.frequency.linearRampToValueAtTime(CHORDS[ci][i], audioCtx.currentTime + 2.5));
+    }, 8000);
+    // 새소리 (낮) / 귀뚜라미 (밤) 랜덤 재생
+    (function ambientChirp() {
+      setTimeout(() => {
+        if (audioCtx.state === "running" && soundOn) {
+          const t = audioCtx.currentTime;
+          const o = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          o.connect(g).connect(masterGain);
+          if (!nightMode) {
+            o.type = "sine";
+            o.frequency.setValueAtTime(2300 + Math.random() * 600, t);
+            o.frequency.exponentialRampToValueAtTime(1700, t + 0.14);
+            g.gain.setValueAtTime(0.0001, t);
+            g.gain.exponentialRampToValueAtTime(0.035, t + 0.03);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+            o.start(t); o.stop(t + 0.2);
+          } else {
+            o.type = "square";
+            o.frequency.value = 4200;
+            g.gain.value = 0;
+            for (let k = 0; k < 4; k++) {
+              g.gain.setValueAtTime(0.008, t + k * 0.09);
+              g.gain.setValueAtTime(0.0001, t + k * 0.09 + 0.045);
+            }
+            o.start(t); o.stop(t + 0.4);
+          }
+        }
+        ambientChirp();
+      }, 2500 + Math.random() * 5000);
+    })();
+  }
+  function playStep(sprinting) {
+    if (!audioCtx || !soundOn || audioCtx.state !== "running") return;
+    const src = audioCtx.createBufferSource();
+    src.buffer = noiseBuf;
+    const bp = audioCtx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = sprinting ? 520 : 380;
+    const g = audioCtx.createGain();
+    g.gain.value = 0.1;
+    src.connect(bp).connect(g).connect(masterGain);
+    src.start();
+  }
+  let stepT = 0;
+  function stepTick(dt, moving, sprinting, grounded) {
+    if (!moving || !grounded) { stepT = 0.3; return; }
+    stepT += dt;
+    if (stepT > (sprinting ? 0.3 : 0.44)) { stepT = 0; playStep(sprinting); }
+  }
+  function setSound(on) {
+    soundOn = on;
+    try { localStorage.setItem("seum_sound", on ? "1" : "0"); } catch (e) {}
+    if (on && !audioCtx) initAudio();
+    if (audioCtx) {
+      if (on && audioCtx.state === "suspended") audioCtx.resume();
+      if (masterGain) masterGain.gain.value = on ? 1 : 0;
+    }
+    const sb = document.getElementById("town-sound");
+    if (sb) sb.textContent = on ? "🔊" : "🔇";
+  }
+  {
+    const sb = document.getElementById("town-sound");
+    if (sb) {
+      sb.textContent = soundOn ? "🔊" : "🔇";
+      sb.addEventListener("click", () => setSound(!soundOn));
+    }
+    // 브라우저 자동재생 정책: 첫 입력에서 오디오 시작
+    const kick = () => { if (soundOn) { initAudio(); if (audioCtx && audioCtx.state === "suspended") audioCtx.resume(); } };
+    window.addEventListener("pointerdown", kick, { once: true });
+    window.addEventListener("keydown", kick, { once: true });
+  }
+
+  // ---------- 공유 (링크 복사 + QR) ----------
+  {
+    const shareEl = document.getElementById("share");
+    const shareBtn = document.getElementById("town-share");
+    if (shareEl && shareBtn) {
+      const url = `${location.origin}/town`;
+      const urlEl = document.getElementById("share-url");
+      const qrImg = document.getElementById("share-qr");
+      const nativeBtn = document.getElementById("share-native");
+      shareBtn.addEventListener("click", () => {
+        urlEl.textContent = url;
+        if (window.qrcode && !qrImg.src) {
+          try {
+            const qr = window.qrcode(0, "M");
+            qr.addData(url);
+            qr.make();
+            qrImg.src = qr.createDataURL(6, 10);
+          } catch (e) {}
+        }
+        if (!navigator.share) nativeBtn.hidden = true;
+        shareEl.hidden = false;
+        if (window.SeumTownConfig && window.SeumTownConfig.logEvent) window.SeumTownConfig.logEvent("share", "");
+      });
+      document.getElementById("share-close").addEventListener("click", () => { shareEl.hidden = true; });
+      shareEl.addEventListener("click", (e) => { if (e.target === shareEl) shareEl.hidden = true; });
+      document.getElementById("share-copy").addEventListener("click", (e) => {
+        try { navigator.clipboard.writeText(url); e.target.textContent = "✓ 복사됨"; setTimeout(() => (e.target.textContent = "🔗 링크 복사"), 1600); } catch (err) {}
+      });
+      if (nativeBtn) nativeBtn.addEventListener("click", () => {
+        if (navigator.share) navigator.share({ title: "메타하우스 3D 타운", text: "3D 마을에서 이동식 주택 모델을 직접 걸어보며 구경해보세요!", url }).catch(() => {});
+      });
+    }
+  }
 
   // ---------- 부지 (전시장 대지: 사각 경계) ----------
   // 부지·통로·존 구획은 관리자 격자(존 데이터)와 같은 좌표 체계에서 생성된다.
@@ -347,6 +564,47 @@ function init() {
   const cardPrice = document.getElementById("town-card-price");
   const cardLink = document.getElementById("town-card-link");
   const cardChat = document.getElementById("town-card-chat");
+  // ---------- 내부 사진 뷰어 (카탈로그 interior_images 슬라이드) ----------
+  const photosBtn = document.getElementById("town-card-photos");
+  const pvEl = document.getElementById("pv");
+  const pvImg = document.getElementById("pv-img");
+  const pvTitle = document.getElementById("pv-title");
+  const pvCount = document.getElementById("pv-count");
+  let pvPics = [];
+  let pvIdx = 0;
+  function modelPics(m) {
+    const pics = [].concat(m.interior_images || [], m.gallery_images || []).filter(Boolean);
+    return pics;
+  }
+  function pvShow(i) {
+    if (!pvPics.length) return;
+    pvIdx = (i + pvPics.length) % pvPics.length;
+    pvImg.src = pvPics[pvIdx];
+    pvCount.textContent = `${pvIdx + 1} / ${pvPics.length}`;
+  }
+  function openPhotos(m) {
+    pvPics = modelPics(m);
+    if (!pvPics.length) return;
+    if (window.SeumTownConfig && window.SeumTownConfig.logEvent) window.SeumTownConfig.logEvent("photos", m.name);
+    pvTitle.textContent = `${m.name} 내부·상세`;
+    pvEl.hidden = false;
+    pvShow(0);
+  }
+  if (pvEl) {
+    document.getElementById("pv-close").addEventListener("click", () => { pvEl.hidden = true; });
+    document.getElementById("pv-prev").addEventListener("click", () => pvShow(pvIdx - 1));
+    document.getElementById("pv-next").addEventListener("click", () => pvShow(pvIdx + 1));
+    pvEl.addEventListener("click", (e) => { if (e.target === pvEl) pvEl.hidden = true; });
+    window.addEventListener("keydown", (e) => {
+      if (pvEl.hidden) return;
+      if (e.key === "Escape") pvEl.hidden = true;
+      if (e.key === "ArrowLeft") pvShow(pvIdx - 1);
+      if (e.key === "ArrowRight") pvShow(pvIdx + 1);
+    });
+  }
+  if (photosBtn) {
+    photosBtn.addEventListener("click", () => { if (activeLot) openPhotos(activeLot.model); });
+  }
   if (cardChat) {
     cardChat.addEventListener("click", () => {
       if (activeLot && window.__metaChat && window.__metaChat.openCurator) {
@@ -417,8 +675,27 @@ function init() {
     return { x: col, z: row };
   }
 
+  // 관리자 존 설정(overrides.zones/booths) 반영: 존 이름·색상·부스명 커스텀
+  function applyZoneOverrides(ov) {
+    const zo = (ov && ov.zones) || {};
+    Object.entries(zo).forEach(([k, o]) => {
+      const z = ZONES[k];
+      if (!z || !o) return;
+      if (o.label) z.label = String(o.label).slice(0, 20);
+      if (o.color && /^#?[0-9a-fA-F]{6}$/.test(o.color)) z.color = parseInt(String(o.color).replace("#", ""), 16);
+    });
+    const bo = (ov && ov.booths) || {};
+    Object.entries(bo).forEach(([k, arr]) => {
+      if (PARTNER_BOOTHS[k] && Array.isArray(arr)) {
+        arr.forEach((v, i) => { if (v && i < 3) PARTNER_BOOTHS[k][i] = String(v).slice(0, 20); });
+      }
+    });
+  }
+
   // 존 바닥 포장 슬래브 + 존 색 테두리 + 입구 게이트(기둥·간판) — 존 구분이 한눈에 보이게
   // 블록 내부는 잔디가 아니라 존 색이 섞인 포장으로 마감 (박람회 부스 단지 느낌)
+  // 관리자 설정(존 색·이름)을 먼저 반영해야 하므로 설정 로드 후 buildZoneDecor()로 호출된다.
+  function buildZoneDecor() {
   const gatePillars = [], gateBeams = [], cornerPosts = []; // 인스턴스 수집용
   Object.values(ZONES).forEach((z) => {
     const minX = Math.min(...z.cols) - XP / 2;
@@ -470,6 +747,8 @@ function init() {
   buildInstanced(new THREE.BoxGeometry(0.55, 4.4, 0.55), gateMat, gatePillars);
   buildInstanced(new THREE.BoxGeometry(10.2, 0.55, 0.55), gateMat, gateBeams);
   buildInstanced(new THREE.BoxGeometry(0.45, 1.7, 0.45), gateMat, cornerPosts);
+  buildBooths();
+  }
 
   // ---------- 파트너 존 부스 (입점 업체 전시 부스, 앞줄 0~2번 칸 고정) ----------
   const PARTNER_BOOTHS = {
@@ -477,6 +756,7 @@ function init() {
     "가구": ["🛋️ 리빙 가구관", "🌤️ 아웃도어 가구관", "🤝 입점 문의"],
     "건축 자재": ["🪟 단열·창호관", "🧱 마감재관", "🤝 입점 문의"],
   };
+  function buildBooths() {
   Object.entries(PARTNER_BOOTHS).forEach(([zk, labels]) => {
     const z = ZONES[zk];
     if (!z) return;
@@ -511,6 +791,7 @@ function init() {
       scene.add(b);
     });
   });
+  }
 
   // 인포메이션 데스크 (남쪽 입구 광장)
   const INFO_POS = { x: 0, z: 26 };
@@ -685,7 +966,7 @@ function init() {
 
   Promise.all([
     fetch(
-      `${SB_URL}/rest/v1/models?select=slug,name,category,size,base_price,main_image,event_on,event_price,rooms,bathrooms,short_description,features,badge&order=created_at.asc`,
+      `${SB_URL}/rest/v1/models?select=slug,name,category,size,base_price,main_image,event_on,event_price,rooms,bathrooms,short_description,features,badge,interior_images,gallery_images&order=created_at.asc`,
       { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
     ).then((r) => { if (!r.ok) throw new Error("catalog"); return r.json(); }),
     window.SeumTownConfig ? window.SeumTownConfig.load().catch(() => ({ data: {} })) : Promise.resolve({ data: {} }),
@@ -694,9 +975,11 @@ function init() {
       let models = data.filter((m) => m.name);
       // 관리자 표시 설정 병합 (숨김/이름/가격/존/큐레이터 등)
       if (window.SeumTownConfig) models = window.SeumTownConfig.apply(models, cfg.data || {});
+      applyZoneOverrides(cfg.data || {});
+      buildZoneDecor();
       placeModels(models.length ? models : TOWN_FALLBACK, cfg.data || {});
     })
-    .catch(() => placeModels(TOWN_FALLBACK, {}));
+    .catch(() => { buildZoneDecor(); placeModels(TOWN_FALLBACK, {}); });
 
   // 가까운 집 안내 카드
   let activeLot = null;
@@ -715,12 +998,15 @@ function init() {
     }
     if (!best) { cardEl.hidden = true; return; }
     const m = best.model;
+    // 방문 통계: 어떤 모델 앞에 왔는지 (세션당 모델별 1회)
+    if (window.SeumTownConfig && window.SeumTownConfig.logEvent) window.SeumTownConfig.logEvent("model", m.name);
     cardTag.textContent = m.category || "메타하우스 모델";
     cardName.textContent = m.name;
     cardSpec.textContent = m.size || "";
     cardPrice.textContent = fmtPrice(m);
     if (m.main_image) { cardImg.src = m.main_image; cardImg.hidden = false; }
     else cardImg.hidden = true;
+    if (photosBtn) photosBtn.hidden = modelPics(m).length === 0;
     if (m.slug) {
       cardLink.href = `${CATALOG_URL}/model-detail.html?slug=${encodeURIComponent(m.slug)}`;
       cardLink.hidden = false;
@@ -910,6 +1196,8 @@ function init() {
   }
 
   player.position.set(0, 0, 30); // 남쪽 입구(인포 앞)에서 시작
+  // 방문 통계: 마을 입장 1회 기록
+  if (window.SeumTownConfig && window.SeumTownConfig.logEvent) window.SeumTownConfig.logEvent("visit", "");
 
   // ---------- 멀티플레이 (Supabase Realtime) ----------
   const remotes = new Map(); // id -> { group, rig, char, nick, target }
@@ -954,6 +1242,13 @@ function init() {
       });
       rtChannel.on("presence", { event: "sync" }, () => {
         const state = rtChannel.presenceState();
+        // 동시 접속 카운터
+        const countEl = document.getElementById("town-count");
+        if (countEl) {
+          const n = Object.keys(state).length;
+          countEl.textContent = `👥 지금 ${Math.max(n, 1)}명 구경 중`;
+          countEl.hidden = n < 1;
+        }
         Object.entries(state).forEach(([id, metas]) => {
           if (id === myId) return;
           const meta = (metas && metas[0]) || {};
@@ -1429,6 +1724,7 @@ function init() {
     },
     // 존 바로가기 (인포 안내봇·미니맵의 순간이동)
     gotoZone(cat) {
+      if (window.SeumTownConfig && window.SeumTownConfig.logEvent) window.SeumTownConfig.logEvent("zone", cat);
       const z = ZONES[zoneFor(cat)];
       player.position.x = z.entry.x;
       player.position.z = z.entry.z;
@@ -1460,6 +1756,7 @@ function init() {
     const moving = mag > 0.12;
     // Shift 또는 조이스틱을 끝까지 밀면 달리기
     const sprinting = moving && (shiftHeld || (joy.active && mag > 0.94));
+    stepTick(dt, moving, sprinting, player.position.y <= 0.01); // 발소리
 
     if (moving) {
       // 입력을 카메라 방향 기준으로 회전 (시점을 돌려도 W = 화면 앞)
