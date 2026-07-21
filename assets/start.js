@@ -215,10 +215,21 @@
     }
     return sbClient;
   }
+  let kakaoReady = null; // null=미확인, true/false=확인됨
   async function kakaoStart() {
     const client = supa();
     if (!client) { showErr("카카오 로그인 준비 중이에요. 잠시 후 다시 시도해주세요."); return; }
     try {
+      // 프로바이더 활성화 여부를 먼저 확인 — 미설정 상태로 이동하면 오류 화면이 떠버림
+      if (kakaoReady === null) {
+        const r = await fetch(`${CFG.SETTINGS_URL}/auth/v1/settings`, { headers: { apikey: CFG.SETTINGS_KEY } });
+        const s = await r.json();
+        kakaoReady = !!(s && s.external && s.external.kakao);
+      }
+      if (!kakaoReady) {
+        showErr("카카오 로그인은 아직 준비 중이에요. 아이디 회원가입/로그인을 이용해주세요 🙏");
+        return;
+      }
       const { error } = await client.auth.signInWithOAuth({
         provider: "kakao",
         options: { redirectTo: window.location.origin + window.location.pathname },
