@@ -988,26 +988,10 @@ function init() {
     normalMap: pbrTex("assets/tex/concrete_n.jpg", false, 2.4, 2.4),
   }); // 부지 패드 (콘크리트 PBR)
 
-  // 수퍼베이스 모델 사진으로 변환한 3D 아키타입. 슬러그 일치 모델은 자기 3D를,
-  // 나머지는 같은 카테고리의 3D를 순환 배정받는다.
-  const HOUSE_GLBS = {
-    "stay-19rb": "assets/houses/stay-19rb.glb",
-    "stay24w": "assets/houses/stay24w.glb",
-    "stay20r": "assets/houses/stay20r.glb",
-    "stay18-b": "assets/houses/stay18-b.glb",
-    "stay14": "assets/houses/stay14.glb",
-    "cube9o": "assets/houses/cube9o.glb",
-    "forest10g": "assets/houses/forest10g.glb",
-    "forest10bb": "assets/houses/forest10bb.glb",
-    "cube-g-10w": "assets/houses/cube-g-10w.glb",
-  };
-  const CAT_POOL = {
-    "전원주택": ["stay-19rb", "stay24w", "stay20r", "stay18-b"],
-    "세컨하우스": ["stay14", "stay-19rb", "stay24w"],
-    "체류형 쉼터": ["cube9o", "forest10g", "forest10bb"],
-    "특별모델": ["cube-g-10w", "cube9o"],
-  };
-  const DEFAULT_GLB = "assets/house-3d.glb";
+  // 3D 아키타입 매핑·중복 제거 규칙은 관리자 지도와 공유 (town-config.js)
+  const HOUSE_GLBS = window.SeumTownConfig.HOUSE_GLBS;
+  const CAT_POOL = window.SeumTownConfig.CAT_POOL;
+  const DEFAULT_GLB = window.SeumTownConfig.DEFAULT_GLB;
 
   const glbCache = {};
   function loadGlb(url) {
@@ -1030,6 +1014,8 @@ function init() {
     // 배치 규칙은 관리자 지도와 공유 (town-config.js computePlacement):
     // 관리자가 고정한 칸(placement)을 우선 반영하고, 나머지는 존 내 빈 칸 자동 채움.
     const CFG = window.SeumTownConfig;
+    // 같은 존에 같은 외형이 반복 배치되지 않게 정리 (마을 전시는 외형당 한 채)
+    if (CFG && CFG.dedupeForTown) models = CFG.dedupeForTown(models);
     const placement = [];
     if (CFG && CFG.computePlacement) {
       const plan = CFG.computePlacement(models, ovData || {});
