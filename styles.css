@@ -1421,3 +1421,4 @@ body.build-page { margin: 0; overflow: hidden; background: #12150f; }
   box-shadow: 0 10px 34px rgba(31, 162, 90, 0.45);
 }
 .town__buildcta[hidden] { display: none; }
+.start__fields[hidden] { display: none; }
