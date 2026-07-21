@@ -1009,27 +1009,49 @@ function init() {
     scene.add(infoDesk);
   }
 
-  // ---------- 빌드룸 포털 (광장 남동측 가장자리 — 통로·집·큐레이터를 가리지 않는 자리) ----------
-  // 입장 직후(스폰 남쪽 광장) 오른쪽에 바로 보이되, 동선 한복판은 피한다.
+  // ---------- 빌드룸 포털 (안내봇 메타봇 바로 옆 — 이중 링 + 포털면 + 빛 구슬) ----------
   const portalGroup = new THREE.Group();
-  let portalRing = null;
+  let portalRing = null, portalRing2 = null, portalDisc = null;
+  const portalOrbs = [];
   {
-    portalRing = new THREE.Mesh(
-      new THREE.TorusGeometry(0.85, 0.1, 12, 40),
-      new THREE.MeshStandardMaterial({ color: 0x1fa25a, emissive: 0x2fe08a, emissiveIntensity: 1.3, roughness: 0.4 })
+    const emerald = new THREE.MeshStandardMaterial({ color: 0x1fa25a, emissive: 0x2fe08a, emissiveIntensity: 1.5, roughness: 0.35, metalness: 0.3 });
+    const gold = new THREE.MeshStandardMaterial({ color: 0xd9a54a, emissive: 0xffcf7a, emissiveIntensity: 0.7, roughness: 0.4, metalness: 0.5 });
+    portalRing = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.09, 14, 48), emerald);
+    portalRing.position.y = 1.55;
+    portalRing2 = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.05, 12, 40), gold);
+    portalRing2.position.y = 1.55;
+    // 은은하게 빛나는 포털면 (블룸에서 살짝 번짐)
+    portalDisc = new THREE.Mesh(
+      new THREE.CircleGeometry(0.68, 40),
+      new THREE.MeshBasicMaterial({ color: 0x9ffcd0, transparent: true, opacity: 0.35, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false })
     );
-    portalRing.position.y = 1.45;
+    portalDisc.position.y = 1.55;
     const base = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.75, 0.9, 0.18, 20),
-      new THREE.MeshStandardMaterial({ color: 0xd9d2c0, roughness: 0.9 })
+      new THREE.CylinderGeometry(0.85, 1.05, 0.22, 24),
+      new THREE.MeshStandardMaterial({ color: 0xe3ddcb, roughness: 0.85 })
     );
-    base.position.y = 0.09;
-    // 라벨은 링 안에 붙여 한 덩어리로 읽히게 (작게)
+    base.position.y = 0.11;
+    // 바닥 발광 링
+    const glowRing = new THREE.Mesh(
+      new THREE.RingGeometry(1.0, 1.35, 40),
+      new THREE.MeshBasicMaterial({ color: 0x2fe08a, transparent: true, opacity: 0.35, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false })
+    );
+    glowRing.rotation.x = -Math.PI / 2;
+    glowRing.position.y = 0.03;
+    // 주위를 도는 빛 구슬 7개
+    const orbMat = new THREE.MeshBasicMaterial({ color: 0xbdffdc });
+    for (let i = 0; i < 7; i++) {
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), orbMat);
+      orb.userData.a = (i / 7) * Math.PI * 2;
+      portalOrbs.push(orb);
+      portalGroup.add(orb);
+    }
+    // 라벨은 링 바로 위에 붙여 한 덩어리로
     const portalSign = nameSign("🔨 내 집 지어보기");
-    portalSign.scale.set(2.2, 0.55, 1);
-    portalSign.position.y = 1.45;
-    portalGroup.add(portalRing, base, portalSign);
-    portalGroup.position.set(11, 0, 30.5);
+    portalSign.scale.set(2.3, 0.58, 1);
+    portalSign.position.y = 2.95;
+    portalGroup.add(portalRing, portalRing2, portalDisc, base, glowRing, portalSign);
+    portalGroup.position.set(6.2, 0, 27.2); // 인포 데스크·안내봇 메타봇 바로 옆
     scene.add(portalGroup);
   }
 
@@ -2085,9 +2107,16 @@ function init() {
       } else if (nd > 4.8) npcNear = false;
     }
 
-    // 빌드룸 포털 근접 → 입장 버튼 표시 + 링 회전 연출
+    // 빌드룸 포털: 이중 링 역회전 + 포털면 맥동 + 빛 구슬 공전 + 근접 입장 버튼
     if (portalRing) {
-      portalRing.rotation.y += dt * 0.8;
+      const T = (portalGroup.userData.t = (portalGroup.userData.t || 0) + dt);
+      portalRing.rotation.y += dt * 0.7;
+      portalRing2.rotation.y -= dt * 1.3;
+      portalDisc.material.opacity = 0.28 + Math.sin(T * 2.2) * 0.12;
+      portalOrbs.forEach((o, i) => {
+        const a = o.userData.a + T * 0.9;
+        o.position.set(Math.cos(a) * 1.25, 1.55 + Math.sin(T * 1.6 + i * 1.7) * 0.55, Math.sin(a) * 1.25);
+      });
       const pd = Math.hypot(portalGroup.position.x - player.position.x, portalGroup.position.z - player.position.z);
       const cta = document.getElementById("town-build-cta");
       if (cta) cta.hidden = pd > 3.6;

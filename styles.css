@@ -1422,3 +1422,32 @@ body.build-page { margin: 0; overflow: hidden; background: #12150f; }
 }
 .town__buildcta[hidden] { display: none; }
 .start__fields[hidden] { display: none; }
+
+/* ============ 시작 화면: 문자 인증 ============ */
+.start__why {
+  margin: 4px 0 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.start__phonerow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+.start__phonerow[hidden] { display: none; }
+.start__phonerow input { flex: 1; min-width: 0; }
+.start__phonerow .btn { flex-shrink: 0; }
+.start__otp-timer {
+  font-size: 12px;
+  color: #ffd75e;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.start__verified {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #8fe6b5;
+}
+.start__verified[hidden] { display: none; }

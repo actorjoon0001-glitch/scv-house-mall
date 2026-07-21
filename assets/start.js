@@ -112,24 +112,135 @@
     window.location.href = "town.html";
   }
 
-  // 선택 입력(이름·핸드폰)을 남기면 상담 리드로 저장
-  function maybeLead(nick) {
-    const name = ((nameEl && nameEl.value) || "").trim();
-    const phone = ((phoneEl && phoneEl.value) || "").trim();
-    if (!phone && !name) return;
-    if (CFG && CFG.addLead) {
-      CFG.addLead({ name: name || nick || "방문객", phone, interest: "신규 모델·이벤트 알림", memo: `닉네임: ${nick}`, source: "시작화면" });
-    }
-    if (phone) {
-      fetch("/", {
+  // ---------- 핸드폰 문자(SMS) 인증 ----------
+  // 인증번호 생성·대조는 서버(Netlify Function)에서만. SMS 미설정 시 인증 없이 입장 폴백.
+  const otpSendBtn = document.getElementById("start-otp-send");
+  const otpRow = document.getElementById("start-otp-row");
+  const otpInput = document.getElementById("start-otp");
+  const otpVerifyBtn = document.getElementById("start-otp-verify");
+  const otpTimerEl = document.getElementById("start-otp-timer");
+  const verifiedEl = document.getElementById("start-verified");
+  let phoneVerified = false;
+  let smsAvailable = null; // null=미확인, false=미설정(폴백 입장 허용)
+  let otpDeadline = 0, otpTick = null, resendAt = 0;
+  const phoneDigits = () => ((phoneEl && phoneEl.value) || "").replace(/[^0-9]/g, "");
+  const validPhone = () => /^01[016789][0-9]{7,8}$/.test(phoneDigits());
+  try {
+    // 이전에 인증한 번호면 재인증 생략
+    const vp = localStorage.getItem("seum_phone_verified") || "";
+    if (vp && phoneEl) { phoneEl.value = vp; phoneVerified = true; }
+  } catch (e) {}
+  function setVerifiedUI() {
+    if (verifiedEl) verifiedEl.hidden = !phoneVerified;
+    if (otpRow) otpRow.hidden = true;
+    if (otpSendBtn) otpSendBtn.hidden = phoneVerified;
+    if (otpTick) { clearInterval(otpTick); otpTick = null; }
+  }
+  setVerifiedUI();
+  if (phoneEl) phoneEl.addEventListener("input", () => {
+    // 번호를 바꾸면 인증 다시
+    let saved = "";
+    try { saved = localStorage.getItem("seum_phone_verified") || ""; } catch (e) {}
+    phoneVerified = !!saved && phoneDigits() === saved;
+    setVerifiedUI();
+  });
+  function startTimer() {
+    otpDeadline = Date.now() + 5 * 60e3;
+    resendAt = Date.now() + 60e3;
+    if (otpTick) clearInterval(otpTick);
+    otpTick = setInterval(() => {
+      const left = Math.max(0, otpDeadline - Date.now());
+      const m = Math.floor(left / 60e3), s = Math.floor((left % 60e3) / 1000);
+      if (otpTimerEl) otpTimerEl.textContent = left ? `${m}:${String(s).padStart(2, "0")}` : "만료됨";
+      if (otpSendBtn) {
+        const cool = Math.max(0, resendAt - Date.now());
+        otpSendBtn.textContent = cool ? `재발송 (${Math.ceil(cool / 1000)}s)` : "재발송";
+        otpSendBtn.disabled = cool > 0;
+      }
+      if (!left) clearInterval(otpTick);
+    }, 500);
+  }
+  async function otpSend() {
+    if (!validPhone()) { markBad(phoneEl); showErr("핸드폰 번호를 정확히 입력해주세요. (예: 010-1234-5678)"); return; }
+    showErr("");
+    otpSendBtn.disabled = true;
+    try {
+      const r = await fetch("/.netlify/functions/sms-send", {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({ "form-name": "상담신청", name: name || nick || "방문객", phone, interest: "미정", memo: "시작 화면 알림 신청", agree: "on" }).toString(),
-      }).catch(() => {});
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phoneDigits() }),
+      });
+      if (r.status === 503 || r.status === 404) {
+        smsAvailable = false;
+        showErr("문자 인증 시스템 준비 중이에요 — 지금은 번호 입력만으로 입장돼요.");
+        otpSendBtn.hidden = true;
+        return;
+      }
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 429) { showErr(d.error === "cooldown" ? `잠시 후 다시 받을 수 있어요 (${d.wait || 60}초)` : "발송 한도를 초과했어요. 1시간 뒤 다시 시도해주세요."); return; }
+      if (!r.ok) { showErr("인증번호 발송에 실패했어요. 잠시 후 다시 시도해주세요."); return; }
+      smsAvailable = true;
+      otpRow.hidden = false;
+      otpInput.value = "";
+      otpInput.focus();
+      startTimer();
+      showErr("");
+    } catch (e) {
+      showErr("인증번호 발송에 실패했어요. 잠시 후 다시 시도해주세요.");
+    } finally {
+      if (smsAvailable !== false) otpSendBtn.disabled = Date.now() < resendAt;
     }
   }
+  async function otpVerify() {
+    const code = (otpInput.value || "").replace(/[^0-9]/g, "");
+    if (code.length !== 6) { markBad(otpInput); return; }
+    otpVerifyBtn.disabled = true;
+    try {
+      const r = await fetch("/.netlify/functions/sms-verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: phoneDigits(), code }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.ok) {
+        phoneVerified = true;
+        try { localStorage.setItem("seum_phone_verified", phoneDigits()); } catch (e) {}
+        setVerifiedUI();
+        showErr("");
+      } else if (d.error === "expired") showErr("인증번호가 만료됐어요. 재발송을 눌러주세요.");
+      else if (d.error === "wrong_code") showErr(`인증번호가 달라요. (남은 시도 ${d.left != null ? d.left : "-"}회)`);
+      else showErr("인증에 실패했어요. 다시 시도해주세요.");
+    } catch (e) {
+      showErr("인증에 실패했어요. 다시 시도해주세요.");
+    } finally {
+      otpVerifyBtn.disabled = false;
+    }
+  }
+  if (otpSendBtn) otpSendBtn.addEventListener("click", otpSend);
+  if (otpVerifyBtn) otpVerifyBtn.addEventListener("click", otpVerify);
+  if (otpInput) otpInput.addEventListener("keydown", (e) => { if (e.key === "Enter") otpVerify(); });
 
-  // ---------- 닉네임 즉시 입장 ----------
+  // 입장 시 인증된 번호 + 닉네임을 리드로 저장 (Supabase는 RLS로 조회 잠금)
+  function saveEntryLead(nick) {
+    const name = ((nameEl && nameEl.value) || "").trim();
+    const phone = phoneDigits();
+    if (CFG && CFG.addLead) {
+      CFG.addLead({
+        name: name || nick || "방문객",
+        phone,
+        interest: "마을 입장",
+        memo: `닉네임: ${nick} / 번호 인증: ${phoneVerified ? "완료 ✅" : "미인증(시스템 준비중)"}`,
+        source: "입장 인증",
+      });
+    }
+    fetch("/", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ "form-name": "상담신청", name: name || nick || "방문객", phone, interest: "마을 입장", memo: `번호 인증: ${phoneVerified ? "완료" : "미인증"}`, agree: "on" }).toString(),
+    }).catch(() => {});
+  }
+
+  // ---------- 입장 (닉네임 + 인증된 번호) ----------
   function enter() {
     if (isReturning()) {
       try { localStorage.setItem("seum_autologin", autoChk && autoChk.checked ? "1" : localStorage.getItem("seum_autologin") || "0"); } catch (e) {}
@@ -137,10 +248,16 @@
       return goTown();
     }
     const nick = ((nickEl && nickEl.value) || "").trim().slice(0, 10);
-    if (!nick) { markBad(nickEl); showErr("닉네임만 입력하면 바로 입장할 수 있어요!"); return; }
+    if (!nick) { markBad(nickEl); showErr("닉네임을 입력해주세요."); return; }
+    if (!validPhone()) { markBad(phoneEl); showErr("핸드폰 번호를 정확히 입력해주세요."); return; }
+    if (!phoneVerified && smsAvailable !== false) {
+      markBad(otpRow && !otpRow.hidden ? otpInput : phoneEl);
+      showErr('"인증번호 받기"를 눌러 문자 인증을 완료해주세요.');
+      return;
+    }
     persistCommon(nick);
     try { localStorage.setItem("seum_guest_ok", "1"); } catch (e) {}
-    maybeLead(nick);
+    saveEntryLead(nick);
     goTown();
   }
 
