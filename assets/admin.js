@@ -672,4 +672,12 @@
     savedMsg.textContent = src === "supabase" ? "저장됨 ✓ (손님 화면 새로고침 시 반영)" : "로컬에 저장됨 ✓ (이 브라우저만)";
   });
   document.getElementById("reload-btn").addEventListener("click", boot);
+
+  // ---------- 사이드바 섹션 전환 ----------
+  document.querySelectorAll(".side__nav").forEach((b) =>
+    b.addEventListener("click", () => {
+      document.querySelectorAll(".side__nav").forEach((x) => x.classList.toggle("is-active", x === b));
+      document.querySelectorAll(".apanel").forEach((p) => p.classList.toggle("is-active", p.id === "panel-" + b.dataset.panel));
+    })
+  );
 })();
