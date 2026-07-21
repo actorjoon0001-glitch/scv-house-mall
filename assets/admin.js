@@ -218,9 +218,10 @@
     savedMsg.textContent = "변경됨 (저장 필요)";
     savedMsg.style.color = "#f0c674";
   }
-  // 마을에 실제 보이는 모델(숨김 제외 + 존 오버라이드 반영) — town.js와 동일 입력
+  // 마을에 실제 보이는 모델(숨김 제외 + 존 오버라이드 + 중복 외형 제거) — town.js와 동일 입력
   function effModels() {
-    return CFG.apply(catalog, overrides);
+    const applied = CFG.apply(catalog, overrides);
+    return CFG.dedupeForTown ? CFG.dedupeForTown(applied) : applied;
   }
   function currentPlan() {
     return CFG.computePlacement(effModels(), overrides);
@@ -682,7 +683,9 @@
   function summaryData() {
     // 손님에게 보이는 최종 값 기준: apply(이름/가격/존 반영) + 배치 칸. 숨김 모델도 포함해 표시.
     const visible = CFG.apply(catalog, overrides);
-    const plan = CFG.computePlacement(visible, overrides);
+    const townList = CFG.dedupeForTown ? CFG.dedupeForTown(visible) : visible;
+    const townSet = new Set(townList.map((m) => m.slug));
+    const plan = CFG.computePlacement(townList, overrides);
     const visMap = {};
     visible.forEach((m) => (visMap[m.slug] = m));
     return catalog.map((raw) => {
@@ -695,7 +698,7 @@
       return {
         name: (m && m.name) || o.name || raw.name,
         zone: p ? p.zone : effZone(raw),
-        cell: p ? `${p.index + 1}번 칸${p.rot ? ` (${p.rot}°)` : ""}` : "-",
+        cell: p ? `${p.index + 1}번 칸${p.rot ? ` (${p.rot}°)` : ""}` : (m && !townSet.has(raw.slug) ? "마을 미표시 (중복 외형)" : "-"),
         size: (m && m.size) || raw.size || "",
         price,
         curator,

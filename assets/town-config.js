@@ -83,6 +83,25 @@
     if (!r.ok) throw new Error("leads " + r.status);
     return r.json();
   }
+  // ---------- 빌드룸: 손님이 만든 집 구성 저장 (시공사 발주용 원본 데이터) ----------
+  async function addBuild(b) {
+    try {
+      const r = await fetch(`${SETTINGS_URL}/rest/v1/town_builds`, {
+        method: "POST",
+        headers: Object.assign({ "Content-Type": "application/json" }, HEADERS),
+        body: JSON.stringify({
+          name: (b.name || "").slice(0, 40),
+          phone: (b.phone || "").slice(0, 30),
+          area: Number(b.area) || 0,
+          price: Number(b.price) || 0,
+          config: b.config || {},
+        }),
+      });
+      return r.ok;
+    } catch (e) { return false; }
+  }
+  const getBuilds = (pass) => rpc("get_builds", { pass });
+
   // ---------- 회원 (게임식 가입: 아이디/비밀번호, 해시는 서버측 RPC에서 처리) ----------
   async function rpc(name, body) {
     const r = await fetch(`${SETTINGS_URL}/rest/v1/rpc/${name}`, {
@@ -135,6 +154,49 @@
         if (o.curator === "m" || o.curator === "f" || o.curator === "bot") c.curator = o.curator;
         return c;
       });
+  }
+
+  // ---------- 3D 외형(아키타입) 매핑 + 중복 외형 제거 (마을·관리자 지도 공유 규칙) ----------
+  // 카탈로그 모델 수 > 3D 모델 수라서 같은 외형이 반복 배치되던 것을,
+  // 존(카테고리)별로 같은 외형은 첫 모델 한 채만 마을에 세우도록 정리한다.
+  // 랜딩 카탈로그(사진 목록)는 전체 유지.
+  const HOUSE_GLBS = {
+    "stay-19rb": "assets/houses/stay-19rb.glb",
+    "stay24w": "assets/houses/stay24w.glb",
+    "stay20r": "assets/houses/stay20r.glb",
+    "stay18-b": "assets/houses/stay18-b.glb",
+    "stay14": "assets/houses/stay14.glb",
+    "cube9o": "assets/houses/cube9o.glb",
+    "forest10g": "assets/houses/forest10g.glb",
+    "forest10bb": "assets/houses/forest10bb.glb",
+    "cube-g-10w": "assets/houses/cube-g-10w.glb",
+  };
+  const CAT_POOL = {
+    "전원주택": ["stay-19rb", "stay24w", "stay20r", "stay18-b"],
+    "세컨하우스": ["stay14", "stay-19rb", "stay24w"],
+    "체류형 쉼터": ["cube9o", "forest10g", "forest10bb"],
+    "특별모델": ["cube-g-10w", "cube9o"],
+  };
+  const DEFAULT_GLB = "assets/house-3d.glb";
+  function archetypeFor(m, idxInCat) {
+    if (m.slug && HOUSE_GLBS[m.slug]) return HOUSE_GLBS[m.slug];
+    const pool = CAT_POOL[m.category];
+    if (pool && pool.length) return HOUSE_GLBS[pool[idxInCat % pool.length]];
+    return DEFAULT_GLB;
+  }
+  function dedupeForTown(models) {
+    const usedByCat = {}; // 카테고리별 사용된 외형 URL
+    const keptCount = {};
+    return models.filter((m) => {
+      const c = m.category || "_";
+      const idx = keptCount[c] || 0;
+      const url = archetypeFor(m, idx);
+      if (!usedByCat[c]) usedByCat[c] = new Set();
+      if (usedByCat[c].has(url)) return false; // 같은 존에 같은 외형 → 제외
+      usedByCat[c].add(url);
+      keptCount[c] = idx + 1;
+      return true;
+    });
   }
 
   // ---------- 배치 계산 (관리자 지도와 3D 마을이 공유하는 단일 규칙) ----------
@@ -192,6 +254,8 @@
     load, save, apply, computePlacement, keyOf, ZONE_ORDER, RESERVED_SLOTS, SB_URL, SB_KEY,
     addLead, logEvent, getLeads, getEvents,
     authRegister, authLogin, authResetPass, authKakaoUpsert, getUsers,
+    addBuild, getBuilds,
+    HOUSE_GLBS, CAT_POOL, DEFAULT_GLB, archetypeFor, dedupeForTown,
     SETTINGS_URL, SETTINGS_KEY,
   };
 })();
