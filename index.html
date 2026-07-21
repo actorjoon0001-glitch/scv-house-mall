@@ -31,37 +31,27 @@
       <p class="start__returning" id="start-returning" hidden><strong id="start-rname"></strong>님 다시 오셨네요! 바로 입장하세요 👋</p>
       <div class="start__chars" id="start-chars"></div>
       <div class="start__fields" id="start-fields">
-        <label class="start__field" data-signup>
-          <span>이름 <em>*</em></span>
-          <input id="start-name" maxlength="20" placeholder="홍길동" autocomplete="name" />
-        </label>
-        <label class="start__field" data-signup>
-          <span>핸드폰 번호 <em>*</em></span>
-          <input id="start-phone" type="tel" maxlength="20" placeholder="010-0000-0000" autocomplete="tel" />
-        </label>
         <label class="start__field">
-          <span>아이디 <em>*</em></span>
-          <input id="start-username" maxlength="20" placeholder="영문·숫자 4자 이상" autocomplete="username" />
-        </label>
-        <label class="start__field">
-          <span>비밀번호 <em>*</em></span>
-          <input id="start-pass" type="password" maxlength="30" placeholder="4자 이상" autocomplete="new-password" />
-        </label>
-        <label class="start__field" data-signup>
           <span>닉네임 <em>*</em></span>
           <input id="start-nick" maxlength="10" placeholder="마을에서 보이는 이름" autocomplete="off" />
         </label>
+        <label class="start__field">
+          <span>이름 <em class="start__opt">(선택)</em></span>
+          <input id="start-name" maxlength="20" placeholder="홍길동" autocomplete="name" />
+        </label>
+        <label class="start__field">
+          <span>핸드폰 번호 <em class="start__opt">(선택 · 신규 모델 알림)</em></span>
+          <input id="start-phone" type="tel" maxlength="20" placeholder="010-0000-0000" autocomplete="tel" />
+        </label>
       </div>
-      <label class="start__check" id="start-auto-wrap"><input type="checkbox" id="start-auto" checked /> 자동 로그인 (다음부터 바로 입장)</label>
+      <label class="start__check" id="start-auto-wrap"><input type="checkbox" id="start-auto" checked /> 자동 입장 (다음부터 바로 마을로)</label>
       <p class="start__formerr" id="start-err" hidden></p>
       <div class="start__btns">
-        <button type="button" class="btn btn--primary" id="start-town">🎮 회원가입하고 입장</button>
-        <button type="button" class="btn btn--kakao" id="start-kakao">💬 카카오로 시작하기</button>
+        <button type="button" class="btn btn--kakao" id="start-kakao" style="grid-column:1/-1">💬 카카오로 시작하기</button>
+        <button type="button" class="btn btn--primary" id="start-town">🎮 닉네임으로 바로 입장</button>
         <button type="button" class="btn btn--glass" id="start-products">📋 모델·가격 바로 보기</button>
       </div>
-      <button type="button" class="start__skip" id="start-mode">이미 계정이 있어요 → 로그인</button>
-      <button type="button" class="start__skip" id="start-forgot" hidden>비밀번호를 잊으셨나요?</button>
-      <button type="button" class="start__skip" id="start-logout" hidden>로그아웃 · 다른 계정</button>
+      <button type="button" class="start__skip" id="start-logout" hidden>로그아웃 · 다른 계정으로</button>
       <a class="start__skip" id="start-admin" href="admin.html">🔒 관리자 페이지</a>
     </div>
   </div>
