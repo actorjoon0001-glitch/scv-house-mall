@@ -272,17 +272,28 @@ function init() {
   }
   function playStep(sprinting) {
     if (!audioCtx || !soundOn || audioCtx.state !== "running") return;
-    // 은은한 발소리: 낮은 톤 + 아주 작은 볼륨, 걸음마다 살짝 다른 피치
+    // 발소리 = 쿵(저음 썸프) + 탁(노이즈 탭) — BGM 위에서도 또렷하게
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(sprinting ? 135 : 110, t);
+    o.frequency.exponentialRampToValueAtTime(55, t + 0.08);
+    const og = audioCtx.createGain();
+    og.gain.setValueAtTime(0.28, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+    o.connect(og).connect(masterGain);
+    o.start(t);
+    o.stop(t + 0.12);
     const src = audioCtx.createBufferSource();
     src.buffer = noiseBuf;
-    src.playbackRate.value = 0.9 + Math.random() * 0.2;
+    src.playbackRate.value = 0.85 + Math.random() * 0.3; // 걸음마다 살짝 다른 톤
     const bp = audioCtx.createBiquadFilter();
-    bp.type = "lowpass";
-    bp.frequency.value = sprinting ? 340 : 260;
+    bp.type = "bandpass";
+    bp.frequency.value = sprinting ? 900 : 700;
     const g = audioCtx.createGain();
-    g.gain.value = 0.035;
+    g.gain.value = 0.12;
     src.connect(bp).connect(g).connect(masterGain);
-    src.start();
+    src.start(t);
   }
   let stepT = 0;
   function stepTick(dt, moving, sprinting, grounded) {
