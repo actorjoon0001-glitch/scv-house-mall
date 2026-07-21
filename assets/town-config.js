@@ -103,6 +103,9 @@
   const authRegister = (d) =>
     rpc("town_register", { p_username: d.username, p_pass: d.pass, p_name: d.name, p_phone: d.phone, p_nick: d.nick });
   const authLogin = (username, pass) => rpc("town_login", { p_username: username, p_pass: pass });
+  const authResetPass = (d) =>
+    rpc("town_reset_pass", { p_username: d.username, p_name: d.name, p_phone: d.phone, p_new_pass: d.newPass });
+  const authKakaoUpsert = (d) => rpc("town_kakao_upsert", { p_kid: d.kid, p_name: d.name, p_nick: d.nick });
   const getUsers = (pass) => rpc("get_users", { pass });
 
   async function getEvents() {
@@ -188,6 +191,7 @@
   window.SeumTownConfig = {
     load, save, apply, computePlacement, keyOf, ZONE_ORDER, RESERVED_SLOTS, SB_URL, SB_KEY,
     addLead, logEvent, getLeads, getEvents,
-    authRegister, authLogin, getUsers,
+    authRegister, authLogin, authResetPass, authKakaoUpsert, getUsers,
+    SETTINGS_URL, SETTINGS_KEY,
   };
 })();

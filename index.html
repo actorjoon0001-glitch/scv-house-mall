@@ -52,12 +52,16 @@
           <input id="start-nick" maxlength="10" placeholder="마을에서 보이는 이름" autocomplete="off" />
         </label>
       </div>
+      <label class="start__check" id="start-auto-wrap"><input type="checkbox" id="start-auto" checked /> 자동 로그인 (다음부터 바로 입장)</label>
       <p class="start__formerr" id="start-err" hidden></p>
       <div class="start__btns">
         <button type="button" class="btn btn--primary" id="start-town">🎮 회원가입하고 입장</button>
+        <button type="button" class="btn btn--kakao" id="start-kakao">💬 카카오로 시작하기</button>
         <button type="button" class="btn btn--glass" id="start-products">📋 모델·가격 바로 보기</button>
       </div>
       <button type="button" class="start__skip" id="start-mode">이미 계정이 있어요 → 로그인</button>
+      <button type="button" class="start__skip" id="start-forgot" hidden>비밀번호를 잊으셨나요?</button>
+      <button type="button" class="start__skip" id="start-logout" hidden>로그아웃 · 다른 계정</button>
       <a class="start__skip" id="start-admin" href="admin.html">🔒 관리자 페이지</a>
     </div>
   </div>
@@ -313,6 +317,7 @@
     </div>
   </div>
 
+  <script src="assets/supabase.js"></script>
   <script src="assets/town-config.js"></script>
   <script src="script.js"></script>
   <script src="assets/chat.js"></script>
