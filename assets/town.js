@@ -732,6 +732,35 @@ function init() {
   if (photosBtn) {
     photosBtn.addEventListener("click", () => { if (activeLot) openPhotos(activeLot.model); });
   }
+  // ---------- 카드 행동 버튼: 방문예약 · 전화 상담 · 빌드룸 시작 ----------
+  const CONTACT_PHONE = (window.SeumTownConfig && window.SeumTownConfig.CONTACT_PHONE) || "";
+  const cardCall = document.getElementById("town-card-call");
+  const cardReserve = document.getElementById("town-card-reserve");
+  const cardBuild = document.getElementById("town-card-build");
+  // 모델 평수 추출 (예: "18평", "1층 14.5평 2층 3평" → 합산)
+  function modelPyeong(m) {
+    let sum = 0;
+    String(m.size || "").replace(/([\d.]+)\s*평/g, (_, n) => { sum += parseFloat(n); return _; });
+    return sum || 10;
+  }
+  if (cardReserve) {
+    cardReserve.addEventListener("click", () => {
+      if (!activeLot) return;
+      const m = activeLot.model;
+      // 보고 있던 집을 관심 모델로 담아 기존 방문예약 폼으로 (script.js가 자동 프리필)
+      try { localStorage.setItem("seum_interest_model", m.name); } catch (e) {}
+      if (window.SeumTownConfig && window.SeumTownConfig.logEvent) window.SeumTownConfig.logEvent("reserve_click", m.name);
+      window.location.href = "index.html#contact";
+    });
+  }
+  if (cardBuild) {
+    cardBuild.addEventListener("click", () => {
+      if (!activeLot) return;
+      const m = activeLot.model;
+      if (window.SeumTownConfig && window.SeumTownConfig.logEvent) window.SeumTownConfig.logEvent("build_from_model", m.name);
+      window.location.href = `build.html?pyeong=${modelPyeong(m)}&model=${encodeURIComponent(m.name)}`;
+    });
+  }
   if (cardChat) {
     cardChat.addEventListener("click", () => {
       if (activeLot && window.__metaChat && window.__metaChat.openCurator) {
@@ -980,6 +1009,28 @@ function init() {
     scene.add(infoDesk);
   }
 
+  // ---------- 빌드룸 포털 (광장 동측 — 다가가면 입장 버튼) ----------
+  const portalGroup = new THREE.Group();
+  let portalRing = null;
+  {
+    portalRing = new THREE.Mesh(
+      new THREE.TorusGeometry(1.5, 0.16, 12, 40),
+      new THREE.MeshStandardMaterial({ color: 0x1fa25a, emissive: 0x2fe08a, emissiveIntensity: 1.3, roughness: 0.4 })
+    );
+    portalRing.position.y = 2.2;
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.2, 1.35, 0.24, 20),
+      new THREE.MeshStandardMaterial({ color: 0xd9d2c0, roughness: 0.9 })
+    );
+    base.position.y = 0.12;
+    const portalSign = nameSign("🔨 내 집 지어보기");
+    portalSign.scale.set(4.6, 1.15, 1);
+    portalSign.position.y = 4.3;
+    portalGroup.add(portalRing, base, portalSign);
+    portalGroup.position.set(9, 0, 26);
+    scene.add(portalGroup);
+  }
+
   const houseLots = []; // { wrap, model }
   const padMat = new THREE.MeshStandardMaterial({
     color: 0xe4dfd2,
@@ -1163,6 +1214,11 @@ function init() {
     if (m.main_image) { cardImg.src = m.main_image; cardImg.hidden = false; }
     else cardImg.hidden = true;
     if (photosBtn) photosBtn.hidden = modelPics(m).length === 0;
+    // 전화 상담: 실제 번호가 설정된 경우에만 (tel: 탭 즉시 통화)
+    if (cardCall) {
+      if (CONTACT_PHONE) { cardCall.href = `tel:${CONTACT_PHONE.replace(/[^0-9+]/g, "")}`; cardCall.hidden = false; }
+      else cardCall.hidden = true;
+    }
     if (m.slug) {
       cardLink.href = `${CATALOG_URL}/model-detail.html?slug=${encodeURIComponent(m.slug)}`;
       cardLink.hidden = false;
@@ -2025,6 +2081,14 @@ function init() {
         if (window.__metaChat.openInfo) window.__metaChat.openInfo();
         else window.__metaChat.open();
       } else if (nd > 4.8) npcNear = false;
+    }
+
+    // 빌드룸 포털 근접 → 입장 버튼 표시 + 링 회전 연출
+    if (portalRing) {
+      portalRing.rotation.y += dt * 0.8;
+      const pd = Math.hypot(portalGroup.position.x - player.position.x, portalGroup.position.z - player.position.z);
+      const cta = document.getElementById("town-build-cta");
+      if (cta) cta.hidden = pd > 3.6;
     }
 
     clouds.forEach((c, i) => { c.position.x += dt * (0.25 + i * 0.05); if (c.position.x > 55) c.position.x = -55; });

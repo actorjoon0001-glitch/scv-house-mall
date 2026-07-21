@@ -9,6 +9,8 @@
   const SETTINGS_URL = "https://zjbaeoqvzbkdctwcrgfd.supabase.co";
   const SETTINGS_KEY = "sb_publishable_k_gQuXbUVRwmFnfCzNGmMg_UvLhesnZ";
   const LS_KEY = "seum_town_overrides";
+  // 대표 전화번호 — 실제 번호를 넣으면 마을 집 카드에 "📞 전화 상담" 버튼이 활성화된다 (빈 값이면 숨김)
+  const CONTACT_PHONE = "";
   const HEADERS = { apikey: SETTINGS_KEY, Authorization: `Bearer ${SETTINGS_KEY}` };
 
   async function load() {
@@ -256,6 +258,6 @@
     authRegister, authLogin, authResetPass, authKakaoUpsert, getUsers,
     addBuild, getBuilds,
     HOUSE_GLBS, CAT_POOL, DEFAULT_GLB, archetypeFor, dedupeForTown,
-    SETTINGS_URL, SETTINGS_KEY,
+    CONTACT_PHONE, SETTINGS_URL, SETTINGS_KEY,
   };
 })();
