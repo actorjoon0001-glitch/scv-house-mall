@@ -405,19 +405,21 @@ body.town-page {
 }
 .town__hud {
   position: absolute;
-  left: 50%;
-  top: 14px;
-  transform: translateX(-50%);
+  right: 14px;
+  bottom: 132px; /* 조이스틱·JUMP 버튼 바로 위 */
   margin: 0;
-  padding: 8px 16px;
-  font-size: 13px;
+  padding: 8px 14px;
+  max-width: 320px;
+  font-size: 12px;
+  text-align: right;
   color: rgba(255,255,255,0.92);
   background: rgba(16,19,15,0.45);
   border: 1px solid rgba(255,255,255,0.16);
-  border-radius: 9999px;
+  border-radius: 14px;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.5;
   pointer-events: none;
 }
 .town__keys {
@@ -1284,3 +1286,23 @@ body.town-fs-lock .chat__fab, body.town-fs-lock .chat__panel { display: none; }
 .start--returning .start__fields,
 .start--returning .start__formerr,
 .start--returning #start-mode { display: none; }
+
+/* ============ 시작 화면: 자동 로그인 · 카카오 버튼 ============ */
+.start__check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+}
+.start__check input { accent-color: #7fd4a8; width: 16px; height: 16px; }
+.btn--kakao {
+  background: #fee500;
+  color: #191919;
+  border-color: #fee500;
+}
+.btn--kakao:hover { background: #f5da00; border-color: #f5da00; }
+.start__field[hidden], .start__chars[hidden], .start__check[hidden] { display: none; }

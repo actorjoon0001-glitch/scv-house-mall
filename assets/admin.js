@@ -546,6 +546,33 @@
     "  end if;\n" +
     "  return json_build_object('username', u.username, 'name', u.name, 'nick', u.nick);\n" +
     "end $$;\n\n" +
+    "create or replace function town_reset_pass(p_username text, p_name text, p_phone text, p_new_pass text)\n" +
+    "returns json language plpgsql security definer set search_path = public, extensions as $$\n" +
+    "declare u town_users;\n" +
+    "begin\n" +
+    "  if length(p_new_pass) < 4 then raise exception 'bad_password'; end if;\n" +
+    "  select * into u from town_users where username = lower(trim(p_username));\n" +
+    "  if u.id is null or trim(u.name) <> trim(p_name)\n" +
+    "     or regexp_replace(u.phone,'[^0-9]','','g') <> regexp_replace(p_phone,'[^0-9]','','g') then\n" +
+    "    raise exception 'no_match';\n" +
+    "  end if;\n" +
+    "  update town_users set pass_hash = crypt(p_new_pass, gen_salt('bf')) where id = u.id;\n" +
+    "  return json_build_object('ok', true);\n" +
+    "end $$;\n\n" +
+    "create or replace function town_kakao_upsert(p_kid text, p_name text, p_nick text)\n" +
+    "returns json language plpgsql security definer set search_path = public, extensions as $$\n" +
+    "declare u town_users; uname text;\n" +
+    "begin\n" +
+    "  uname := 'kakao_' || left(regexp_replace(p_kid, '[^a-zA-Z0-9]', '', 'g'), 12);\n" +
+    "  select * into u from town_users where username = uname;\n" +
+    "  if u.id is null then\n" +
+    "    insert into town_users (username, pass_hash, name, phone, nick)\n" +
+    "    values (uname, crypt(gen_random_uuid()::text, gen_salt('bf')),\n" +
+    "            coalesce(nullif(trim(p_name),''),'카카오 회원'), '카카오', coalesce(nullif(trim(p_nick),''),'카카오 회원'))\n" +
+    "    returning * into u;\n" +
+    "  end if;\n" +
+    "  return json_build_object('username', u.username, 'name', u.name, 'nick', u.nick);\n" +
+    "end $$;\n\n" +
     "create or replace function get_users(pass text)\n" +
     "returns table(created_at timestamptz, username text, name text, phone text, nick text)\n" +
     "language plpgsql security definer set search_path = public as $$\n" +
