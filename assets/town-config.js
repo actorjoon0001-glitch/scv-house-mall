@@ -121,6 +121,7 @@
   // 나머지는 (존 이동 반영된) 카탈로그 순서대로 빈 칸을 채운다.
   function computePlacement(models, ov) {
     const pov = (ov && ov.placement) || {};
+    const booths = (ov && ov.boothSlots) || {}; // "존|칸번호" → {status, company} 부스 계약 칸
     const zoneOf = (m) => {
       const p = pov[keyOf(m)];
       if (p && ZONE_ORDER.includes(p.zone)) return p.zone;
@@ -128,7 +129,14 @@
     };
     const used = {};
     const reservedOf = (z) => {
-      if (!used[z]) used[z] = new Set(RESERVED_SLOTS[z] || []);
+      if (!used[z]) {
+        used[z] = new Set(RESERVED_SLOTS[z] || []);
+        // 부스로 지정된 칸(모집중·계약)은 모델 배치에서 제외
+        Object.keys(booths).forEach((k) => {
+          const sep = k.lastIndexOf("|");
+          if (k.slice(0, sep) === z) used[z].add(Number(k.slice(sep + 1)));
+        });
+      }
       return used[z];
     };
     const out = {};
