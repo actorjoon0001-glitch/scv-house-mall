@@ -413,6 +413,18 @@
       });
       quickEl.appendChild(b);
     });
+    // 빌드룸 유도: 직접 지어보기
+    const bd = document.createElement("button");
+    bd.type = "button";
+    bd.className = "chat__quickbtn";
+    bd.textContent = "🔨 내 집 직접 지어보기";
+    bd.addEventListener("click", () => {
+      bubble("직접 지어보고 싶어요", "me");
+      botSay("좋아요! 빌드룸에서 유닛을 조립해 나만의 집을 만들고 실시간 견적까지 받아보실 수 있어요 🔨\n바로 모셔다드릴게요!", [
+        { label: "🚀 빌드룸 입장하기", action: () => { window.location.href = "build.html"; } },
+      ]);
+    });
+    quickEl.appendChild(bd);
     const rv = document.createElement("button");
     rv.type = "button";
     rv.className = "chat__quickbtn";
