@@ -418,16 +418,21 @@
       });
       quickEl.appendChild(b);
     });
-    // 빌드룸 유도: 직접 지어보기
+    // 체험존 유도: 직접 지어보기·배워보기 포털은 전부 체험존에 모여 있다
     const bd = document.createElement("button");
     bd.type = "button";
     bd.className = "chat__quickbtn";
-    bd.textContent = "🔨 내 집 직접 지어보기";
+    bd.textContent = "🎪 직접 지어보고·배워보기 (체험존)";
     bd.addEventListener("click", () => {
-      bubble("직접 지어보고 싶어요", "me");
-      botSay("좋아요! 빌드룸에서 유닛을 조립해 나만의 집을 만들고 실시간 견적까지 받아보실 수 있어요 🔨\n바로 모셔다드릴게요!", [
-        { label: "🚀 빌드룸 입장하기", action: () => { window.location.href = "build.html"; } },
-      ]);
+      bubble("직접 지어보거나 배워보고 싶어요", "me");
+      const canGo = window.__seumTown && window.__seumTown.gotoExperience;
+      botSay("직접 해보고 싶으시면 체험존으로 가보세요 🎪 마을 남서쪽에 있어요!\n🔨 빌드룸 포털 — 유닛을 조립해 내 집을 만들고 실시간 견적까지\n📚 교육관 포털 — 집이 지어지는 과정을 단계별로 배워보기\n🕶️ VR룸은 준비 중이에요.", [
+        canGo ? { label: "🚀 체험존으로 이동", action: () => { closeChat(); window.__seumTown.gotoExperience(); } } : null,
+        { label: "🔨 빌드룸 바로 입장", action: () => {
+          if (window.__seumTown && window.__seumTown.saveReturnSpot) window.__seumTown.saveReturnSpot();
+          window.location.href = "build.html";
+        } },
+      ].filter(Boolean));
     });
     quickEl.appendChild(bd);
     const rv = document.createElement("button");
