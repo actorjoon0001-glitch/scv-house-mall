@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="description" content="메타하우스 3D 타운 — 메타봇과 함께 실제 판매 모델이 놓인 3D 주택 마을을 걸어보세요." />
   <title>메타하우스 3D 타운</title>
+  <!-- 공유 미리보기 (카카오톡·SNS) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="메타하우스" />
+  <meta property="og:title" content="메타하우스 3D 타운 — 걸어서 구경하는 주택 전시장" />
+  <meta property="og:description" content="캐릭터를 골라 3D 마을을 걸으며 실제 판매 모델을 구경하고, 큐레이터에게 바로 물어보세요." />
+  <meta property="og:image" content="https://scv-house-mall.netlify.app/assets/town-preview.webp" />
+  <meta property="og:url" content="https://scv-house-mall.netlify.app/town" />
+  <meta name="twitter:card" content="summary_large_image" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
@@ -26,6 +34,10 @@
     <a class="town__fs town__exit" href="index.html" aria-label="마을에서 나가기">
       <span class="town__fs-icon" aria-hidden="true">✕</span>나가기
     </a>
+    <button type="button" class="town__mini" id="town-night" style="right:236px" aria-label="밤/낮 전환" title="밤/낮 전환">🌙</button>
+    <button type="button" class="town__mini" id="town-sound" style="right:282px" aria-label="소리 켜기/끄기" title="소리">🔊</button>
+    <button type="button" class="town__mini" id="town-share" style="right:328px" aria-label="공유하기" title="공유">🔗</button>
+    <div class="town__count" id="town-count" hidden></div>
 
     <button type="button" class="town__jump" id="town-jump" aria-label="점프">JUMP</button>
 
@@ -68,8 +80,33 @@
       </div>
       <div class="town__card-btns">
         <button type="button" class="btn btn--glass btn--sm" id="town-card-chat">💬 물어보기</button>
+        <button type="button" class="btn btn--glass btn--sm" id="town-card-photos" hidden>📸 내부 보기</button>
         <a class="btn btn--primary btn--sm" id="town-card-link" target="_blank" rel="noopener" hidden>상세보기</a>
       </div>
+    </div>
+
+    <!-- 공유 (링크 + QR) -->
+    <div class="share" id="share" hidden>
+      <div class="share__panel">
+        <button type="button" class="share__close" id="share-close" aria-label="닫기">✕</button>
+        <h3>메타하우스 3D 마을 공유</h3>
+        <p class="share__sub">QR을 찍거나 링크를 보내면 바로 마을에 입장할 수 있어요.</p>
+        <img class="share__qr" id="share-qr" alt="3D 마을 QR 코드" />
+        <p class="share__url" id="share-url"></p>
+        <div class="share__btns">
+          <button type="button" class="btn btn--primary btn--sm" id="share-copy">🔗 링크 복사</button>
+          <button type="button" class="btn btn--glass btn--sm" id="share-native">📤 공유하기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 내부 사진 뷰어 -->
+    <div class="pv" id="pv" hidden>
+      <button type="button" class="pv__close" id="pv-close" aria-label="닫기">✕</button>
+      <button type="button" class="pv__nav pv__nav--prev" id="pv-prev" aria-label="이전 사진">‹</button>
+      <img class="pv__img" id="pv-img" alt="모델 내부 사진" />
+      <button type="button" class="pv__nav pv__nav--next" id="pv-next" aria-label="다음 사진">›</button>
+      <p class="pv__cap"><strong id="pv-title"></strong> <span id="pv-count"></span></p>
     </div>
   </div>
 
@@ -100,6 +137,7 @@
     { "imports": { "three": "./assets/three.module.min.js" } }
   </script>
   <script src="assets/supabase.js"></script>
+  <script src="assets/qrcode.js"></script>
   <script src="assets/town-config.js"></script>
   <script type="module" src="assets/town.js"></script>
   <script src="assets/chat.js"></script>

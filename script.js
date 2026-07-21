@@ -151,7 +151,18 @@ if (form) {
     const err = document.getElementById("lead-err");
     ok.hidden = true;
     err.hidden = true;
-    const body = new URLSearchParams(new FormData(form)).toString();
+    const fd = new FormData(form);
+    // 관리자 대시보드용 리드 백업 저장 (Netlify Forms와 병행)
+    if (window.SeumTownConfig && window.SeumTownConfig.addLead) {
+      window.SeumTownConfig.addLead({
+        name: fd.get("name") || "",
+        phone: fd.get("phone") || "",
+        interest: [fd.get("interest") || "", fd.get("budget") || ""].filter(Boolean).join(" / "),
+        memo: fd.get("memo") || "",
+        source: "상담폼",
+      });
+    }
+    const body = new URLSearchParams(fd).toString();
     fetch("/", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
