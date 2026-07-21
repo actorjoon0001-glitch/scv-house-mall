@@ -270,6 +270,9 @@
       const zc = (overrides.zones && overrides.zones[mz.key] && overrides.zones[mz.key].color) || mz.color;
       const zoneEl = document.createElement("div");
       zoneEl.className = "map-zone";
+      // 실제 마을 지형과 같은 자리에 배치 (게임 화면과 1:1 일치)
+      const AREA = { "건축 자재": "za", "전원주택": "nw", "체류형 쉼터": "ne", "LG가전 이벤트": "zb", "세컨하우스": "sw", "특별모델": "se", "가구": "zc" };
+      zoneEl.style.gridArea = AREA[mz.key] || "auto";
       zoneEl.style.borderColor = zc;
       zoneEl.innerHTML = `<h3 style="color:${zc}">${mz.emoji} ${esc(mz.key)} 존 · ${inZone.length}개</h3>`;
       const gridEl = document.createElement("div");
