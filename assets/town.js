@@ -894,6 +894,11 @@ function init() {
         player.userData.balloon = null;
         player.add(rig.obj);
         playerRig = rig;
+        // 내 머리 위 닉네임 (다른 방문자에게 보이는 것과 동일한 스타일)
+        const myLabel = nameSign(myNick || "방문객");
+        myLabel.scale.set(2.4, 0.6, 1);
+        myLabel.position.y = CHARACTERS[myChar].height + 0.55;
+        player.add(myLabel);
         attachBalloon(player, myColor, CHARACTERS[myChar].height);
         player.scale.setScalar(myScale);
         updateNickChip();
