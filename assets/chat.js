@@ -391,24 +391,29 @@
     });
   }
 
+  // 관리자에서 바꾼 존 표시 이름 반영
+  function zoneDisp(cat) {
+    return (window.__seumTown && window.__seumTown.zoneLabel && window.__seumTown.zoneLabel(cat)) || cat;
+  }
   function renderInfoQuick() {
     quickEl.innerHTML = "";
     ZONE_INFO.forEach(([cat, emoji]) => {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "chat__quickbtn";
-      b.textContent = `${emoji} ${cat}`;
+      b.textContent = `${emoji} ${zoneDisp(cat)}`;
       b.addEventListener("click", () => {
-        bubble(`${cat} 보러 왔어요`, "me");
+        const disp = zoneDisp(cat);
+        bubble(`${disp} 보러 왔어요`, "me");
         const canGo = window.__seumTown && window.__seumTown.gotoZone;
-        const goBtn = canGo ? [{ label: `🚀 ${cat} 존으로 이동`, action: () => { closeChat(); window.__seumTown.gotoZone(cat); } }] : [];
+        const goBtn = canGo ? [{ label: `🚀 ${disp} 존으로 이동`, action: () => { closeChat(); window.__seumTown.gotoZone(cat); } }] : [];
         if (PARTNER_ZONES.includes(cat)) {
-          botSay(`${cat} 존은 마을 ${zoneDirection(cat)}에 새로 생긴 파트너 전시 블록이에요 ${emoji}\n입점 업체를 모집 중이니 구경해보시고, 입점·제휴 문의도 환영해요!`,
+          botSay(`${disp} 존은 마을 ${zoneDirection(cat)}에 새로 생긴 파트너 전시 블록이에요 ${emoji}\n입점 업체를 모집 중이니 구경해보시고, 입점·제휴 문의도 환영해요!`,
             goBtn.concat([{ label: "🤝 입점·제휴 문의", action: goContact }]));
           return;
         }
         try { localStorage.setItem("seum_pref_use", cat); } catch (e) {}
-        botSay(`${cat} 보러 오셨군요 ${emoji} ${cat} 존은 마을 ${zoneDirection(cat)}이에요!\n바로 데려다드릴까요? 예산대도 알려주시면 딱 맞는 집만 골라드려요.`, goBtn);
+        botSay(`${disp} 보러 오셨군요 ${emoji} ${disp} 존은 마을 ${zoneDirection(cat)}이에요!\n바로 데려다드릴까요? 예산대도 알려주시면 딱 맞는 집만 골라드려요.`, goBtn);
         askBudget();
       });
       quickEl.appendChild(b);

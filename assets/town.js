@@ -453,10 +453,10 @@ function init() {
   archBeam.position.set(0, 6.2, SITE.zS + 0.5);
   archBeam.castShadow = true;
   scene.add(archBeam);
-  const archSign = nameSign("🏠 메타하우스 전시장");
-  archSign.scale.set(9.5, 2.4, 1);
-  archSign.position.set(0, 7.7, SITE.zS + 0.6);
-  scene.add(archSign);
+  // 정문 간판: 가장 크고 격 있는 보드 (짙은 초록 바탕 + 크림 글씨)
+  const archBoard = makeBoardMesh("메타하우스 전시장", 10.5, 2.1, { bg: "#2f4a3a", fg: "#f2ede0" });
+  archBoard.position.set(0, 7.35, SITE.zS + 0.55);
+  scene.add(archBoard);
 
   // ---------- 주차장 (정문 동측 바깥) ----------
   const parking = new THREE.Mesh(
@@ -800,6 +800,57 @@ function init() {
     return sp;
   }
 
+  // ---------- 물리 간판 (알약 스프라이트 대신 3D 세계에 녹아드는 보드) ----------
+  // 위계: 정문(크고 진중) > 존 게이트(중간) > 집 앞 사인보드(작음)
+  function boardTexture(text, o) {
+    const c = document.createElement("canvas");
+    c.width = 512; c.height = Math.round(512 * (o.h / o.w));
+    const x = c.getContext("2d");
+    const bg = o.bg || "#f4efe3";
+    const fg = o.fg || "#3a382f";
+    x.fillStyle = bg;
+    x.beginPath();
+    x.roundRect(4, 4, c.width - 8, c.height - 8, 14);
+    x.fill();
+    x.strokeStyle = "rgba(60,56,45,0.35)";
+    x.lineWidth = 5;
+    x.stroke();
+    if (o.accent) {
+      x.fillStyle = o.accent;
+      x.beginPath();
+      x.roundRect(16, c.height - 20, c.width - 32, 9, 4);
+      x.fill();
+    }
+    x.fillStyle = fg;
+    x.font = `700 ${Math.round(c.height * (o.accent ? 0.42 : 0.46))}px 'Inter','Noto Sans KR',sans-serif`;
+    x.textAlign = "center";
+    x.textBaseline = "middle";
+    x.fillText(text, c.width / 2, c.height / 2 - (o.accent ? 4 : 0), c.width - 40);
+    const t = new THREE.CanvasTexture(c);
+    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }
+  function hex(n) { return `#${n.toString(16).padStart(6, "0")}`; }
+  function makeBoardMesh(text, w, h, o) {
+    o = o || {};
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.MeshStandardMaterial({ map: boardTexture(text, { w, h, bg: o.bg, fg: o.fg, accent: o.accent != null ? hex(o.accent) : null }), roughness: 0.85, side: THREE.DoubleSide })
+    );
+    return mesh;
+  }
+  const tagPostMat = new THREE.MeshStandardMaterial({ color: 0x8a6a4f, roughness: 0.85 });
+  function makeHouseTag(name) {
+    const g = new THREE.Group();
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 1.05, 6), tagPostMat);
+    post.position.y = 0.52;
+    const board = makeBoardMesh(name, 1.9, 0.55, {});
+    board.position.y = 1.28;
+    g.add(post, board);
+    return g;
+  }
+
   // ---------- 전시장 존 (용도별 사각 블록, 2×2) ----------
   // 카탈로그 category 기준 자동 배치. 격자(행×열) 정렬로 겹침 없이,
   // 새 모델은 해당 존의 다음 빈 격자 칸에 자동으로 들어간다.
@@ -807,22 +858,28 @@ function init() {
   const PITCH = 11;     // 줄(남북) 피치: 부지 패드 8.6 + 통로 2.4
   const XP = 10;        // 열(동서) 피치: 패드 8.6 + 여백 1.4 (박람회식 압축 간격)
   const LOT_MAX = 8;    // 부지 위 집의 최대 가로/세로
+  // 존 accent는 저채도 팔레트만 사용 (형광 원색 금지) — 표지판·테두리·게이트에만 쓰인다
   const ZONES = {
     // 북서 블록 (모델 수가 많아 북쪽으로 확장 가능)
-    "전원주택": { label: "전원주택 존", emoji: "🏡", color: 0x69b25e, cols: [-31, -21, -11], rowStart: -19, entry: { x: -21, z: -11 } },
+    "전원주택": { label: "전원주택 존", emoji: "🏡", color: 0x7d9471, cols: [-31, -21, -11], rowStart: -19, entry: { x: -21, z: -11 } },
     // 북동 블록
-    "체류형 쉼터": { label: "체류형 쉼터 존", emoji: "🌿", color: 0xb2a15e, cols: [11, 21, 31], rowStart: -19, entry: { x: 21, z: -11 } },
+    "체류형 쉼터": { label: "체류형 쉼터 존", emoji: "🌿", color: 0xb3a284, cols: [11, 21, 31], rowStart: -19, entry: { x: 21, z: -11 } },
     // 남서 블록
-    "세컨하우스": { label: "세컨하우스 존", emoji: "🏠", color: 0x5e9db2, cols: [-31, -21, -11], rowStart: 14, entry: { x: -21, z: 22 } },
+    "세컨하우스": { label: "세컨하우스 존", emoji: "🏠", color: 0x87a0ad, cols: [-31, -21, -11], rowStart: 14, entry: { x: -21, z: 22 } },
     // 남동 블록
-    "특별모델": { label: "특별모델 존", emoji: "⛳", color: 0x9a7fc0, cols: [11, 21, 31], rowStart: 14, entry: { x: 21, z: 22 } },
+    "특별모델": { label: "특별모델 존", emoji: "⛳", color: 0x9a8fa6, cols: [11, 21, 31], rowStart: 14, entry: { x: 21, z: 22 } },
     // ---- 파트너 존 (바깥 블록: 입점 업체·이벤트 전시) ----
-    "LG가전 이벤트": { label: "LG가전 이벤트 존", emoji: "📺", color: 0xa50034, cols: [42, 52, 62], rowStart: -19, rows: 2, partner: true, entry: { x: 52, z: -11 } },
-    "가구": { label: "가구 존", emoji: "🛋️", color: 0xd08a3e, cols: [42, 52, 62], rowStart: 14, rows: 2, partner: true, entry: { x: 52, z: 22 } },
-    "건축 자재": { label: "건축 자재 존", emoji: "🧱", color: 0x60788f, cols: [-62, -52, -42], rowStart: -19, rows: 2, partner: true, entry: { x: -52, z: -11 } },
+    "LG가전 이벤트": { label: "LG가전 이벤트 존", emoji: "📺", color: 0x9c5a63, cols: [42, 52, 62], rowStart: -19, rows: 2, partner: true, entry: { x: 52, z: -11 } },
+    "가구": { label: "가구 존", emoji: "🛋️", color: 0xb08a66, cols: [42, 52, 62], rowStart: 14, rows: 2, partner: true, entry: { x: 52, z: 22 } },
+    "건축 자재": { label: "건축 자재 존", emoji: "🧱", color: 0x8b959c, cols: [-62, -52, -42], rowStart: -19, rows: 2, partner: true, entry: { x: -52, z: -11 } },
   };
   function zoneFor(cat) {
     return ZONES[cat] ? cat : "특별모델";
+  }
+  // 존 표시 이름 (관리자 존 관리에서 바꾼 이름 — "…존" 접미사 제거한 짧은 형태)
+  function zoneDisplay(cat) {
+    const z = ZONES[zoneFor(cat)];
+    return z ? z.label.replace(/\s*존$/, "") : (cat || "메타하우스 모델");
   }
   // 존 격자 i번째 칸 (열 우선, 다음 줄은 북쪽으로)
   function zoneSlot(zone, i) {
@@ -861,33 +918,18 @@ function init() {
     const front = z.rowStart + PITCH / 2;
     const back = z.rowStart - (rows - 0.5) * PITCH;
     const cx = (minX + maxX) / 2;
-    // 톤매핑·HDRI 노출로 밝게 떠 보이므로 어두운 회색 쪽으로 섞어 실제 화면에서 존 색이 살게 한다
-    const slabCol = new THREE.Color(z.color).lerp(new THREE.Color(0x9a968a), 0.35);
-    const slab = new THREE.Mesh(
-      new THREE.PlaneGeometry(maxX - minX, front - back),
-      new THREE.MeshStandardMaterial({
-        color: slabCol,
-        roughness: 1,
-        map: pbrTex("assets/tex/concrete_c.jpg", true, (maxX - minX) / 5.5, (front - back) / 5.5),
-        normalMap: pbrTex("assets/tex/concrete_n.jpg", false, (maxX - minX) / 5.5, (front - back) / 5.5),
-      })
-    );
-    slab.rotation.x = -Math.PI / 2;
-    slab.position.set(cx, 0.008, (front + back) / 2);
-    slab.receiveShadow = true;
-    scene.add(slab);
-    // 존 둘레 테두리 띠
-    const frameMat = new THREE.MeshBasicMaterial({ color: z.color, transparent: true, opacity: 0.85, depthWrite: false });
+    // 존 내부는 잔디 그대로 — 바닥을 색으로 칠하지 않고, 얇은 경계 라인 + 게이트 간판으로만 구분
+    const frameMat = new THREE.MeshBasicMaterial({ color: z.color, transparent: true, opacity: 0.5, depthWrite: false });
     const strip = (w, d, x, zz) => {
       const s = new THREE.Mesh(new THREE.PlaneGeometry(w, d), frameMat);
       s.rotation.x = -Math.PI / 2;
       s.position.set(x, 0.014, zz);
       scene.add(s);
     };
-    strip(maxX - minX, 0.7, cx, front);
-    strip(maxX - minX, 0.7, cx, back);
-    strip(0.7, front - back, minX, (front + back) / 2);
-    strip(0.7, front - back, maxX, (front + back) / 2);
+    strip(maxX - minX, 0.3, cx, front);
+    strip(maxX - minX, 0.3, cx, back);
+    strip(0.3, front - back, minX, (front + back) / 2);
+    strip(0.3, front - back, maxX, (front + back) / 2);
     // 입구 게이트(존 색 기둥 2개 + 상단 보) + 모서리 포스트 — 인스턴스 배열에 수집
     const gc = new THREE.Color(z.color);
     gatePillars.push(
@@ -895,10 +937,10 @@ function init() {
       { x: cx + 4.8, y: 2.2, z: front + 1.4, color: gc }
     );
     gateBeams.push({ x: cx, y: 4.55, z: front + 1.4, color: gc });
-    const sign = nameSign(`${z.emoji} ${z.label}`);
-    sign.scale.set(7.6, 1.9, 1);
-    sign.position.set(cx, 5.8, front + 1.4);
-    scene.add(sign);
+    // 게이트 보 위에 실제 간판(보드) — 모든 존 동일 스타일·높이
+    const board = makeBoardMesh(`${z.emoji} ${z.label}`, 6.6, 1.5, { accent: z.color });
+    board.position.set(cx, 5.5, front + 1.4);
+    scene.add(board);
     [[minX, front], [maxX, front], [minX, back], [maxX, back]].forEach(([px, pz]) => {
       cornerPosts.push({ x: px, y: 0.85, z: pz, color: gc });
     });
@@ -960,8 +1002,9 @@ function init() {
       canopy.position.set(0, 3.15, 0.7);
       canopy.rotation.x = -0.14;
       canopy.castShadow = true;
-      const sign = nameSign(label);
-      sign.position.y = 4;
+      // 부스 간판: 백월 위 보드 (존 accent 언더라인)
+      const sign = makeBoardMesh(label, 4.2, 1.0, { accent: z.color });
+      sign.position.set(0, 3.55, -2.55);
       b.add(floor, backWall, sideL, sideR, counter, canopy, sign);
       b.position.set(slot.x, 0, slot.z);
       scene.add(b);
@@ -1133,9 +1176,10 @@ function init() {
           const h = normalizeFootprint(inst, Math.min(foot, LOT_MAX), 5.2);
           inst.position.y += 0.22 - h * 0.04; // 패드 위에 올리고 스캔 밑판은 살짝 묻기
           wrap.add(inst);
-          const sign = nameSign(m.name);
-          sign.position.y = h + 1.25;
-          wrap.add(sign);
+          // 집 이름표: 떠 있는 라벨 대신 앞마당의 작은 사인보드 (통일 스타일)
+          const tag = makeHouseTag(m.name);
+          tag.position.set(-2.9, 0.22, 4.05);
+          wrap.add(tag);
           wrap.position.set(lot.x, 0, lot.z);
           // 기본 0도 = 남쪽 통로 정면. 관리자 배치에서 90도 단위 회전 가능 (90=동, 180=북, 270=서)
           wrap.rotation.y = THREE.MathUtils.degToRad(rot || 0);
@@ -1231,7 +1275,7 @@ function init() {
     const m = best.model;
     // 방문 통계: 어떤 모델 앞에 왔는지 (세션당 모델별 1회)
     if (window.SeumTownConfig && window.SeumTownConfig.logEvent) window.SeumTownConfig.logEvent("model", m.name);
-    cardTag.textContent = m.category || "메타하우스 모델";
+    cardTag.textContent = zoneDisplay(m.category);
     cardName.textContent = m.name;
     cardSpec.textContent = m.size || "";
     cardPrice.textContent = fmtPrice(m);
@@ -1985,6 +2029,7 @@ function init() {
       updateNearCard();
     },
     zones: Object.keys(ZONES),
+    zoneLabel: (cat) => zoneDisplay(cat), // 챗봇 등에서 존 표시 이름 조회
     // 디버그·연출용 카메라 (방위각 rad, 줌 배율)
     setCam(az, zoom) { if (az != null) camAz = az; if (zoom != null) camZoom = Math.max(0.55, Math.min(3.2, zoom)); },
     quality: () => ({ qLevel, pixelRatio: renderer.getPixelRatio() }),
