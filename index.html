@@ -39,10 +39,20 @@
           <span>이름 <em class="start__opt">(선택)</em></span>
           <input id="start-name" maxlength="20" placeholder="홍길동" autocomplete="name" />
         </label>
-        <label class="start__field">
-          <span>핸드폰 번호 <em class="start__opt">(선택 · 신규 모델 알림)</em></span>
-          <input id="start-phone" type="tel" maxlength="20" placeholder="010-0000-0000" autocomplete="tel" />
-        </label>
+        <div class="start__field">
+          <span>핸드폰 번호 <em>*</em></span>
+          <p class="start__why">방문 상담 안내를 위해 실제 번호를 확인해요</p>
+          <div class="start__phonerow">
+            <input id="start-phone" type="tel" maxlength="20" placeholder="010-0000-0000" autocomplete="tel" />
+            <button type="button" class="btn btn--glass btn--sm" id="start-otp-send">인증번호 받기</button>
+          </div>
+          <div class="start__phonerow" id="start-otp-row" hidden>
+            <input id="start-otp" inputmode="numeric" maxlength="6" placeholder="인증번호 6자리" autocomplete="one-time-code" />
+            <button type="button" class="btn btn--primary btn--sm" id="start-otp-verify">확인</button>
+            <span class="start__otp-timer" id="start-otp-timer"></span>
+          </div>
+          <p class="start__verified" id="start-verified" hidden>✅ 번호 인증 완료</p>
+        </div>
       </div>
       <label class="start__check" id="start-auto-wrap"><input type="checkbox" id="start-auto" checked /> 자동 입장 (다음부터 바로 마을로)</label>
       <p class="start__formerr" id="start-err" hidden></p>
