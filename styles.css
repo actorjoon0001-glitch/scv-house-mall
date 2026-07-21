@@ -1270,3 +1270,17 @@ body.town-fs-lock .chat__fab, body.town-fs-lock .chat__panel { display: none; }
   color: #fff;
   cursor: pointer;
 }
+
+/* ============ 시작 화면 회원가입 폼 ============ */
+.start__formerr {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #ff9d9d;
+  text-align: center;
+}
+.start__formerr[hidden] { display: none; }
+.start__skip + .start__skip { margin-left: 18px; }
+.start--login .start__field[data-signup] { display: none; }
+.start--returning .start__fields,
+.start--returning .start__formerr,
+.start--returning #start-mode { display: none; }

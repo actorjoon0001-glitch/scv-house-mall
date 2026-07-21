@@ -14,6 +14,13 @@ const joyStick = document.getElementById("town-stick");
 let started = false;
 let running = false;
 
+// 마을은 회원 전용: 계정(또는 회원 시스템 미구축 시 게스트 승인) 없으면 시작 화면으로
+try {
+  if (!localStorage.getItem("seum_user") && !localStorage.getItem("seum_guest_ok")) {
+    window.location.replace("index.html");
+  }
+} catch (e) {}
+
 // 섹션이 화면에 들어올 때 한 번만 초기화, 벗어나면 렌더 일시정지
 const visIO = new IntersectionObserver((entries) => {
   entries.forEach((e) => {

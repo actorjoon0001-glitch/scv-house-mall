@@ -83,6 +83,28 @@
     if (!r.ok) throw new Error("leads " + r.status);
     return r.json();
   }
+  // ---------- 회원 (게임식 가입: 아이디/비밀번호, 해시는 서버측 RPC에서 처리) ----------
+  async function rpc(name, body) {
+    const r = await fetch(`${SETTINGS_URL}/rest/v1/rpc/${name}`, {
+      method: "POST",
+      headers: Object.assign({ "Content-Type": "application/json" }, HEADERS),
+      body: JSON.stringify(body || {}),
+    });
+    if (!r.ok) {
+      let msg = "error";
+      try { msg = (await r.json()).message || msg; } catch (e) {}
+      const err = new Error(msg);
+      err.status = r.status;
+      throw err;
+    }
+    const txt = await r.text();
+    return txt ? JSON.parse(txt) : null;
+  }
+  const authRegister = (d) =>
+    rpc("town_register", { p_username: d.username, p_pass: d.pass, p_name: d.name, p_phone: d.phone, p_nick: d.nick });
+  const authLogin = (username, pass) => rpc("town_login", { p_username: username, p_pass: pass });
+  const getUsers = (pass) => rpc("get_users", { pass });
+
   async function getEvents() {
     const r = await fetch(
       `${SETTINGS_URL}/rest/v1/town_events?select=type,name,created_at&order=created_at.desc&limit=2000`,
@@ -166,5 +188,6 @@
   window.SeumTownConfig = {
     load, save, apply, computePlacement, keyOf, ZONE_ORDER, RESERVED_SLOTS, SB_URL, SB_KEY,
     addLead, logEvent, getLeads, getEvents,
+    authRegister, authLogin, getUsers,
   };
 })();

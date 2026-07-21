@@ -30,20 +30,34 @@
       <h1 class="start__title">메타봇과 함께 걷는<br />3D 주택 마을</h1>
       <p class="start__returning" id="start-returning" hidden><strong id="start-rname"></strong>님 다시 오셨네요! 바로 입장하세요 👋</p>
       <div class="start__chars" id="start-chars"></div>
-      <div class="start__fields">
-        <label class="start__field">
-          <span>닉네임 <em>*</em></span>
-          <input id="start-nick" maxlength="10" placeholder="방문객" autocomplete="off" />
+      <div class="start__fields" id="start-fields">
+        <label class="start__field" data-signup>
+          <span>이름 <em>*</em></span>
+          <input id="start-name" maxlength="20" placeholder="홍길동" autocomplete="name" />
         </label>
-        <label class="start__field">
-          <span>신규 모델·이벤트 알림 받기 <em class="start__opt">(선택)</em></span>
+        <label class="start__field" data-signup>
+          <span>핸드폰 번호 <em>*</em></span>
           <input id="start-phone" type="tel" maxlength="20" placeholder="010-0000-0000" autocomplete="tel" />
         </label>
+        <label class="start__field">
+          <span>아이디 <em>*</em></span>
+          <input id="start-username" maxlength="20" placeholder="영문·숫자 4자 이상" autocomplete="username" />
+        </label>
+        <label class="start__field">
+          <span>비밀번호 <em>*</em></span>
+          <input id="start-pass" type="password" maxlength="30" placeholder="4자 이상" autocomplete="new-password" />
+        </label>
+        <label class="start__field" data-signup>
+          <span>닉네임 <em>*</em></span>
+          <input id="start-nick" maxlength="10" placeholder="마을에서 보이는 이름" autocomplete="off" />
+        </label>
       </div>
+      <p class="start__formerr" id="start-err" hidden></p>
       <div class="start__btns">
-        <button type="button" class="btn btn--primary" id="start-town">🎮 3D 마을 둘러보기</button>
+        <button type="button" class="btn btn--primary" id="start-town">🎮 회원가입하고 입장</button>
         <button type="button" class="btn btn--glass" id="start-products">📋 모델·가격 바로 보기</button>
       </div>
+      <button type="button" class="start__skip" id="start-mode">이미 계정이 있어요 → 로그인</button>
       <a class="start__skip" id="start-admin" href="admin.html">🔒 관리자 페이지</a>
     </div>
   </div>
