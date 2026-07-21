@@ -162,10 +162,10 @@ function init() {
     if (nb) nb.addEventListener("click", () => setNight(!nightMode));
   }
 
-  // ---------- 사운드 (WebAudio 신스 BGM + 발소리, 외부 파일 없음) ----------
+  // ---------- 사운드 (BGM 음원 파일 + 신스 효과음) ----------
   let soundOn = true;
   try { soundOn = localStorage.getItem("seum_sound") !== "0"; } catch (e) {}
-  let audioCtx = null, masterGain = null, noiseBuf = null;
+  let audioCtx = null, masterGain = null, noiseBuf = null, bgmEl = null;
   function initAudio() {
     if (audioCtx) return;
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -178,104 +178,12 @@ function init() {
     noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.08, audioCtx.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
-    // 신나는 게임풍 BGM — 124BPM 치프튠 시퀀서 (드럼 + 베이스 + 멜로디 + 에코)
-    const bgmGain = audioCtx.createGain();
-    bgmGain.gain.value = 0.17;
-    bgmGain.connect(masterGain);
-    const spb = 60 / 124; // 한 박자 길이
-    const s16 = spb / 4;  // 16분음표
-    const dly = audioCtx.createDelay(0.6);
-    dly.delayTime.value = spb * 0.75;
-    const fb = audioCtx.createGain();
-    fb.gain.value = 0.22;
-    dly.connect(fb).connect(dly);
-    dly.connect(bgmGain);
-    const echoSend = audioCtx.createGain();
-    echoSend.gain.value = 1;
-    echoSend.connect(dly);
-    const NOTE = (n) => 440 * Math.pow(2, (n - 69) / 12);
-    function tone(type, midi, t0, dur, vol, echo) {
-      const o = audioCtx.createOscillator();
-      o.type = type;
-      o.frequency.value = NOTE(midi);
-      const g = audioCtx.createGain();
-      g.gain.setValueAtTime(vol, t0);
-      g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
-      o.connect(g).connect(bgmGain);
-      if (echo) g.connect(echoSend);
-      o.start(t0);
-      o.stop(t0 + dur + 0.03);
-    }
-    function kick(t0) {
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.frequency.setValueAtTime(150, t0);
-      o.frequency.exponentialRampToValueAtTime(46, t0 + 0.11);
-      g.gain.setValueAtTime(0.5, t0);
-      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.14);
-      o.connect(g).connect(bgmGain);
-      o.start(t0);
-      o.stop(t0 + 0.16);
-    }
-    function hat(t0, open) {
-      const src = audioCtx.createBufferSource();
-      src.buffer = noiseBuf;
-      const hp = audioCtx.createBiquadFilter();
-      hp.type = "highpass";
-      hp.frequency.value = 6500;
-      const g = audioCtx.createGain();
-      g.gain.setValueAtTime(open ? 0.1 : 0.055, t0);
-      g.gain.exponentialRampToValueAtTime(0.001, t0 + (open ? 0.08 : 0.03));
-      src.connect(hp).connect(g).connect(bgmGain);
-      src.start(t0);
-    }
-    function snare(t0) {
-      const src = audioCtx.createBufferSource();
-      src.buffer = noiseBuf;
-      const bp = audioCtx.createBiquadFilter();
-      bp.type = "bandpass";
-      bp.frequency.value = 1900;
-      const g = audioCtx.createGain();
-      g.gain.setValueAtTime(0.2, t0);
-      g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.09);
-      src.connect(bp).connect(g).connect(bgmGain);
-      src.start(t0);
-    }
-    // C장조 진행 C→G→Am→F (한 마디씩), 밝은 멜로디 두 프레이즈 번갈아
-    const bassRoots = [48, 55, 57, 53];
-    const leadA = [
-      [72, null, 76, null, 79, null, 76, null, 72, null, 76, 79, 84, null, 79, null],
-      [67, null, 71, null, 74, null, 71, null, 67, 71, 74, null, 79, 74, 71, null],
-      [69, null, 72, null, 76, null, 72, null, 69, null, 72, 76, 81, null, 76, null],
-      [65, null, 69, null, 72, null, 69, null, 74, 72, 71, 69, 67, null, 65, null],
-    ];
-    const leadB = [
-      [84, 83, 84, null, 79, null, 76, null, 84, 83, 84, null, 88, null, 84, null],
-      [83, null, 79, null, 74, null, 79, 83, 86, null, 83, null, 79, null, 74, null],
-      [81, null, 76, null, 72, null, 76, 81, 84, 83, 81, null, 76, null, 72, null],
-      [77, null, 72, null, 69, null, 72, 77, 81, 79, 77, 76, 74, 72, 71, 67],
-    ];
-    let bar = 0, step = 0, nextT = audioCtx.currentTime + 0.1;
-    setInterval(() => {
-      if (audioCtx.state !== "running") return;
-      while (nextT < audioCtx.currentTime + 0.3) {
-        const t = nextT;
-        const chord = bar % 4;
-        const lead = Math.floor(bar / 4) % 2 ? leadB : leadA;
-        if (step % 4 === 0) kick(t);
-        if (step % 8 === 4) snare(t);
-        if (step % 2 === 0) hat(t, step % 8 === 6);
-        if (step % 2 === 0) {
-          const oct = step % 8 === 6 ? 0 : -12; // 옥타브 바운스 베이스
-          tone("triangle", bassRoots[chord] + oct, t, s16 * 1.9, 0.3, false);
-        }
-        const n = lead[chord][step];
-        if (n != null) tone("square", n, t, s16 * 1.7, 0.05, true);
-        step = (step + 1) % 16;
-        if (step === 0) bar++;
-        nextT += s16;
-      }
-    }, 70);
+    // BGM: 업로드 음원 (Gallery Drift) 반복 재생
+    bgmEl = new Audio("assets/bgm.mp3");
+    bgmEl.loop = true;
+    bgmEl.volume = 0.55;
+    bgmEl.preload = "auto";
+    if (soundOn) bgmEl.play().catch(() => {});
   }
   function playStep(sprinting) {
     if (!audioCtx || !soundOn || audioCtx.state !== "running") return;
@@ -346,6 +254,7 @@ function init() {
       if (on && audioCtx.state === "suspended") audioCtx.resume();
       if (masterGain) masterGain.gain.value = on ? 1 : 0;
     }
+    if (bgmEl) { if (on) bgmEl.play().catch(() => {}); else bgmEl.pause(); }
     const sb = document.getElementById("town-sound");
     if (sb) sb.textContent = on ? "🔊" : "🔇";
   }
@@ -356,7 +265,12 @@ function init() {
       sb.addEventListener("click", () => setSound(!soundOn));
     }
     // 브라우저 자동재생 정책: 첫 입력에서 오디오 시작
-    const kick = () => { if (soundOn) { initAudio(); if (audioCtx && audioCtx.state === "suspended") audioCtx.resume(); } };
+    const kick = () => {
+      if (!soundOn) return;
+      initAudio();
+      if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+      if (bgmEl && bgmEl.paused) bgmEl.play().catch(() => {});
+    };
     window.addEventListener("pointerdown", kick, { once: true });
     window.addEventListener("keydown", kick, { once: true });
   }
