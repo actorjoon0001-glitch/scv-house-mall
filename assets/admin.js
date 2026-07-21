@@ -962,6 +962,326 @@
     });
   }
 
+  // ---------- 시공 현황 (계약 고객 프로젝트: 단계·사진·일정·안내) ----------
+  const PROJECTS_SQL =
+    "-- 계약 고객 시공 현황 저장용. Supabase(scv-3Dhouse) SQL Editor에서 한 번 실행하세요:\n" +
+    "create table if not exists town_projects (\n" +
+    "  id bigint generated always as identity primary key,\n" +
+    "  created_at timestamptz default now(),\n" +
+    "  phone text not null unique,\n" +
+    "  name text, nick text,\n" +
+    "  status text default '시공중',\n" +
+    "  stage int default 0,\n" +
+    "  photos jsonb default '[]'::jsonb,\n" +
+    "  schedule jsonb default '[]'::jsonb,\n" +
+    "  notices jsonb default '[]'::jsonb,\n" +
+    "  inquiries jsonb default '[]'::jsonb\n" +
+    ");\n" +
+    "alter table town_projects enable row level security; -- 정책 없음: RPC로만 접근\n\n" +
+    "-- 손님 조회: 본인 번호(+닉네임 대조)로 자기 것만\n" +
+    "create or replace function get_my_project(p_phone text, p_nick text)\n" +
+    "returns setof town_projects language sql security definer set search_path = public as $$\n" +
+    "  select * from town_projects\n" +
+    "  where regexp_replace(phone,'[^0-9]','','g') = regexp_replace(p_phone,'[^0-9]','','g')\n" +
+    "    and (nick is null or nick = '' or nick = p_nick)\n" +
+    "  limit 1;\n" +
+    "$$;\n\n" +
+    "create or replace function add_project_inquiry(p_phone text, p_nick text, p_text text)\n" +
+    "returns boolean language plpgsql security definer set search_path = public as $$\n" +
+    "begin\n" +
+    "  update town_projects set inquiries = inquiries || jsonb_build_array(jsonb_build_object(\n" +
+    "    'date', to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD HH24:MI'), 'text', left(p_text, 500)))\n" +
+    "  where regexp_replace(phone,'[^0-9]','','g') = regexp_replace(p_phone,'[^0-9]','','g')\n" +
+    "    and (nick is null or nick = '' or nick = p_nick);\n" +
+    "  return found;\n" +
+    "end $$;\n\n" +
+    "-- 관리자 전용 (비밀번호 확인)\n" +
+    "create or replace function get_projects(pass text)\n" +
+    "returns setof town_projects language plpgsql security definer set search_path = public as $$\n" +
+    "begin\n" +
+    "  if pass is distinct from '931122' then raise exception 'unauthorized'; end if;\n" +
+    "  return query select * from town_projects order by created_at desc;\n" +
+    "end $$;\n\n" +
+    "create or replace function upsert_project(pass text, p jsonb)\n" +
+    "returns bigint language plpgsql security definer set search_path = public as $$\n" +
+    "declare rid bigint;\n" +
+    "begin\n" +
+    "  if pass is distinct from '931122' then raise exception 'unauthorized'; end if;\n" +
+    "  insert into town_projects (phone, name, nick, status, stage, photos, schedule, notices, inquiries)\n" +
+    "  values (p->>'phone', p->>'name', p->>'nick', coalesce(p->>'status','시공중'), coalesce((p->>'stage')::int,0),\n" +
+    "          coalesce(p->'photos','[]'::jsonb), coalesce(p->'schedule','[]'::jsonb),\n" +
+    "          coalesce(p->'notices','[]'::jsonb), coalesce(p->'inquiries','[]'::jsonb))\n" +
+    "  on conflict (phone) do update set name=excluded.name, nick=excluded.nick, status=excluded.status,\n" +
+    "    stage=excluded.stage, photos=excluded.photos, schedule=excluded.schedule,\n" +
+    "    notices=excluded.notices, inquiries=excluded.inquiries\n" +
+    "  returning id into rid;\n" +
+    "  return rid;\n" +
+    "end $$;\n\n" +
+    "create or replace function delete_project(pass text, p_phone text)\n" +
+    "returns boolean language plpgsql security definer set search_path = public as $$\n" +
+    "begin\n" +
+    "  if pass is distinct from '931122' then raise exception 'unauthorized'; end if;\n" +
+    "  delete from town_projects where phone = p_phone;\n" +
+    "  return found;\n" +
+    "end $$;\n\n" +
+    "-- 현장 사진 저장소 (공개 읽기 버킷 — 파일명이 랜덤이라 추측 불가)\n" +
+    "insert into storage.buckets (id, name, public) values ('site-photos','site-photos', true)\n" +
+    "on conflict (id) do nothing;\n" +
+    "create policy \"site photos read\" on storage.objects for select using (bucket_id = 'site-photos');\n" +
+    "create policy \"site photos upload\" on storage.objects for insert with check (bucket_id = 'site-photos');";
+
+  const P_STAGES = CFG.BUILD_STAGES || ["토목", "기초", "골조", "지붕/외장", "내부", "마감", "준공"];
+  const adminPw = () => sessionStorage.getItem("seum_admin_pw") || "";
+  let projects = [];
+  let projLoaded = false;
+  const todayStr = () => new Date().toISOString().slice(0, 10);
+
+  async function loadProjects(force) {
+    const sqlEl = document.getElementById("projects-sql");
+    if (!sqlEl) return;
+    if (projLoaded && !force) return;
+    try {
+      projects = await CFG.getProjects(adminPw());
+      projLoaded = true;
+      sqlEl.style.display = "none";
+    } catch (e) {
+      projects = [];
+      sqlEl.style.display = "block";
+      sqlEl.textContent = (e && e.status === 404)
+        ? PROJECTS_SQL
+        : "-- 시공 현황을 불러오지 못했어요 (" + ((e && e.message) || "오류") + ").\n-- 처음이라면 아래 SQL을 Supabase에서 실행하세요:\n\n" + PROJECTS_SQL;
+    }
+    renderProjList();
+  }
+
+  function renderProjList() {
+    const table = document.getElementById("proj-table");
+    const rows = document.getElementById("proj-rows");
+    const empty = document.getElementById("proj-empty");
+    if (!table || !rows) return;
+    rows.innerHTML = "";
+    table.hidden = projects.length === 0;
+    empty.hidden = projects.length !== 0;
+    projects.forEach((p, i) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${esc(p.name || "-")} <small style="color:#889">${esc(p.nick || "")}</small></td>
+        <td style="white-space:nowrap">${esc(p.phone || "")}</td>
+        <td>${p.status === "완공" ? "🏡 완공" : "🏗️ 시공중"}</td>
+        <td>${esc(P_STAGES[Math.min(P_STAGES.length - 1, Number(p.stage) || 0)])} (${Number(p.stage) + 1}/${P_STAGES.length})</td>
+        <td>${(p.photos || []).length}장</td>
+        <td>${(p.inquiries || []).length}건</td>
+        <td><button type="button" class="btn btn--ghost" data-pi="${i}" style="padding:6px 12px;font-size:12px">관리</button></td>`;
+      tr.querySelector("[data-pi]").addEventListener("click", () => renderProjEditor(JSON.parse(JSON.stringify(projects[i]))));
+      rows.appendChild(tr);
+    });
+  }
+
+  // 폰 카메라 사진도 부담 없이: 업로드 전 클라이언트에서 최대 1280px JPEG로 축소
+  function resizePhoto(file, maxDim) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, (maxDim || 1280) / Math.max(img.width, img.height));
+        const c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(img.width * scale));
+        c.height = Math.max(1, Math.round(img.height * scale));
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(img.src);
+        c.toBlob((b) => (b ? resolve(b) : reject(new Error("resize"))), "image/jpeg", 0.82);
+      };
+      img.onerror = () => reject(new Error("bad image"));
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  function renderProjEditor(p) {
+    const ed = document.getElementById("proj-editor");
+    if (!ed) return;
+    ed.hidden = false;
+    const isNew = !projects.some((x) => x.phone === p.phone);
+    ed.innerHTML = `
+      <div class="zone-card" style="margin-top:14px;border-left-color:#5e8a74">
+        <h3>${isNew ? "➕ 새 시공 고객" : `🏗️ ${esc(p.name || p.phone)} 님`} <small style="color:#889">저장해야 손님 화면에 반영</small></h3>
+        <div class="row"><label>이름</label><input type="text" data-e="name" maxlength="20" value="${esc(p.name || "")}" /></div>
+        <div class="row"><label>닉네임</label><input type="text" data-e="nick" maxlength="10" value="${esc(p.nick || "")}" placeholder="마을 닉네임 (대조용, 비우면 번호만으로 확인)" /></div>
+        <div class="row"><label>연락처</label><input type="tel" data-e="phone" maxlength="20" value="${esc(p.phone || "")}" ${isNew ? "" : "readonly style='opacity:.6'"} placeholder="010-0000-0000" /></div>
+        <div class="row"><label>상태</label><select data-e="status">
+          <option value="시공중" ${p.status !== "완공" ? "selected" : ""}>🏗️ 시공중</option>
+          <option value="완공" ${p.status === "완공" ? "selected" : ""}>🏡 완공</option></select></div>
+        <div class="row"><label>현재 단계</label><select data-e="stage">
+          ${P_STAGES.map((s, i) => `<option value="${i}" ${Number(p.stage) === i ? "selected" : ""}>${i + 1}. ${s}</option>`).join("")}</select></div>
+
+        <h3 style="margin-top:16px">📸 현장 사진 (${(p.photos || []).length}장)</h3>
+        <div class="row"><label>사진 단계</label><select id="pe-photo-stage">
+          ${P_STAGES.map((s, i) => `<option value="${i}" ${Number(p.stage) === i ? "selected" : ""}>${i + 1}. ${s}</option>`).join("")}</select></div>
+        <div class="row"><label>촬영일</label><input type="date" id="pe-photo-date" value="${todayStr()}" /></div>
+        <div class="row"><label>설명</label><input type="text" id="pe-photo-cap" maxlength="40" placeholder="예: 기초 콘크리트 타설" /></div>
+        <div class="row"><label>사진 추가</label><input type="file" id="pe-photo-file" accept="image/*" capture="environment" multiple /></div>
+        <p class="note" id="pe-photo-msg" hidden></p>
+        <div id="pe-photo-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-top:8px"></div>
+
+        <h3 style="margin-top:16px">🗓️ 일정 (다음 단계 예정일·중도금 등)</h3>
+        <div id="pe-sch-list"></div>
+        <div class="row"><input type="date" id="pe-sch-date" value="${todayStr()}" />
+          <input type="text" id="pe-sch-label" maxlength="40" placeholder="예: 골조 공사 시작 / 중도금 결제" style="flex:1" />
+          <button type="button" class="btn btn--ghost" id="pe-sch-add" style="padding:6px 12px;font-size:12px">추가</button></div>
+
+        <h3 style="margin-top:16px">📢 안내 메시지</h3>
+        <div id="pe-nt-list"></div>
+        <div class="row"><input type="text" id="pe-nt-text" maxlength="200" placeholder="예: 이번 주 금요일 골조 반입 예정입니다" style="flex:1" />
+          <button type="button" class="btn btn--ghost" id="pe-nt-add" style="padding:6px 12px;font-size:12px">추가</button></div>
+
+        <h3 style="margin-top:16px">💬 손님 문의 (${(p.inquiries || []).length}건)</h3>
+        <div id="pe-inq-list"></div>
+
+        <div class="row" style="margin-top:16px;gap:8px">
+          <button type="button" class="btn" id="pe-save">💾 이 고객 저장</button>
+          <button type="button" class="btn btn--ghost" id="pe-close">닫기</button>
+          <span style="flex:1"></span>
+          ${isNew ? "" : '<button type="button" class="btn btn--ghost" id="pe-del" style="color:#c66">🗑 삭제</button>'}
+          <span class="note" id="pe-msg"></span>
+        </div>
+      </div>`;
+
+    const val = (k) => ed.querySelector(`[data-e="${k}"]`).value;
+    const msg = (t, ok) => {
+      const m = ed.querySelector("#pe-msg");
+      m.textContent = t;
+      m.style.color = ok ? "#2f8f5a" : "#c66";
+    };
+
+    function drawPhotos() {
+      const list = ed.querySelector("#pe-photo-list");
+      list.innerHTML = (p.photos || []).map((ph, i) => `
+        <figure style="margin:0;position:relative">
+          <img src="${esc(ph.url)}" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px" />
+          <figcaption style="font-size:11px;color:#889">${esc(P_STAGES[ph.stage] || "")} · ${esc(ph.date || "")}</figcaption>
+          <button type="button" data-delph="${i}" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.55);color:#fff;border-radius:6px;padding:2px 7px;font-size:11px">✕</button>
+        </figure>`).join("");
+      list.querySelectorAll("[data-delph]").forEach((b) =>
+        b.addEventListener("click", () => { p.photos.splice(Number(b.dataset.delph), 1); drawPhotos(); })
+      );
+    }
+    function drawSch() {
+      const list = ed.querySelector("#pe-sch-list");
+      const sch = (p.schedule || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+      p.schedule = sch;
+      list.innerHTML = sch.map((s, i) => `
+        <div class="row"><b style="font-size:12.5px">${esc(s.date || "")}</b><span style="flex:1">${esc(s.label || "")}</span>
+          <button type="button" data-delsch="${i}" style="color:#c66;font-size:12px">✕</button></div>`).join("");
+      list.querySelectorAll("[data-delsch]").forEach((b) =>
+        b.addEventListener("click", () => { p.schedule.splice(Number(b.dataset.delsch), 1); drawSch(); })
+      );
+    }
+    function drawNotices() {
+      const list = ed.querySelector("#pe-nt-list");
+      list.innerHTML = (p.notices || []).map((n, i) => `
+        <div class="row"><b style="font-size:12.5px">${esc(n.date || "")}</b><span style="flex:1">${esc(n.text || "")}</span>
+          <button type="button" data-delnt="${i}" style="color:#c66;font-size:12px">✕</button></div>`).join("");
+      list.querySelectorAll("[data-delnt]").forEach((b) =>
+        b.addEventListener("click", () => { p.notices.splice(Number(b.dataset.delnt), 1); drawNotices(); })
+      );
+    }
+    function drawInqs() {
+      const list = ed.querySelector("#pe-inq-list");
+      list.innerHTML = (p.inquiries || []).length
+        ? (p.inquiries || []).slice().reverse().map((q) => `
+          <div class="row" style="flex-wrap:wrap"><b style="font-size:12.5px">${esc(q.date || "")}</b>
+            <span style="flex:1">${esc(q.text || "")}</span>${q.answer ? `<span style="width:100%;font-size:12.5px;color:#5e8a74">↳ ${esc(q.answer)}</span>` : ""}</div>`).join("")
+        : '<p class="note">아직 문의가 없습니다.</p>';
+    }
+    drawPhotos(); drawSch(); drawNotices(); drawInqs();
+
+    ed.querySelector("#pe-photo-file").addEventListener("change", async (e) => {
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
+      const m = ed.querySelector("#pe-photo-msg");
+      m.hidden = false;
+      let done = 0;
+      for (const f of files) {
+        m.textContent = `사진 올리는 중… (${done + 1}/${files.length})`;
+        try {
+          const blob = await resizePhoto(f, 1280);
+          const url = await CFG.uploadSitePhoto(blob, String(val("phone")).replace(/[^0-9]/g, ""));
+          p.photos = (p.photos || []).concat([{
+            stage: Number(ed.querySelector("#pe-photo-stage").value),
+            date: ed.querySelector("#pe-photo-date").value || todayStr(),
+            caption: ed.querySelector("#pe-photo-cap").value.trim(),
+            url,
+          }]);
+          done++;
+          drawPhotos();
+        } catch (err) {
+          m.textContent = err && err.status === 404
+            ? "사진 저장소가 아직 없어요 — 위 SQL(버킷 생성 포함)을 실행해주세요."
+            : "사진 업로드에 실패했어요. 네트워크를 확인해주세요.";
+          e.target.value = "";
+          return;
+        }
+      }
+      m.textContent = `사진 ${done}장 올렸어요. "💾 이 고객 저장"을 눌러야 손님 화면에 반영돼요!`;
+      e.target.value = "";
+    });
+    ed.querySelector("#pe-sch-add").addEventListener("click", () => {
+      const d = ed.querySelector("#pe-sch-date").value;
+      const l = ed.querySelector("#pe-sch-label").value.trim();
+      if (!d || !l) return;
+      p.schedule = (p.schedule || []).concat([{ date: d, label: l }]);
+      ed.querySelector("#pe-sch-label").value = "";
+      drawSch();
+    });
+    ed.querySelector("#pe-nt-add").addEventListener("click", () => {
+      const t = ed.querySelector("#pe-nt-text").value.trim();
+      if (!t) return;
+      p.notices = (p.notices || []).concat([{ date: todayStr(), text: t }]);
+      ed.querySelector("#pe-nt-text").value = "";
+      drawNotices();
+    });
+    ed.querySelector("#pe-save").addEventListener("click", async () => {
+      const phone = String(val("phone")).trim();
+      if (!/^01[016789][0-9-]{7,12}$/.test(phone.replace(/\s/g, ""))) { msg("연락처를 확인해주세요 (010-…)", false); return; }
+      const payload = {
+        phone,
+        name: val("name").trim(),
+        nick: val("nick").trim(),
+        status: val("status"),
+        stage: Number(val("stage")),
+        photos: p.photos || [],
+        schedule: p.schedule || [],
+        notices: p.notices || [],
+        inquiries: p.inquiries || [],
+      };
+      msg("저장 중…", true);
+      try {
+        await CFG.upsertProject(adminPw(), payload);
+        msg("저장됨 ✓ 손님 /my 화면에 바로 반영돼요", true);
+        await loadProjects(true);
+      } catch (e2) {
+        msg(e2 && e2.status === 404 ? "먼저 위 SQL을 실행해주세요" : "저장 실패: " + ((e2 && e2.message) || "오류"), false);
+      }
+    });
+    ed.querySelector("#pe-close").addEventListener("click", () => { ed.hidden = true; });
+    const delBtn = ed.querySelector("#pe-del");
+    if (delBtn) delBtn.addEventListener("click", async () => {
+      if (!confirm(`${p.name || p.phone} 고객의 시공 현황을 삭제할까요? (사진 기록 포함)`)) return;
+      try {
+        await CFG.deleteProject(adminPw(), p.phone);
+        ed.hidden = true;
+        await loadProjects(true);
+      } catch (e2) { msg("삭제 실패", false); }
+    });
+  }
+
+  {
+    const newBtn = document.getElementById("proj-new-btn");
+    const refBtn = document.getElementById("proj-refresh");
+    if (newBtn) newBtn.addEventListener("click", () =>
+      renderProjEditor({ phone: "", name: "", nick: "", status: "시공중", stage: 0, photos: [], schedule: [], notices: [], inquiries: [] })
+    );
+    if (refBtn) refBtn.addEventListener("click", () => loadProjects(true));
+  }
+
   // ---------- 사이드바 섹션 전환 ----------
   document.querySelectorAll(".side__nav").forEach((b) =>
     b.addEventListener("click", () => {
@@ -970,6 +1290,7 @@
       // 최신 편집 내용 반영해서 다시 그리기
       if (b.dataset.panel === "summary") renderSummary();
       if (b.dataset.panel === "partners") renderPartners();
+      if (b.dataset.panel === "projects") loadProjects();
     })
   );
 })();
