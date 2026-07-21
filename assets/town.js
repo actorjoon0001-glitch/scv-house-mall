@@ -751,7 +751,8 @@ function init() {
   scene.add(player);
 
   const CHARACTERS = {
-    robot: { label: "메타봇", walk: "assets/robot-walk.glb", run: "assets/robot-run.glb", height: 1.9 },
+    // 메타봇은 안내봇·큐레이터 전용 — 방문객 선택 불가 (reserved)
+    robot: { label: "메타봇", walk: "assets/robot-walk.glb", run: "assets/robot-run.glb", height: 1.9, reserved: true },
     boy: { label: "남자아이", walk: "assets/chars/kid.glb", height: 1.25, img: "kid" },
     girl: { label: "여자아이", walk: "assets/chars/girl.glb", height: 1.22 },
     woman: { label: "여성", walk: "assets/chars/woman.glb", height: 1.7 },
@@ -772,7 +773,7 @@ function init() {
   try {
     myChar = localStorage.getItem("seum_char");
     if (myChar && CHAR_ALIAS[myChar]) myChar = CHAR_ALIAS[myChar];
-    if (myChar && !CHARACTERS[myChar]) myChar = null;
+    if (myChar && (!CHARACTERS[myChar] || CHARACTERS[myChar].reserved)) myChar = null; // 예약 캐릭터 저장값은 무효
     myNick = localStorage.getItem("seum_nick") || "";
     myColor = localStorage.getItem("seum_color") || myColor;
     myScale = parseFloat(localStorage.getItem("seum_scale")) || 1;
@@ -884,7 +885,7 @@ function init() {
 
   let playerRig = null;
   function setPlayerCharacter(charKey) {
-    myChar = CHARACTERS[charKey] ? charKey : "robot";
+    myChar = CHARACTERS[charKey] && !CHARACTERS[charKey].reserved ? charKey : "boy";
     try { localStorage.setItem("seum_char", myChar); } catch (e) {}
     buildCharInstance(myChar)
       .catch(() => capsuleFallback())
@@ -1007,7 +1008,7 @@ function init() {
   const nickInput = document.getElementById("town-nick");
   const enterBtn = document.getElementById("town-enter");
   const charBtn = document.getElementById("town-char");
-  let selChar = myChar || "robot";
+  let selChar = myChar || "boy";
 
   const colorsEl = document.getElementById("town-colors");
   const scaleEl = document.getElementById("town-scale");
@@ -1018,6 +1019,7 @@ function init() {
   function renderSelect() {
     if (!selGrid) return;
     selGrid.innerHTML = Object.entries(CHARACTERS)
+      .filter(([, d]) => !d.reserved) // 안내봇 전용 캐릭터 제외
       .map(([k, d]) => `
         <button type="button" class="town__char${k === selChar ? " is-sel" : ""}" data-char="${k}">
           <img src="assets/chars/${d.img || k}.webp" alt="${d.label}" loading="lazy" />
@@ -1081,7 +1083,7 @@ function init() {
     joinRealtime();
     maybeAutoInfo();
   } else {
-    setPlayerCharacter("robot");
+    setPlayerCharacter("boy");
     openSelect();
   }
 
@@ -1417,7 +1419,7 @@ function init() {
         try { localStorage.setItem("seum_nick", nick); } catch (e) {}
       }
       if (selEl) selEl.hidden = true;
-      setPlayerCharacter(charKey && CHARACTERS[charKey] ? charKey : myChar || "robot");
+      setPlayerCharacter(charKey && CHARACTERS[charKey] && !CHARACTERS[charKey].reserved ? charKey : myChar || "boy");
       joinRealtime();
     },
     // 존 바로가기 (인포 안내봇·미니맵의 순간이동)
