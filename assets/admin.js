@@ -512,6 +512,46 @@
     "begin\n" +
     "  if pass is distinct from '931122' then raise exception 'unauthorized'; end if;\n" +
     "  return query select * from town_leads order by created_at desc limit 500;\n" +
+    "end $$;\n\n" +
+    "-- 회원 (게임식 가입: 아이디/비밀번호)\n" +
+    "create extension if not exists pgcrypto;\n" +
+    "create table if not exists town_users (\n" +
+    "  id bigint generated always as identity primary key,\n" +
+    "  created_at timestamptz default now(),\n" +
+    "  username text unique not null,\n" +
+    "  pass_hash text not null,\n" +
+    "  name text not null, phone text not null, nick text not null\n" +
+    ");\n" +
+    "alter table town_users enable row level security;\n\n" +
+    "create or replace function town_register(p_username text, p_pass text, p_name text, p_phone text, p_nick text)\n" +
+    "returns json language plpgsql security definer set search_path = public as $$\n" +
+    "declare u town_users;\n" +
+    "begin\n" +
+    "  if length(trim(p_username)) < 4 then raise exception 'bad_username'; end if;\n" +
+    "  if length(p_pass) < 4 then raise exception 'bad_password'; end if;\n" +
+    "  insert into town_users (username, pass_hash, name, phone, nick)\n" +
+    "  values (lower(trim(p_username)), crypt(p_pass, gen_salt('bf')), trim(p_name), trim(p_phone), trim(p_nick))\n" +
+    "  returning * into u;\n" +
+    "  return json_build_object('username', u.username, 'name', u.name, 'nick', u.nick);\n" +
+    "exception when unique_violation then\n" +
+    "  raise exception 'username_taken';\n" +
+    "end $$;\n\n" +
+    "create or replace function town_login(p_username text, p_pass text)\n" +
+    "returns json language plpgsql security definer set search_path = public as $$\n" +
+    "declare u town_users;\n" +
+    "begin\n" +
+    "  select * into u from town_users where username = lower(trim(p_username));\n" +
+    "  if u.id is null or u.pass_hash <> crypt(p_pass, u.pass_hash) then\n" +
+    "    raise exception 'invalid_login';\n" +
+    "  end if;\n" +
+    "  return json_build_object('username', u.username, 'name', u.name, 'nick', u.nick);\n" +
+    "end $$;\n\n" +
+    "create or replace function get_users(pass text)\n" +
+    "returns table(created_at timestamptz, username text, name text, phone text, nick text)\n" +
+    "language plpgsql security definer set search_path = public as $$\n" +
+    "begin\n" +
+    "  if pass is distinct from '931122' then raise exception 'unauthorized'; end if;\n" +
+    "  return query select u.created_at, u.username, u.name, u.phone, u.nick from town_users u order by u.created_at desc limit 1000;\n" +
     "end $$;";
 
   async function loadDash() {
@@ -549,6 +589,25 @@
       chips.innerHTML = `<span class="note">통계 테이블이 아직 없습니다 (아래 SQL 실행 필요)</span>`;
       needSql = true;
     }
+    // 회원 목록
+    try {
+      const pw = sessionStorage.getItem("seum_admin_pw") || "";
+      const users = await CFG.getUsers(pw);
+      const uTable = document.getElementById("users-table");
+      const uRows = document.getElementById("users-rows");
+      if (uTable && uRows) {
+        uRows.innerHTML = users.map((u) => `
+          <tr>
+            <td style="white-space:nowrap">${esc(new Date(u.created_at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }))}</td>
+            <td>${esc(u.username)}</td>
+            <td>${esc(u.name)}</td>
+            <td style="white-space:nowrap">${esc(u.phone)}</td>
+            <td>${esc(u.nick)}</td>
+          </tr>`).join("");
+        uTable.hidden = users.length === 0;
+      }
+      chips.insertAdjacentHTML("beforeend", `<span class="statchip">회원 <b>${users.length}</b>명</span>`);
+    } catch (e) {}
     // 상담 리드
     try {
       const pw = sessionStorage.getItem("seum_admin_pw") || "";
