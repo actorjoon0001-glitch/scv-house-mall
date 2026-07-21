@@ -4,8 +4,8 @@
   const el = document.getElementById("start");
   if (!el) return;
 
+  // 메타봇은 안내봇 전용이라 방문객 선택 목록에 없음
   const CHARS = [
-    ["robot", "메타봇", "robot"],
     ["boy", "남자아이", "kid"],
     ["girl", "여자아이", "girl"],
     ["woman", "여성", "woman"],
@@ -22,13 +22,13 @@
   const returningEl = document.getElementById("start-returning");
   const rNameEl = document.getElementById("start-rname");
 
-  let selChar = "robot";
+  let selChar = "boy";
   let savedNick = "";
   try {
-    selChar = localStorage.getItem("seum_char") || "robot";
+    selChar = localStorage.getItem("seum_char") || "boy";
     savedNick = localStorage.getItem("seum_nick") || "";
   } catch (e) {}
-  if (!CHARS.some(([k]) => k === selChar)) selChar = "robot";
+  if (!CHARS.some(([k]) => k === selChar)) selChar = "boy"; // 메타봇 등 예약/구버전 저장값 폴백
 
   // 재방문자는 인사 + 간소화
   if (savedNick && returningEl && rNameEl) {
