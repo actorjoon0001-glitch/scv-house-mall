@@ -44,7 +44,7 @@
     .mapwrap {
       /* 실제 마을 지형과 동일한 배치: 서쪽바깥 | 서쪽 | 동쪽 | 동쪽바깥 (위=북쪽) */
       display: grid; grid-template-columns: 0.85fr 1fr 1fr 0.85fr; gap: 18px 30px; position: relative;
-      grid-template-areas: "za nw ne zb" ". sw se zc";
+      grid-template-areas: "za nw ne zb" "xp sw se zc";
       background: #171b13; border: 1px solid #2a2f26; border-radius: 14px; padding: 20px 20px 46px;
     }
     .mapwrap::before {
@@ -286,6 +286,11 @@
     <p class="sub">존 <b>표시 이름·색상</b>과 파트너 존의 <b>부스 이름</b>을 바꿉니다. 3D 마을의 간판·바닥·게이트 색에 그대로 반영돼요. (빈 칸 = 기본값)</p>
     <div class="zones-panel" id="zones-panel"></div>
     <p class="note">· 존 구분(어떤 모델이 어느 존인지)은 모델 관리 표의 "소속 존"에서 관리 · 저장은 왼쪽 💾 전체 저장 버튼</p>
+
+    <h2 style="margin-top:26px">🎪 체험존 포털</h2>
+    <p class="sub">마을 남서쪽 <b>체험존</b>에 줄지어 배치되는 체험 포털 목록입니다. 이름을 바꾸거나 숨길 수 있고, 새 체험 공간이 생기면 포털을 추가하면 돼요.</p>
+    <div class="zones-panel" id="portals-panel"></div>
+    <p class="note">· URL이 없는 포털은 "준비 중"으로 표시됩니다 (예: VR룸) · 저장은 왼쪽 💾 전체 저장 버튼</p>
     </section>
     </main>
   </div>

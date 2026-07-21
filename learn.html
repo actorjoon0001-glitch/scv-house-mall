@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="메타하우스 교육관 — 모듈러 주택이 지어지는 과정을 단계별로 배워보세요." />
+  <title>메타하우스 교육관 — 집짓기 과정 배우기</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="learn-page">
+  <div class="learn">
+    <header class="learn__top">
+      <strong>📚 메타하우스 교육관</strong>
+      <span class="learn__hint">집이 완성되기까지의 여정을 단계별로 따라가 보세요</span>
+      <a class="btn btn--glass btn--sm" href="town.html">← 체험존으로</a>
+    </header>
+
+    <div class="learn__progress" id="learn-progress"></div>
+
+    <main class="learn__card" id="learn-card">
+      <div class="learn__emoji" id="learn-emoji">🗒️</div>
+      <p class="learn__stepno" id="learn-stepno"></p>
+      <h1 id="learn-title"></h1>
+      <p class="learn__period" id="learn-period"></p>
+      <p class="learn__desc" id="learn-desc"></p>
+      <p class="learn__tip" id="learn-tip"></p>
+    </main>
+
+    <nav class="learn__nav">
+      <button type="button" class="btn btn--glass" id="learn-prev">← 이전 단계</button>
+      <button type="button" class="btn btn--primary" id="learn-next">다음 단계 →</button>
+    </nav>
+
+    <!-- 마지막 단계에서 노출: 직접 해보기 유도 -->
+    <div class="learn__done" id="learn-done" hidden>
+      <p>과정을 전부 배웠어요! 이제 직접 지어볼까요?</p>
+      <div class="learn__done-btns">
+        <a class="btn btn--primary" id="learn-build" href="build.html">🔨 빌드룸에서 직접 지어보기</a>
+        <a class="btn btn--glass" href="town.html">🎪 체험존으로 돌아가기</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/town-config.js"></script>
+  <script src="assets/learn.js"></script>
+</body>
+</html>

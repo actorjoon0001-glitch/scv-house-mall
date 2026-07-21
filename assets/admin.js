@@ -361,6 +361,15 @@
       zoneEl.appendChild(gridEl);
       mapEl.appendChild(zoneEl);
     });
+    // 체험존 (부대시설 — 모델 배치 불가, 포털 전용 구역)
+    const expEl = document.createElement("div");
+    expEl.className = "map-zone";
+    expEl.style.gridArea = "xp";
+    expEl.style.borderColor = "#5e8a74";
+    const expPortals = (CFG.portalsFor ? CFG.portalsFor(overrides) : []);
+    expEl.innerHTML = `<h3 style="color:#5e8a74">🎪 체험존 · 포털 ${expPortals.length}개</h3>
+      <div style="font-size:12px;color:#889;line-height:1.9">${expPortals.map((p) => `${p.icon} ${esc(p.label)}${p.soon ? " (준비 중)" : ""}`).join("<br>") || "표시할 포털 없음"}<br><span style="opacity:.7">→ 존 관리 탭에서 편집</span></div>`;
+    mapEl.appendChild(expEl);
   }
 
   // ---------- 3단계: 존 관리 (표시 이름·색상·부스명) ----------
@@ -428,6 +437,106 @@
       );
       panel.appendChild(card);
     });
+  }
+
+  // ---------- 체험존 포털 관리 (이름 변경·숨김·추가) ----------
+  // 포털 목록은 데이터로 관리: overrides.portals = { build/learn/vr: {label,hidden}, extra: [{icon,label,href,hidden}] }
+  function renderPortals() {
+    const panel = document.getElementById("portals-panel");
+    if (!panel) return;
+    const defaults = CFG.DEFAULT_PORTALS || [];
+    const pov = overrides.portals || {};
+    panel.innerHTML = "";
+    const setP = (patch) => {
+      overrides.portals = Object.assign({}, overrides.portals, patch);
+      markDirty();
+      renderMap(); // 지도 탭의 체험존 포털 목록도 갱신
+    };
+    defaults.forEach((p) => {
+      const o = pov[p.id] || {};
+      const card = document.createElement("div");
+      card.className = "zone-card";
+      card.style.borderLeftColor = p.color;
+      card.innerHTML = `
+        <h3>${p.icon} ${esc(o.label || p.label)}${p.soon ? ' <small style="color:#889">(준비 중)</small>' : ""}</h3>
+        <div class="row"><label>표시 이름</label><input type="text" data-pf="label" maxlength="16" placeholder="${esc(p.label)}" value="${esc(o.label || "")}" /></div>
+        <div class="row"><label>마을에 표시</label><label style="display:flex;align-items:center;gap:6px;font-weight:400">
+          <input type="checkbox" data-pf="show" ${o.hidden ? "" : "checked"} /> 표시 (끄면 체험존에서 숨김)</label></div>
+        <div class="row"><label>연결 화면</label><span style="font-size:12.5px;color:#889">${p.href ? esc(p.href) : "아직 없음 — 준비 중 자리표시"}</span></div>`;
+      card.querySelector('[data-pf="label"]').addEventListener("input", (e) => {
+        const cur = Object.assign({}, (overrides.portals || {})[p.id]);
+        cur.label = e.target.value.trim();
+        if (!cur.label) delete cur.label;
+        setP({ [p.id]: Object.keys(cur).length ? cur : undefined });
+        if (!Object.keys(cur).length) delete overrides.portals[p.id];
+      });
+      card.querySelector('[data-pf="show"]').addEventListener("change", (e) => {
+        const cur = Object.assign({}, (overrides.portals || {})[p.id]);
+        if (e.target.checked) delete cur.hidden; else cur.hidden = true;
+        setP({ [p.id]: Object.keys(cur).length ? cur : undefined });
+        if (!Object.keys(cur).length) delete overrides.portals[p.id];
+        renderPortals();
+      });
+      panel.appendChild(card);
+    });
+    // 관리자가 추가한 포털
+    const extras = Array.isArray(pov.extra) ? pov.extra : [];
+    extras.forEach((e, i) => {
+      if (!e) return;
+      const card = document.createElement("div");
+      card.className = "zone-card";
+      card.style.borderLeftColor = "#8fd0a8";
+      card.innerHTML = `
+        <h3>${esc(e.icon || "✨")} ${esc(e.label || "")} <small style="color:#889">(추가 포털)</small></h3>
+        <div class="row"><label>아이콘</label><input type="text" data-xf="icon" maxlength="4" value="${esc(e.icon || "")}" /></div>
+        <div class="row"><label>이름</label><input type="text" data-xf="label" maxlength="16" value="${esc(e.label || "")}" /></div>
+        <div class="row"><label>URL</label><input type="text" data-xf="href" maxlength="120" placeholder="비우면 준비 중 표시" value="${esc(e.href || "")}" /></div>
+        <div class="row"><label>마을에 표시</label><label style="display:flex;align-items:center;gap:6px;font-weight:400">
+          <input type="checkbox" data-xf="show" ${e.hidden ? "" : "checked"} /> 표시</label>
+          <button type="button" class="btn btn--ghost" data-xf="del" style="padding:6px 12px;font-size:12px">🗑 삭제</button></div>`;
+      const upd = (patch) => {
+        const arr = (overrides.portals.extra || []).slice();
+        arr[i] = Object.assign({}, arr[i], patch);
+        setP({ extra: arr });
+      };
+      card.querySelector('[data-xf="icon"]').addEventListener("input", (ev) => upd({ icon: ev.target.value.trim() }));
+      card.querySelector('[data-xf="label"]').addEventListener("input", (ev) => upd({ label: ev.target.value.trim() }));
+      card.querySelector('[data-xf="href"]').addEventListener("input", (ev) => upd({ href: ev.target.value.trim() }));
+      card.querySelector('[data-xf="show"]').addEventListener("change", (ev) => {
+        upd({ hidden: !ev.target.checked || undefined });
+        renderPortals();
+      });
+      card.querySelector('[data-xf="del"]').addEventListener("click", () => {
+        const arr = (overrides.portals.extra || []).slice();
+        arr.splice(i, 1);
+        setP({ extra: arr });
+        renderPortals();
+      });
+      panel.appendChild(card);
+    });
+    // 새 포털 추가 카드
+    const add = document.createElement("div");
+    add.className = "zone-card";
+    add.style.borderLeftColor = "#bbb";
+    add.innerHTML = `
+      <h3>➕ 포털 추가</h3>
+      <div class="row"><label>아이콘</label><input type="text" id="portal-add-icon" maxlength="4" placeholder="✨" /></div>
+      <div class="row"><label>이름</label><input type="text" id="portal-add-label" maxlength="16" placeholder="예: 갤러리관" /></div>
+      <div class="row"><label>URL</label><input type="text" id="portal-add-href" maxlength="120" placeholder="비우면 준비 중 표시" /></div>
+      <div class="row"><button type="button" class="btn btn--primary" id="portal-add-btn" style="padding:8px 16px;font-size:13px">체험존에 추가</button></div>`;
+    add.querySelector("#portal-add-btn").addEventListener("click", () => {
+      const label = add.querySelector("#portal-add-label").value.trim();
+      if (!label) return alert("포털 이름을 입력하세요");
+      const arr = ((overrides.portals || {}).extra || []).slice();
+      arr.push({
+        icon: add.querySelector("#portal-add-icon").value.trim() || "✨",
+        label,
+        href: add.querySelector("#portal-add-href").value.trim(),
+      });
+      setP({ extra: arr });
+      renderPortals();
+    });
+    panel.appendChild(add);
   }
 
   // 부스 관리 모드 토글 + 상태 버튼
@@ -505,6 +614,7 @@
     render();
     renderMap();
     renderZones();
+    renderPortals();
     renderPartners();
     renderSummary();
     loadDash();

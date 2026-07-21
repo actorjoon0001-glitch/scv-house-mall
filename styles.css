@@ -1451,3 +1451,114 @@ body.build-page { margin: 0; overflow: hidden; background: #12150f; }
   color: #8fe6b5;
 }
 .start__verified[hidden] { display: none; }
+
+/* ============== 교육관 (learn) ============== */
+.learn-page {
+  background: linear-gradient(180deg, #2f4a3a 0%, #3d5c48 30%, #eee8da 30.01%, #f4efe3 100%);
+  min-height: 100vh;
+}
+.learn {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 18px 16px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 100vh;
+}
+.learn__top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #f2ede0;
+}
+.learn__top strong { font-size: 18px; }
+.learn__hint { flex: 1; font-size: 12.5px; opacity: 0.75; }
+.learn__progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-top: 6px;
+}
+.learn__dot {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid #cbbfa4;
+  background: #fdfaf2;
+  font-size: 19px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.learn__dot.is-done { border-color: #2f5d46; background: #e4efe7; }
+.learn__dot.is-active {
+  border-color: #2f5d46;
+  box-shadow: 0 0 0 4px rgba(47, 93, 70, 0.18);
+  transform: scale(1.12);
+}
+.learn__line {
+  width: clamp(14px, 5vw, 46px);
+  height: 3px;
+  background: #d9cfb6;
+  flex-shrink: 1;
+}
+.learn__line.is-done { background: #2f5d46; }
+.learn__card {
+  background: #fdfaf2;
+  border: 1px solid #e3dbc6;
+  border-radius: 22px;
+  padding: 34px 30px;
+  text-align: center;
+  box-shadow: 0 12px 34px rgba(52, 46, 30, 0.12);
+}
+.learn__emoji { font-size: 64px; line-height: 1; }
+.learn__stepno {
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #8a9a8f;
+}
+.learn__card h1 { font-size: 26px; margin-top: 4px; color: #2c3a2f; }
+.learn__period { margin-top: 6px; font-size: 13.5px; font-weight: 600; color: #4f6b58; }
+.learn__desc { margin-top: 14px; font-size: 15.5px; line-height: 1.75; color: #4a4738; }
+.learn__tip {
+  margin-top: 16px;
+  display: inline-block;
+  background: #eef4ee;
+  border: 1px solid #cfe0d2;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #35563f;
+  text-align: left;
+}
+.learn__tip[hidden] { display: none; }
+.learn__nav { display: flex; justify-content: space-between; gap: 12px; }
+.learn__nav .btn--glass { background: rgba(47, 74, 58, 0.1); color: #35563f; border-color: rgba(47, 74, 58, 0.3); }
+.learn__nav .btn--glass:hover { background: rgba(47, 74, 58, 0.18); }
+.learn__nav .btn:disabled { opacity: 0.35; pointer-events: none; }
+.learn__nav #learn-next[hidden] { display: none; }
+.learn__done {
+  background: #2f4a3a;
+  color: #f2ede0;
+  border-radius: 18px;
+  padding: 22px;
+  text-align: center;
+}
+.learn__done[hidden] { display: none; }
+.learn__done p { font-size: 15.5px; font-weight: 600; }
+.learn__done-btns {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+@media (max-width: 560px) {
+  .learn__top { flex-wrap: wrap; }
+  .learn__hint { order: 3; width: 100%; }
+  .learn__card { padding: 26px 18px; }
+}

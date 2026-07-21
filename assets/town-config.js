@@ -44,6 +44,37 @@
     }
   }
 
+  // ---------- 체험존 포털 목록 (데이터 관리 — 관리자에서 라벨 변경·숨김·추가 가능) ----------
+  // 마을에 흩뿌리지 않고 체험존 한 구역에만 모아 배치한다. href가 없으면 "준비 중" 자리표시.
+  const DEFAULT_PORTALS = [
+    { id: "build", icon: "🔨", label: "내 집 지어보기", href: "build.html", color: "#2fe08a" },
+    { id: "learn", icon: "📚", label: "집짓기 교육관", href: "learn.html", color: "#6fb1ff" },
+    { id: "vr", icon: "🕶️", label: "VR룸", href: "", soon: true, color: "#b7a7d9" },
+  ];
+  function portalsFor(ovData, includeHidden) {
+    const ov = (ovData && ovData.portals) || {};
+    const list = DEFAULT_PORTALS.map((p) => {
+      const o = ov[p.id] || {};
+      return Object.assign({}, p, {
+        label: (o.label || p.label).slice(0, 16),
+        hidden: !!o.hidden,
+      });
+    });
+    (Array.isArray(ov.extra) ? ov.extra : []).forEach((e, i) => {
+      if (!e || !e.label) return;
+      list.push({
+        id: "extra" + i,
+        icon: (e.icon || "✨").slice(0, 4),
+        label: String(e.label).slice(0, 16),
+        href: String(e.href || "").slice(0, 120),
+        soon: !e.href,
+        hidden: !!e.hidden,
+        color: /^#[0-9a-fA-F]{6}$/.test(e.color || "") ? e.color : "#8fd0a8",
+      });
+    });
+    return includeHidden ? list : list.filter((p) => !p.hidden);
+  }
+
   // ---------- 상담 리드 + 방문 이벤트 (전용 프로젝트 town_leads/town_events) ----------
   // 리드 조회는 RLS로 막고 get_leads(pass) RPC(관리자 비밀번호 확인)로만 연다.
   async function addLead(lead) {
@@ -258,6 +289,7 @@
     authRegister, authLogin, authResetPass, authKakaoUpsert, getUsers,
     addBuild, getBuilds,
     HOUSE_GLBS, CAT_POOL, DEFAULT_GLB, archetypeFor, dedupeForTown,
+    DEFAULT_PORTALS, portalsFor,
     CONTACT_PHONE, SETTINGS_URL, SETTINGS_KEY,
   };
 })();

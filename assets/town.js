@@ -758,7 +758,15 @@ function init() {
       if (!activeLot) return;
       const m = activeLot.model;
       if (window.SeumTownConfig && window.SeumTownConfig.logEvent) window.SeumTownConfig.logEvent("build_from_model", m.name);
+      try { sessionStorage.setItem("seum_town_return", JSON.stringify({ x: player.position.x, z: player.position.z })); } catch (e) {}
       window.location.href = `build.html?pyeong=${modelPyeong(m)}&model=${encodeURIComponent(m.name)}`;
+    });
+  }
+  // 체험 포털 입장 버튼: 나가기 전 현재 위치 저장 (돌아오면 체험존 자리로 복귀)
+  {
+    const cta = document.getElementById("town-build-cta");
+    if (cta) cta.addEventListener("click", () => {
+      try { sessionStorage.setItem("seum_town_return", JSON.stringify({ x: player.position.x, z: player.position.z })); } catch (e) {}
     });
   }
   if (cardChat) {
@@ -963,6 +971,7 @@ function init() {
   buildInstanced(new THREE.CylinderGeometry(0.34, 0.26, 0.6, 8), new THREE.MeshStandardMaterial({ color: 0xb9714f, roughness: 0.8 }), pots);
   buildInstanced(new THREE.IcosahedronGeometry(0.42, 0), new THREE.MeshStandardMaterial({ color: 0x4e8f4e, roughness: 0.9 }), bushes);
   buildBooths(zoneOvData);
+  buildExperienceZone(zoneOvData);
   }
   let zoneOvData = {}; // buildZoneDecor 호출 전에 설정됨
 
@@ -1052,51 +1061,121 @@ function init() {
     scene.add(infoDesk);
   }
 
-  // ---------- 빌드룸 포털 (안내봇 메타봇 바로 옆 — 이중 링 + 포털면 + 빛 구슬) ----------
-  const portalGroup = new THREE.Group();
-  let portalRing = null, portalRing2 = null, portalDisc = null;
-  const portalOrbs = [];
-  {
-    const emerald = new THREE.MeshStandardMaterial({ color: 0x1fa25a, emissive: 0x2fe08a, emissiveIntensity: 1.5, roughness: 0.35, metalness: 0.3 });
-    const gold = new THREE.MeshStandardMaterial({ color: 0xd9a54a, emissive: 0xffcf7a, emissiveIntensity: 0.7, roughness: 0.4, metalness: 0.5 });
-    portalRing = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.09, 14, 48), emerald);
-    portalRing.position.y = 1.55;
-    portalRing2 = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.05, 12, 40), gold);
-    portalRing2.position.y = 1.55;
+  // ---------- 체험존 (부대시설 구역) ----------
+  // 포털을 마을 곳곳에 흩뿌리지 않고 남서쪽 한 블록에 모두 모은다 (가구 존과 대칭 자리).
+  // 포털 목록은 데이터(town-config DEFAULT_PORTALS + 관리자 설정 data.portals)로 관리 —
+  // 새 체험 공간이 생기면 목록에 추가만 하면 되고, 관리자에서 이름 변경·숨김이 가능하다.
+  const EXP = { cols: [-62, -52, -42], minX: -67, maxX: -37, front: 19.5, back: 6.5, cx: -52, color: 0x5e8a74, entry: { x: -52, z: 23 } };
+  const expPortals = []; // { group, ring, ring2, disc, orbs, def }
+
+  function makeExpPortal(def, x, z) {
+    const g = new THREE.Group();
+    const accent = new THREE.Color(def.color || "#2fe08a");
+    const dim = def.soon ? 0.35 : 1; // 준비 중 포털은 어둡게
+    const ringMat = new THREE.MeshStandardMaterial({
+      color: accent.clone().multiplyScalar(0.55), emissive: accent, emissiveIntensity: 1.5 * dim, roughness: 0.35, metalness: 0.3,
+    });
+    const gold = new THREE.MeshStandardMaterial({ color: 0xd9a54a, emissive: 0xffcf7a, emissiveIntensity: 0.7 * dim, roughness: 0.4, metalness: 0.5 });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.09, 14, 48), ringMat);
+    ring.position.y = 1.55;
+    const ring2 = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.05, 12, 40), gold);
+    ring2.position.y = 1.55;
     // 은은하게 빛나는 포털면 (블룸에서 살짝 번짐)
-    portalDisc = new THREE.Mesh(
+    const disc = new THREE.Mesh(
       new THREE.CircleGeometry(0.68, 40),
-      new THREE.MeshBasicMaterial({ color: 0x9ffcd0, transparent: true, opacity: 0.35, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: accent.clone().lerp(new THREE.Color(0xffffff), 0.55), transparent: true, opacity: 0.35 * dim, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false })
     );
-    portalDisc.position.y = 1.55;
+    disc.position.y = 1.55;
     const base = new THREE.Mesh(
       new THREE.CylinderGeometry(0.85, 1.05, 0.22, 24),
       new THREE.MeshStandardMaterial({ color: 0xe3ddcb, roughness: 0.85 })
     );
     base.position.y = 0.11;
-    // 바닥 발광 링
     const glowRing = new THREE.Mesh(
       new THREE.RingGeometry(1.0, 1.35, 40),
-      new THREE.MeshBasicMaterial({ color: 0x2fe08a, transparent: true, opacity: 0.35, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.35 * dim, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false })
     );
     glowRing.rotation.x = -Math.PI / 2;
     glowRing.position.y = 0.03;
-    // 주위를 도는 빛 구슬 7개
-    const orbMat = new THREE.MeshBasicMaterial({ color: 0xbdffdc });
-    for (let i = 0; i < 7; i++) {
-      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), orbMat);
-      orb.userData.a = (i / 7) * Math.PI * 2;
-      portalOrbs.push(orb);
-      portalGroup.add(orb);
+    const orbs = [];
+    if (!def.soon) {
+      const orbMat = new THREE.MeshBasicMaterial({ color: accent.clone().lerp(new THREE.Color(0xffffff), 0.65) });
+      for (let i = 0; i < 7; i++) {
+        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), orbMat);
+        orb.userData.a = (i / 7) * Math.PI * 2;
+        orbs.push(orb);
+        g.add(orb);
+      }
     }
-    // 라벨은 링 바로 위에 붙여 한 덩어리로
-    const portalSign = nameSign("🔨 내 집 지어보기");
-    portalSign.scale.set(2.3, 0.58, 1);
-    portalSign.position.y = 2.95;
-    portalGroup.add(portalRing, portalRing2, portalDisc, base, glowRing, portalSign);
-    portalGroup.position.set(6.2, 0, 27.2); // 인포 데스크·안내봇 메타봇 바로 옆
-    scene.add(portalGroup);
+    // 포털 이름표는 링 위에 붙여 한 덩어리로 — 준비 중은 명시
+    const sign = nameSign(def.soon ? `${def.icon} ${def.label} (준비 중)` : `${def.icon} ${def.label}`);
+    sign.scale.set(2.3, 0.58, 1);
+    sign.position.y = 2.95;
+    g.add(ring, ring2, disc, base, glowRing, sign);
+    g.position.set(x, 0, z);
+    scene.add(g);
+    expPortals.push({ group: g, ring, ring2, disc, orbs, def });
   }
+
+  function buildExperienceZone(ovData) {
+    const CFG = window.SeumTownConfig;
+    const portals = (CFG && CFG.portalsFor) ? CFG.portalsFor(ovData) : [];
+    // 존과 같은 문법의 얇은 경계 라인 (바닥은 잔디 유지)
+    const frameMat = new THREE.MeshBasicMaterial({ color: EXP.color, transparent: true, opacity: 0.5, depthWrite: false });
+    const strip = (w, d, x, zz) => {
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(w, d), frameMat);
+      s.rotation.x = -Math.PI / 2;
+      s.position.set(x, 0.014, zz);
+      scene.add(s);
+    };
+    strip(EXP.maxX - EXP.minX, 0.3, EXP.cx, EXP.front);
+    strip(EXP.maxX - EXP.minX, 0.3, EXP.cx, EXP.back);
+    strip(0.3, EXP.front - EXP.back, EXP.minX, (EXP.front + EXP.back) / 2);
+    strip(0.3, EXP.front - EXP.back, EXP.maxX, (EXP.front + EXP.back) / 2);
+    // 입구 게이트 (존 게이트와 같은 스타일) + "체험존 / EXPERIENCE" 간판
+    const gateMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
+    const gc = new THREE.Color(EXP.color);
+    [-4.8, 4.8].forEach((dx) => {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.55, 4.4, 0.55), gateMat.clone());
+      p.material.color = gc;
+      p.position.set(EXP.cx + dx, 2.2, EXP.front + 1.4);
+      p.castShadow = true;
+      scene.add(p);
+    });
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(10.2, 0.55, 0.55), gateMat.clone());
+    beam.material.color = gc;
+    beam.position.set(EXP.cx, 4.55, EXP.front + 1.4);
+    scene.add(beam);
+    const board = makeBoardMesh("🎪 체험존 · EXPERIENCE", 7.4, 1.5, { bg: "#2f4a3a", fg: "#f2ede0", accent: EXP.color });
+    board.position.set(EXP.cx, 5.5, EXP.front + 1.4);
+    scene.add(board);
+    // 포털을 한 줄로 정렬 배치 (간격 10 — 서로 겹치지 않게)
+    portals.forEach((def, i) => {
+      const x = EXP.cols[i % EXP.cols.length];
+      const z = 12.5 - Math.floor(i / EXP.cols.length) * 6; // 4개 이상이면 뒷줄로
+      makeExpPortal(def, x, z);
+    });
+  }
+
+  // 전시존에는 포털을 두지 않는다 — 대신 인포 광장·통로에 방향 안내 표지만
+  function makeGuideSign(x, z, ry) {
+    const g = new THREE.Group();
+    const post = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.07, 0.09, 2.5, 8),
+      new THREE.MeshStandardMaterial({ color: 0x6b5b45, roughness: 0.85 })
+    );
+    post.position.y = 1.25;
+    post.castShadow = true;
+    // 체험존은 서쪽(-x) — 남쪽에서 보는 보드 기준 왼쪽 화살표
+    const b = makeBoardMesh("← 🎪 체험존 이쪽", 3.1, 0.75, { accent: EXP.color });
+    b.position.y = 2.15;
+    g.add(post, b);
+    g.position.set(x, 0, z);
+    g.rotation.y = ry;
+    scene.add(g);
+  }
+  makeGuideSign(5.8, 27.4, -0.5);  // 인포 데스크 옆 (서쪽 체험존 방향으로 비스듬히)
+  makeGuideSign(-34.2, 21.5, -0.85); // 남쪽 통로 서쪽 끝 — 체험존 입구 직전
 
   const houseLots = []; // { wrap, model }
   const padMat = new THREE.MeshStandardMaterial({
@@ -1477,6 +1556,15 @@ function init() {
   }
 
   player.position.set(0, 0, 30); // 남쪽 입구(인포 앞)에서 시작
+  // 체험 화면(빌드룸·교육관)에서 돌아온 경우 → 나갔던 자리(체험존)로 복귀
+  try {
+    const back = JSON.parse(sessionStorage.getItem("seum_town_return") || "null");
+    sessionStorage.removeItem("seum_town_return");
+    if (back && isFinite(back.x) && isFinite(back.z)) {
+      player.position.x = Math.max(-SITE.x + 2, Math.min(SITE.x - 2, back.x));
+      player.position.z = Math.max(SITE.zN + 2, Math.min(SITE.zS + 8, back.z));
+    }
+  } catch (e) {}
   // 방문 통계: 마을 입장 1회 기록
   if (window.SeumTownConfig && window.SeumTownConfig.logEvent) window.SeumTownConfig.logEvent("visit", "");
 
@@ -1922,6 +2010,13 @@ function init() {
       mapCtx.textBaseline = "middle";
       mapCtx.fillText(z.emoji, c + ((minX + maxX) / 2) * scale, c + ((front + back) / 2) * scale);
     });
+    // 체험존 블록 (부대시설 구역)
+    mapCtx.fillStyle = `#${EXP.color.toString(16).padStart(6, "0")}88`;
+    mapCtx.fillRect(c + EXP.minX * scale, c + EXP.back * scale, (EXP.maxX - EXP.minX) * scale, (EXP.front - EXP.back) * scale);
+    mapCtx.font = "12px sans-serif";
+    mapCtx.textAlign = "center";
+    mapCtx.textBaseline = "middle";
+    mapCtx.fillText("🎪", c + EXP.cx * scale, c + ((EXP.front + EXP.back) / 2) * scale);
     // 도로 (메인 남북 + 동서 통로 + 파트너 블록 세로 통로)
     mapCtx.fillStyle = "rgba(210,200,178,0.95)";
     mapCtx.fillRect(c - 3.5 * scale, c + SITE.zN * scale, 7 * scale, (SITE.zS - SITE.zN + 8) * scale);
@@ -2030,10 +2125,24 @@ function init() {
     },
     zones: Object.keys(ZONES),
     zoneLabel: (cat) => zoneDisplay(cat), // 챗봇 등에서 존 표시 이름 조회
+    // 체험존 바로가기 (안내봇의 "직접 지어보기·배워보기" 안내용)
+    gotoExperience() {
+      if (window.SeumTownConfig && window.SeumTownConfig.logEvent) window.SeumTownConfig.logEvent("zone", "체험존");
+      player.position.x = EXP.entry.x;
+      player.position.z = EXP.entry.z;
+      heading = Math.PI;
+      player.rotation.y = heading;
+      updateNearCard();
+    },
+    // 체험 화면(빌드룸·교육관)으로 나가기 전에 현재 위치 저장 → 돌아오면 그 자리(체험존)로 복귀
+    saveReturnSpot() {
+      try { sessionStorage.setItem("seum_town_return", JSON.stringify({ x: player.position.x, z: player.position.z })); } catch (e) {}
+    },
     // 디버그·연출용 카메라 (방위각 rad, 줌 배율)
     setCam(az, zoom) { if (az != null) camAz = az; if (zoom != null) camZoom = Math.max(0.55, Math.min(3.2, zoom)); },
     quality: () => ({ qLevel, pixelRatio: renderer.getPixelRatio() }),
     _scene: scene,
+    _expPortals: expPortals,
   };
 
   function tick() {
@@ -2152,19 +2261,31 @@ function init() {
       } else if (nd > 4.8) npcNear = false;
     }
 
-    // 빌드룸 포털: 이중 링 역회전 + 포털면 맥동 + 빛 구슬 공전 + 근접 입장 버튼
-    if (portalRing) {
-      const T = (portalGroup.userData.t = (portalGroup.userData.t || 0) + dt);
-      portalRing.rotation.y += dt * 0.7;
-      portalRing2.rotation.y -= dt * 1.3;
-      portalDisc.material.opacity = 0.28 + Math.sin(T * 2.2) * 0.12;
-      portalOrbs.forEach((o, i) => {
-        const a = o.userData.a + T * 0.9;
-        o.position.set(Math.cos(a) * 1.25, 1.55 + Math.sin(T * 1.6 + i * 1.7) * 0.55, Math.sin(a) * 1.25);
+    // 체험존 포털들: 이중 링 역회전 + 포털면 맥동 + 빛 구슬 공전 + 근접 입장 버튼
+    if (expPortals.length) {
+      let nearest = null, nearestD = Infinity;
+      expPortals.forEach((p) => {
+        const T = (p.group.userData.t = (p.group.userData.t || 0) + dt);
+        p.ring.rotation.y += dt * 0.7;
+        p.ring2.rotation.y -= dt * 1.3;
+        p.disc.material.opacity = (p.def.soon ? 0.1 : 0.28) + Math.sin(T * 2.2) * (p.def.soon ? 0.04 : 0.12);
+        p.orbs.forEach((o, i) => {
+          const a = o.userData.a + T * 0.9;
+          o.position.set(Math.cos(a) * 1.25, 1.55 + Math.sin(T * 1.6 + i * 1.7) * 0.55, Math.sin(a) * 1.25);
+        });
+        if (p.def.href) {
+          const d = Math.hypot(p.group.position.x - player.position.x, p.group.position.z - player.position.z);
+          if (d < nearestD) { nearestD = d; nearest = p; }
+        }
       });
-      const pd = Math.hypot(portalGroup.position.x - player.position.x, portalGroup.position.z - player.position.z);
       const cta = document.getElementById("town-build-cta");
-      if (cta) cta.hidden = pd > 3.6;
+      if (cta) {
+        if (nearest && nearestD <= 3.6) {
+          cta.hidden = false;
+          cta.href = nearest.def.href;
+          cta.textContent = `${nearest.def.icon} ${nearest.def.label} 입장`;
+        } else cta.hidden = true;
+      }
     }
 
     clouds.forEach((c, i) => { c.position.x += dt * (0.25 + i * 0.05); if (c.position.x > 55) c.position.x = -55; });
