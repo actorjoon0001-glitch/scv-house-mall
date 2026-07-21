@@ -160,6 +160,33 @@
   const authKakaoUpsert = (d) => rpc("town_kakao_upsert", { p_kid: d.kid, p_name: d.name, p_nick: d.nick });
   const getUsers = (pass) => rpc("get_users", { pass });
 
+  // ---------- 계약 고객 시공 현황 (town_projects — 손님은 본인 것만 RPC로 조회) ----------
+  // 시공 7단계 (진행바·사진첩 그룹 기준)
+  const BUILD_STAGES = ["토목", "기초", "골조", "지붕/외장", "내부", "마감", "준공"];
+  // 손님 조회: 폰 번호 + 닉네임 대조 (닉네임 미설정 프로젝트는 폰만) — 남의 현황은 못 봄
+  const getMyProject = (phone, nick) => rpc("get_my_project", { p_phone: phone, p_nick: nick || "" });
+  const addProjectInquiry = (phone, nick, text) => rpc("add_project_inquiry", { p_phone: phone, p_nick: nick || "", p_text: text });
+  // 관리자: 비밀번호 확인 RPC
+  const getProjects = (pass) => rpc("get_projects", { pass });
+  const upsertProject = (pass, p) => rpc("upsert_project", { pass, p });
+  const deleteProject = (pass, phone) => rpc("delete_project", { pass, p_phone: phone });
+  // 현장 사진 업로드 (Supabase Storage 공개 버킷 site-photos, 파일명은 추측 불가한 랜덤)
+  async function uploadSitePhoto(blob, phoneDigits) {
+    const rand = Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+    const path = `${(phoneDigits || "misc").slice(-4)}-${rand}.jpg`;
+    const r = await fetch(`${SETTINGS_URL}/storage/v1/object/site-photos/${path}`, {
+      method: "POST",
+      headers: Object.assign({ "Content-Type": "image/jpeg" }, HEADERS),
+      body: blob,
+    });
+    if (!r.ok) {
+      const err = new Error("upload failed");
+      err.status = r.status;
+      throw err;
+    }
+    return `${SETTINGS_URL}/storage/v1/object/public/site-photos/${path}`;
+  }
+
   async function getEvents() {
     const r = await fetch(
       `${SETTINGS_URL}/rest/v1/town_events?select=type,name,created_at&order=created_at.desc&limit=2000`,
@@ -290,6 +317,7 @@
     addBuild, getBuilds,
     HOUSE_GLBS, CAT_POOL, DEFAULT_GLB, archetypeFor, dedupeForTown,
     DEFAULT_PORTALS, portalsFor,
+    BUILD_STAGES, getMyProject, addProjectInquiry, getProjects, upsertProject, deleteProject, uploadSitePhoto,
     CONTACT_PHONE, SETTINGS_URL, SETTINGS_KEY,
   };
 })();

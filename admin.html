@@ -162,6 +162,7 @@
       <button type="button" class="side__nav" data-panel="summary">📋 모델 취합</button>
       <button type="button" class="side__nav" data-panel="map">🗺️ 배치·부스 지도</button>
       <button type="button" class="side__nav" data-panel="partners">🤝 입점 업체 관리</button>
+      <button type="button" class="side__nav" data-panel="projects">🏗️ 시공 현황</button>
       <button type="button" class="side__nav" data-panel="zones">🎨 존 관리</button>
       <div class="side__foot">
         <span class="savedmsg" id="saved-msg"></span>
@@ -279,6 +280,26 @@
       <p class="note" id="partners-empty">아직 등록된 업체가 없습니다. "➕ 업체 추가"로 시작하세요.</p>
     </div>
     <p class="note">· 상태를 <b>계약/입점완료</b>로 두고 부스를 배정하면 마을 부스에 회사명이 표시됩니다 · 저장은 왼쪽 💾 전체 저장 버튼</p>
+    </section>
+
+    <section class="apanel" id="panel-projects">
+    <h2>🏗️ 계약 고객 시공 현황</h2>
+    <p class="sub">계약 고객별로 <b>시공 단계·현장 사진·일정·안내</b>를 올립니다. 올리면 손님의 <b>내 집 현황(/my)</b> 화면에 바로 반영돼요. 현장에서 폰으로 접속해 사진을 올려도 됩니다.</p>
+    <div class="sqlbox" id="projects-sql"></div>
+    <div class="bar">
+      <button class="btn" id="proj-new-btn">➕ 고객 등록</button>
+      <span style="flex:1"></span>
+      <button class="btn btn--ghost" id="proj-refresh">↺ 새로고침</button>
+    </div>
+    <div id="proj-list" style="overflow-x:auto">
+      <table id="proj-table" hidden>
+        <thead><tr><th>고객</th><th>연락처</th><th>상태</th><th>단계</th><th>사진</th><th>문의</th><th></th></tr></thead>
+        <tbody id="proj-rows"></tbody>
+      </table>
+      <p class="note" id="proj-empty" hidden>등록된 시공 고객이 없습니다. "➕ 고객 등록"으로 첫 계약 고객을 추가하세요.</p>
+    </div>
+    <div id="proj-editor" hidden></div>
+    <p class="note">· 사진은 자동으로 축소(최대 1280px)돼 올라가요 · 손님은 본인 번호+닉네임으로만 자기 현황을 볼 수 있어요</p>
     </section>
 
     <section class="apanel" id="panel-zones">

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="robots" content="noindex" />
+  <meta name="description" content="메타하우스 내 집 현황 — 시공 단계와 현장 사진을 확인하세요." />
+  <title>내 집 현황 — 메타하우스</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="my-page">
+  <div class="my">
+    <header class="my__top">
+      <strong>🏗️ 내 집 현황</strong>
+      <span class="my__hint" id="my-sub">시공 단계와 현장 사진을 확인하세요</span>
+      <a class="btn btn--glass btn--sm" href="index.html">← 처음으로</a>
+    </header>
+
+    <!-- 확인(로그인) 필요 -->
+    <section class="my__gate" id="my-gate" hidden>
+      <p class="my__gate-emoji">🔑</p>
+      <h2>고객 확인이 필요해요</h2>
+      <p class="my__gate-sub">계약 때 남기신 <b>핸드폰 번호</b>와 마을 <b>닉네임</b>으로 내 집 현황을 확인해요.</p>
+      <label class="start__field"><span>핸드폰 번호</span>
+        <input id="my-phone" type="tel" maxlength="20" placeholder="010-0000-0000" autocomplete="tel" /></label>
+      <label class="start__field"><span>닉네임 (마을에서 쓰는 이름)</span>
+        <input id="my-nick" maxlength="10" placeholder="닉네임" autocomplete="off" /></label>
+      <p class="start__formerr" id="my-gate-err" hidden></p>
+      <button type="button" class="btn btn--primary btn--block" id="my-gate-btn">내 집 현황 보기</button>
+    </section>
+
+    <!-- 연결된 계약 없음 -->
+    <section class="my__none" id="my-none" hidden>
+      <p class="my__gate-emoji">🏡</p>
+      <h2>아직 연결된 계약 정보가 없어요</h2>
+      <p class="my__gate-sub" id="my-none-sub">계약을 진행하시면 이 화면에서 내 집이 올라가는 과정을 사진으로 볼 수 있어요!</p>
+      <div class="my__none-btns">
+        <a class="btn btn--primary" href="town.html">🎮 3D 마을 둘러보기</a>
+        <a class="btn btn--ghost" href="index.html#contact">📅 방문 상담 예약</a>
+      </div>
+    </section>
+
+    <!-- 시공 현황 본문 -->
+    <main id="my-body" hidden>
+      <p class="my__hello" id="my-hello"></p>
+
+      <!-- 완공 축하 배너 -->
+      <div class="my__done-banner" id="my-done-banner" hidden>
+        🎉 <b>완공을 축하드려요!</b> 후기를 남겨주시면 다른 가족들에게 큰 도움이 돼요.
+        <div class="my__done-btns">
+          <a class="btn btn--primary btn--sm" href="index.html#contact" id="my-review-btn">✍️ 후기 남기기</a>
+          <button type="button" class="btn btn--glass btn--sm" id="my-as-btn">🔧 A/S 문의</button>
+        </div>
+        <p class="my__refer">👨‍👩‍👧 지인 추천 혜택도 준비 중이에요 — 소개해주시면 양쪽 모두 혜택을 드릴 예정!</p>
+      </div>
+
+      <!-- ① 시공 진행 단계 -->
+      <section class="my__card">
+        <h2>시공 진행 단계</h2>
+        <div class="my__bar"><div class="my__bar-fill" id="my-bar"></div></div>
+        <p class="my__percent" id="my-percent"></p>
+        <div class="my__stages" id="my-stages"></div>
+      </section>
+
+      <!-- ② 단계별 현장 사진첩 -->
+      <section class="my__card">
+        <h2>📸 현장 사진첩</h2>
+        <p class="my__cardsub">내 집이 올라가는 과정을 단계별로 담았어요</p>
+        <div id="my-photos"></div>
+        <p class="my__empty" id="my-photos-empty" hidden>아직 올라온 사진이 없어요. 공사가 시작되면 단계별로 사진이 올라와요!</p>
+      </section>
+
+      <!-- ③ 일정 안내 -->
+      <section class="my__card" id="my-schedule-card">
+        <h2>🗓️ 일정 안내</h2>
+        <ul class="my__schedule" id="my-schedule"></ul>
+        <p class="my__empty" id="my-schedule-empty" hidden>등록된 일정이 없어요.</p>
+      </section>
+
+      <!-- ④ 공지 / 문의 -->
+      <section class="my__card">
+        <h2>📢 안내 사항</h2>
+        <ul class="my__notices" id="my-notices"></ul>
+        <p class="my__empty" id="my-notices-empty" hidden>새 안내 사항이 없어요.</p>
+      </section>
+      <section class="my__card" id="my-inq-card">
+        <h2>💬 문의 남기기</h2>
+        <p class="my__cardsub">남겨주신 문의는 기록으로 남고, 담당자가 확인 후 연락드려요.</p>
+        <ul class="my__inqs" id="my-inqs"></ul>
+        <textarea id="my-inq-text" rows="3" maxlength="500" placeholder="궁금한 점을 남겨주세요"></textarea>
+        <button type="button" class="btn btn--primary btn--sm" id="my-inq-btn">문의 남기기</button>
+        <p class="start__formerr" id="my-inq-err" hidden></p>
+      </section>
+    </main>
+
+    <!-- 사진 크게 보기 -->
+    <div class="my__lightbox" id="my-lightbox" hidden>
+      <button type="button" class="my__lightbox-close" id="my-lightbox-close">✕</button>
+      <img id="my-lightbox-img" alt="현장 사진" />
+      <p id="my-lightbox-cap"></p>
+    </div>
+  </div>
+
+  <script src="assets/town-config.js"></script>
+  <script src="assets/my.js"></script>
+</body>
+</html>
