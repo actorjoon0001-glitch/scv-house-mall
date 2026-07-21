@@ -630,7 +630,7 @@ function init() {
     return `${uk ? uk + "억 " : ""}${man ? man.toLocaleString() + "만" : ""}원~`;
   }
 
-  function nameSign(text) {
+  function nameSign(text, textColor) {
     const c = document.createElement("canvas");
     c.width = 512; c.height = 128;
     const ctx = c.getContext("2d");
@@ -641,7 +641,7 @@ function init() {
     ctx.strokeStyle = "rgba(255,255,255,0.35)";
     ctx.lineWidth = 4;
     ctx.stroke();
-    ctx.fillStyle = "#fff";
+    ctx.fillStyle = textColor || "#fff";
     ctx.font = "700 52px 'Inter','Noto Sans KR',sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -1209,11 +1209,12 @@ function init() {
         player.userData.balloon = null;
         player.add(rig.obj);
         playerRig = rig;
-        // 내 머리 위 닉네임 (다른 방문자에게 보이는 것과 동일한 스타일)
-        const myLabel = nameSign(myNick || "방문객");
+        // 내 머리 위 닉네임 — 노란색으로 표시해 내 위치를 바로 찾을 수 있게
+        const myLabel = nameSign(myNick || "방문객", "#ffd75e");
         myLabel.scale.set(2.4, 0.6, 1);
         myLabel.position.y = CHARACTERS[myChar].height + 0.55;
         player.add(myLabel);
+        // 풍선 액세서리는 내 캐릭터에만
         attachBalloon(player, myColor, CHARACTERS[myChar].height);
         player.scale.setScalar(myScale);
         updateNickChip();
@@ -1250,7 +1251,7 @@ function init() {
         label.scale.set(2.4, 0.6, 1);
         label.position.y = h + 0.55;
         group.add(label);
-        if (meta.color) attachBalloon(group, meta.color, h);
+        // 풍선은 내 캐릭터 전용 — 다른 방문자에게는 표시하지 않음 (내 위치 구분용)
         const sc = parseFloat(meta.scale);
         if (sc && sc > 0.5 && sc < 2) group.scale.setScalar(sc);
         entry.rig = rig;

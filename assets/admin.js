@@ -486,6 +486,8 @@
     render();
     renderMap();
     renderZones();
+    renderPartners();
+    renderSummary();
     loadDash();
   }
 
@@ -673,11 +675,168 @@
   });
   document.getElementById("reload-btn").addEventListener("click", boot);
 
+  // ---------- 모델 취합 (최종 표시 정보 요약 + CSV) ----------
+  function summaryData() {
+    // 손님에게 보이는 최종 값 기준: apply(이름/가격/존 반영) + 배치 칸. 숨김 모델도 포함해 표시.
+    const visible = CFG.apply(catalog, overrides);
+    const plan = CFG.computePlacement(visible, overrides);
+    const visMap = {};
+    visible.forEach((m) => (visMap[m.slug] = m));
+    return catalog.map((raw) => {
+      const o = overrides.models[raw.slug] || {};
+      const m = visMap[raw.slug];
+      const p = m ? plan[CFG.keyOf(m)] : null;
+      const won = m ? (m.event_on && m.event_price ? m.event_price : m.base_price) : raw.base_price;
+      const price = won ? Math.round(won / 1e4).toLocaleString() + "만원" : "가격 상담";
+      const curator = o.curator === "f" ? "수아" : o.curator === "m" ? "준" : o.curator === "bot" ? "메타봇" : "자동";
+      return {
+        name: (m && m.name) || o.name || raw.name,
+        zone: p ? p.zone : effZone(raw),
+        cell: p ? `${p.index + 1}번 칸${p.rot ? ` (${p.rot}°)` : ""}` : "-",
+        size: (m && m.size) || raw.size || "",
+        price,
+        curator,
+        shown: !o.hidden,
+        memo: o.desc || raw.short_description || "",
+      };
+    });
+  }
+  function renderSummary() {
+    const rows = document.getElementById("summary-rows");
+    const chips = document.getElementById("summary-chips");
+    if (!rows) return;
+    const data = summaryData();
+    const zoneCnt = {};
+    data.filter((d) => d.shown).forEach((d) => (zoneCnt[d.zone] = (zoneCnt[d.zone] || 0) + 1));
+    chips.innerHTML =
+      `<span class="statchip">전체 <b>${data.length}</b></span>` +
+      `<span class="statchip">노출 <b>${data.filter((d) => d.shown).length}</b> · 숨김 <b>${data.filter((d) => !d.shown).length}</b></span>` +
+      Object.entries(zoneCnt).map(([z, n]) => `<span class="statchip">${esc(z)} <b>${n}</b></span>`).join("");
+    rows.innerHTML = data
+      .map((d, i) => `
+      <tr${d.shown ? "" : ' class="is-hidden-row"'}>
+        <td>${i + 1}</td>
+        <td><b>${esc(d.name)}</b></td>
+        <td>${esc(d.zone)}</td>
+        <td>${esc(d.cell)}</td>
+        <td>${esc(d.size)}</td>
+        <td>${esc(d.price)}</td>
+        <td>${esc(d.curator)}</td>
+        <td>${d.shown ? "✅" : "숨김"}</td>
+        <td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${esc(d.memo)}</td>
+      </tr>`)
+      .join("");
+  }
+  {
+    const csvBtn = document.getElementById("summary-csv-btn");
+    if (csvBtn) csvBtn.addEventListener("click", () => {
+      const data = summaryData();
+      const q = (s) => `"${String(s).replace(/"/g, '""')}"`;
+      const csv = "﻿" + [
+        ["번호", "모델명", "존", "배치 칸", "평수", "가격", "큐레이터", "노출", "비고"].join(","),
+        ...data.map((d, i) => [i + 1, d.name, d.zone, d.cell, d.size, d.price, d.curator, d.shown ? "노출" : "숨김", d.memo].map(q).join(",")),
+      ].join("\n");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      a.download = `메타하우스_모델취합_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+  }
+
+  // ---------- 입점 업체 관리 (B2B: 회사 정보·담당자·계약·부스 배정) ----------
+  const P_STATUS = ["상담중", "계약", "입점완료", "종료"];
+  function partnersList() {
+    if (!Array.isArray(overrides.partners)) overrides.partners = [];
+    return overrides.partners;
+  }
+  // 부스 배정 → 지도·3D 마을 부스 간판에 회사명 동기화
+  function syncPartnerBooth(p, prevBooth) {
+    if (!overrides.boothSlots) overrides.boothSlots = {};
+    if (prevBooth && prevBooth !== p.booth && overrides.boothSlots[prevBooth]) {
+      overrides.boothSlots[prevBooth] = { status: "open" }; // 이전 부스는 모집 재개
+    }
+    if (p.booth) {
+      const active = p.status === "계약" || p.status === "입점완료";
+      overrides.boothSlots[p.booth] = active && p.company
+        ? { status: "booked", company: p.company.slice(0, 16) }
+        : { status: "open" };
+    }
+  }
+  function renderPartners() {
+    const rows = document.getElementById("partners-rows");
+    const empty = document.getElementById("partners-empty");
+    if (!rows) return;
+    const list = partnersList();
+    empty.hidden = list.length > 0;
+    const boothKeys = Object.keys(overrides.boothSlots || {});
+    rows.innerHTML = "";
+    list.forEach((p, i) => {
+      const tr = document.createElement("tr");
+      const boothOpts = [...new Set(boothKeys.concat(p.booth || []))];
+      tr.innerHTML = `
+        <td><input type="text" data-p="company" maxlength="16" placeholder="회사명" value="${esc(p.company || "")}" /></td>
+        <td><input type="text" data-p="manager" maxlength="20" placeholder="담당자" value="${esc(p.manager || "")}" /></td>
+        <td><input type="tel" data-p="phone" maxlength="20" placeholder="010-0000-0000" value="${esc(p.phone || "")}" /></td>
+        <td><input type="email" data-p="email" maxlength="40" placeholder="이메일" value="${esc(p.email || "")}" /></td>
+        <td><select data-p="category">
+          <option value="">미지정</option>
+          ${ZONES.map((z) => `<option value="${z}" ${p.category === z ? "selected" : ""}>${z}</option>`).join("")}
+          <option value="기타" ${p.category === "기타" ? "selected" : ""}>기타</option>
+        </select></td>
+        <td><select data-p="status" class="p-status--${esc(p.status || "상담중")}">
+          ${P_STATUS.map((s) => `<option value="${s}" ${(p.status || "상담중") === s ? "selected" : ""}>${s}</option>`).join("")}
+        </select></td>
+        <td><input type="date" data-p="start" value="${esc(p.start || "")}" /></td>
+        <td><input type="date" data-p="end" value="${esc(p.end || "")}" /></td>
+        <td><select data-p="booth">
+          <option value="">미배정</option>
+          ${boothOpts.map((k) => `<option value="${esc(k)}" ${p.booth === k ? "selected" : ""}>${esc(k.replace("|", " "))}번</option>`).join("")}
+        </select></td>
+        <td><input type="text" data-p="memo" maxlength="60" placeholder="메모" value="${esc(p.memo || "")}" /></td>
+        <td><button type="button" class="partner-del">삭제</button></td>`;
+      tr.querySelectorAll("[data-p]").forEach((elm) => {
+        elm.addEventListener("change", () => {
+          const f = elm.dataset.p;
+          const prevBooth = p.booth;
+          p[f] = elm.value.trim();
+          if (f === "booth" || f === "status" || f === "company") syncPartnerBooth(p, f === "booth" ? prevBooth : null);
+          markDirty();
+          if (f === "booth" || f === "status" || f === "company") { renderMap(); renderPartners(); }
+        });
+        if (elm.tagName === "INPUT") elm.addEventListener("input", () => { p[elm.dataset.p] = elm.value.trim(); markDirty(); });
+      });
+      tr.querySelector(".partner-del").addEventListener("click", () => {
+        if (!confirm(`'${p.company || "이 업체"}'를 삭제할까요?`)) return;
+        if (p.booth && overrides.boothSlots && overrides.boothSlots[p.booth]) {
+          overrides.boothSlots[p.booth] = { status: "open" }; // 부스는 모집 재개
+        }
+        list.splice(i, 1);
+        if (!list.length) delete overrides.partners;
+        markDirty();
+        renderPartners();
+        renderMap();
+      });
+      rows.appendChild(tr);
+    });
+  }
+  {
+    const addBtn = document.getElementById("partner-add-btn");
+    if (addBtn) addBtn.addEventListener("click", () => {
+      partnersList().push({ id: Date.now().toString(36), status: "상담중" });
+      markDirty();
+      renderPartners();
+    });
+  }
+
   // ---------- 사이드바 섹션 전환 ----------
   document.querySelectorAll(".side__nav").forEach((b) =>
     b.addEventListener("click", () => {
       document.querySelectorAll(".side__nav").forEach((x) => x.classList.toggle("is-active", x === b));
       document.querySelectorAll(".apanel").forEach((p) => p.classList.toggle("is-active", p.id === "panel-" + b.dataset.panel));
+      // 최신 편집 내용 반영해서 다시 그리기
+      if (b.dataset.panel === "summary") renderSummary();
+      if (b.dataset.panel === "partners") renderPartners();
     })
   );
 })();
