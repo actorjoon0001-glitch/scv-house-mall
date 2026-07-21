@@ -190,6 +190,30 @@
   const resetPlaceBtn = document.getElementById("resetplace-btn");
   let selKey = null;
 
+  // ---------- 부스 관리 모드 (박람회식 부스 분양: 빈 칸 → 모집중/계약) ----------
+  let boothMode = false;
+  let selBooth = null; // { zone, idx }
+  const bkey = (zone, idx) => `${zone}|${idx}`;
+  function boothOf(zone, idx) {
+    return overrides.boothSlots ? overrides.boothSlots[bkey(zone, idx)] : null;
+  }
+  function setBooth(zone, idx, val) {
+    if (!overrides.boothSlots) overrides.boothSlots = {};
+    if (val) overrides.boothSlots[bkey(zone, idx)] = val;
+    else delete overrides.boothSlots[bkey(zone, idx)];
+    if (!Object.keys(overrides.boothSlots).length) delete overrides.boothSlots;
+    markDirty();
+  }
+  function setSelBooth(sb) {
+    selBooth = sb;
+    const has = !!sb;
+    ["booth-open-btn", "booth-company-btn", "booth-clear-btn"].forEach((id) => {
+      const b = document.getElementById(id);
+      if (b) b.disabled = !has;
+    });
+    renderMap();
+  }
+
   function markDirty() {
     savedMsg.textContent = "변경됨 (저장 필요)";
     savedMsg.style.color = "#f0c674";
@@ -270,17 +294,34 @@
             gridEl.appendChild(cell);
             continue;
           }
+          // 관리자 지정 부스 칸 (모집중/계약 업체) — 모든 존에서 가능
+          const booth = boothOf(mz.key, idx);
+          if (booth) {
+            const chip = document.createElement("div");
+            const isSelB = selBooth && selBooth.zone === mz.key && selBooth.idx === idx;
+            chip.className = "map-chip is-booth" + (booth.company ? " is-booked" : "") + (isSelB ? " is-sel" : "");
+            chip.innerHTML = booth.company
+              ? `<span class="rot">🏢</span><span class="nm">${esc(booth.company)}</span>`
+              : `<span class="rot">🟡</span><span class="nm">입점 모집</span>`;
+            chip.addEventListener("click", (e) => {
+              e.stopPropagation();
+              if (boothMode) setSelBooth(isSelB ? null : { zone: mz.key, idx });
+            });
+            cell.appendChild(chip);
+            gridEl.appendChild(cell);
+            continue;
+          }
           const k = inZone.find((k2) => plan[k2].index === idx);
           if (k) {
             const m = byKey[k];
             const pinned = overrides.placement && overrides.placement[k] && overrides.placement[k].index != null;
             const chip = document.createElement("div");
             chip.className = "map-chip" + (k === selKey ? " is-sel" : "") + (pinned ? " is-pin" : "");
-            chip.draggable = true;
+            chip.draggable = !boothMode;
             chip.innerHTML = `<span class="rot">${ROT_ARROW[plan[k].rot || 0] || "↓"}</span><span class="nm">${esc((m && m.name) || k)}</span>`;
             chip.addEventListener("click", (e) => {
               e.stopPropagation();
-              setSel(k === selKey ? null : k);
+              if (!boothMode) setSel(k === selKey ? null : k);
             });
             chip.addEventListener("dragstart", (e) => {
               e.dataTransfer.setData("text/plain", k);
@@ -288,9 +329,12 @@
             });
             cell.appendChild(chip);
           }
-          if (selKey && selKey !== k) cell.classList.add("is-target");
+          if (!boothMode && selKey && selKey !== k) cell.classList.add("is-target");
+          if (boothMode && !k && selBooth && selBooth.zone === mz.key && selBooth.idx === idx) cell.classList.add("is-boothsel");
           cell.addEventListener("click", () => {
-            if (selKey) moveTo(selKey, mz.key, idx);
+            if (boothMode) {
+              if (!k) setSelBooth({ zone: mz.key, idx }); // 빈 칸만 부스 지정 가능
+            } else if (selKey) moveTo(selKey, mz.key, idx);
           });
           cell.addEventListener("dragover", (e) => e.preventDefault());
           cell.addEventListener("drop", (e) => {
@@ -365,6 +409,40 @@
       );
       panel.appendChild(card);
     });
+  }
+
+  // 부스 관리 모드 토글 + 상태 버튼
+  {
+    const modeBtn = document.getElementById("booth-mode-btn");
+    const boothBar = document.getElementById("booth-bar");
+    if (modeBtn && boothBar) {
+      modeBtn.addEventListener("click", () => {
+        boothMode = !boothMode;
+        boothBar.hidden = !boothMode;
+        modeBtn.textContent = boothMode ? "✅ 부스 관리 종료" : "🏢 부스 관리 모드";
+        setSel(null);
+        setSelBooth(null);
+        mapSelMsg.textContent = boothMode ? "부스 관리 중 — 아래 지도에서 빈 칸을 클릭하세요" : "선택된 집 없음";
+      });
+      document.getElementById("booth-open-btn").addEventListener("click", () => {
+        if (!selBooth) return;
+        setBooth(selBooth.zone, selBooth.idx, { status: "open" });
+        setSelBooth(null);
+      });
+      document.getElementById("booth-company-btn").addEventListener("click", () => {
+        if (!selBooth) return;
+        const cur = boothOf(selBooth.zone, selBooth.idx);
+        const name = prompt("계약 업체명을 입력하세요 (16자 이내)", (cur && cur.company) || "");
+        if (name === null) return;
+        setBooth(selBooth.zone, selBooth.idx, name.trim() ? { status: "booked", company: name.trim().slice(0, 16) } : { status: "open" });
+        setSelBooth(null);
+      });
+      document.getElementById("booth-clear-btn").addEventListener("click", () => {
+        if (!selBooth) return;
+        setBooth(selBooth.zone, selBooth.idx, null);
+        setSelBooth(null);
+      });
+    }
   }
 
   if (rotBtn) {

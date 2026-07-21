@@ -805,8 +805,9 @@ function init() {
   buildInstanced(new THREE.BoxGeometry(0.55, 4.4, 0.55), gateMat, gatePillars);
   buildInstanced(new THREE.BoxGeometry(10.2, 0.55, 0.55), gateMat, gateBeams);
   buildInstanced(new THREE.BoxGeometry(0.45, 1.7, 0.45), gateMat, cornerPosts);
-  buildBooths();
+  buildBooths(zoneOvData);
   }
+  let zoneOvData = {}; // buildZoneDecor 호출 전에 설정됨
 
   // ---------- 파트너 존 부스 (입점 업체 전시 부스, 앞줄 0~2번 칸 고정) ----------
   const PARTNER_BOOTHS = {
@@ -814,14 +815,16 @@ function init() {
     "가구": ["🛋️ 리빙 가구관", "🌤️ 아웃도어 가구관", "🤝 입점 문의"],
     "건축 자재": ["🪟 단열·창호관", "🧱 마감재관", "🤝 입점 문의"],
   };
-  function buildBooths() {
-  Object.entries(PARTNER_BOOTHS).forEach(([zk, labels]) => {
-    const z = ZONES[zk];
-    if (!z) return;
-    const wallMat = new THREE.MeshStandardMaterial({ color: z.color, roughness: 0.7 });
+  function buildBooths(ovData) {
     const floorMat = new THREE.MeshStandardMaterial({ color: 0xeae4d6, roughness: 0.9 });
     const counterMat = new THREE.MeshStandardMaterial({ color: 0xf6f3ea, roughness: 0.6 });
-    labels.forEach((label, i) => {
+    const wallMats = {};
+    const wallMatFor = (z) => {
+      if (!wallMats[z.color]) wallMats[z.color] = new THREE.MeshStandardMaterial({ color: z.color, roughness: 0.7 });
+      return wallMats[z.color];
+    };
+    function makeBooth(z, i, label) {
+      const wallMat = wallMatFor(z);
       const slot = zoneSlot(z, i);
       const b = new THREE.Group();
       const floor = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.24, 8.6), floorMat); // 부지 패드와 같은 크기
@@ -847,8 +850,24 @@ function init() {
       b.add(floor, backWall, sideL, sideR, counter, canopy, sign);
       b.position.set(slot.x, 0, slot.z);
       scene.add(b);
+    }
+    // 파트너 존 기본 부스 (앞줄 고정)
+    Object.entries(PARTNER_BOOTHS).forEach(([zk, labels]) => {
+      const z = ZONES[zk];
+      if (z) labels.forEach((label, i) => makeBooth(z, i, label));
     });
-  });
+    // 관리자가 지정한 부스 칸 (모든 존, 입점 모집/계약 업체) — 실제 박람회 부스 분양처럼
+    const CFG2 = window.SeumTownConfig;
+    const fixed = (CFG2 && CFG2.RESERVED_SLOTS) || {};
+    Object.entries((ovData && ovData.boothSlots) || {}).forEach(([key, o]) => {
+      const sep = key.lastIndexOf("|");
+      const zk = key.slice(0, sep);
+      const i = Number(key.slice(sep + 1));
+      const z = ZONES[zk];
+      if (!z || isNaN(i)) return;
+      if ((fixed[zk] || []).includes(i)) return; // 파트너 기본 부스 자리와 중복 방지
+      makeBooth(z, i, o && o.company ? `🏢 ${String(o.company).slice(0, 16)}` : "🤝 입점 모집");
+    });
   }
 
   // 인포메이션 데스크 (남쪽 입구 광장)
@@ -1034,6 +1053,7 @@ function init() {
       // 관리자 표시 설정 병합 (숨김/이름/가격/존/큐레이터 등)
       if (window.SeumTownConfig) models = window.SeumTownConfig.apply(models, cfg.data || {});
       applyZoneOverrides(cfg.data || {});
+      zoneOvData = cfg.data || {};
       buildZoneDecor();
       placeModels(models.length ? models : TOWN_FALLBACK, cfg.data || {});
     })
