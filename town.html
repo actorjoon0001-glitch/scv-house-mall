@@ -81,9 +81,17 @@
       <div class="town__card-btns">
         <button type="button" class="btn btn--glass btn--sm" id="town-card-chat">💬 물어보기</button>
         <button type="button" class="btn btn--glass btn--sm" id="town-card-photos" hidden>📸 내부 보기</button>
-        <a class="btn btn--primary btn--sm" id="town-card-link" target="_blank" rel="noopener" hidden>상세보기</a>
+        <a class="btn btn--glass btn--sm" id="town-card-link" target="_blank" rel="noopener" hidden>상세보기</a>
+        <button type="button" class="btn btn--glass btn--sm" id="town-card-build">🔨 이 집으로 시작</button>
+      </div>
+      <div class="town__card-btns town__card-btns--cta">
+        <button type="button" class="btn btn--reserve btn--sm" id="town-card-reserve">📅 방문예약</button>
+        <a class="btn btn--call btn--sm" id="town-card-call" hidden>📞 전화 상담</a>
       </div>
     </div>
+
+    <!-- 빌드룸 포털 진입 버튼 (포털 근처에서 표시) -->
+    <a class="btn btn--primary town__buildcta" id="town-build-cta" href="build.html" hidden>🔨 빌드룸 입장 — 내 집 지어보기</a>
 
     <!-- 공유 (링크 + QR) -->
     <div class="share" id="share" hidden>

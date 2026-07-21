@@ -1306,3 +1306,118 @@ body.town-fs-lock .chat__fab, body.town-fs-lock .chat__panel { display: none; }
 }
 .btn--kakao:hover { background: #f5da00; border-color: #f5da00; }
 .start__field[hidden], .start__chars[hidden], .start__check[hidden] { display: none; }
+
+/* ============ 빌드룸 ============ */
+body.build-page { margin: 0; overflow: hidden; background: #12150f; }
+.build__stage { position: fixed; inset: 0; height: 100dvh; }
+.build__stage canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+.build__loading {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: #dcecf5; color: #35507a; font-weight: 700; z-index: 10;
+}
+.build__loading[hidden] { display: none; }
+.build__top {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 5;
+  display: flex; align-items: center; gap: 14px; padding: 12px 16px;
+  background: linear-gradient(180deg, rgba(16,19,15,0.55), transparent);
+  color: #fff;
+}
+.build__top strong { font-size: 16px; }
+.build__hint { flex: 1; font-size: 12px; color: rgba(255,255,255,0.85); }
+.build__palette {
+  position: absolute; left: 14px; top: 64px; z-index: 5; width: 168px;
+  background: rgba(16,19,15,0.72); border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 14px; padding: 12px; color: #fff;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.build__palette-title { margin: 0 0 8px; font-size: 12px; font-weight: 700; color: #9fd9bd; letter-spacing: 0.06em; }
+.build__unitbtn {
+  display: flex; align-items: center; gap: 9px; width: 100%; margin-bottom: 6px;
+  padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06); color: #fff; font-size: 12px; line-height: 1.3;
+  cursor: pointer; text-align: left;
+}
+.build__unitbtn:hover { background: rgba(255,255,255,0.16); }
+.build__unitbtn-ic { font-size: 20px; }
+.build__unitbtn small { color: rgba(255,255,255,0.65); }
+.build__selbtns { display: flex; gap: 6px; }
+.build__quote {
+  position: absolute; right: 14px; top: 64px; z-index: 5; width: 230px;
+  background: rgba(16,19,15,0.72); border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 14px; padding: 14px; color: #fff;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.build__quote-title { margin: 0 0 10px; font-size: 13px; font-weight: 800; color: #9fd9bd; }
+.build__qrow { display: flex; justify-content: space-between; font-size: 12.5px; padding: 3px 0; color: #e6efe6; }
+.build__qempty { font-size: 12px; color: rgba(255,255,255,0.6); margin: 4px 0 8px; }
+.build__quote-total { border-top: 1px solid rgba(255,255,255,0.18); margin-top: 8px; padding-top: 10px; }
+.build__quote-total div { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+.build__quote-total span { font-size: 12px; color: rgba(255,255,255,0.7); }
+.build__quote-total strong { font-size: 16px; color: #ffd75e; }
+.build__quote-note { font-size: 10.5px; color: rgba(255,255,255,0.5); margin: 6px 0 10px; }
+.build__options {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+  z-index: 5; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; justify-content: center;
+  max-width: min(94vw, 860px); padding: 10px 14px;
+  background: rgba(16,19,15,0.72); border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 999px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.build__optlabel { font-size: 11px; font-weight: 700; color: #9fd9bd; margin-left: 6px; }
+.build__optbtn {
+  padding: 7px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.22);
+  background: transparent; color: #eee; font-size: 12px; cursor: pointer; white-space: nowrap;
+}
+.build__optbtn.is-on { background: #2f5d46; border-color: #2f5d46; color: #fff; font-weight: 700; }
+.build__modal {
+  position: fixed; inset: 0; z-index: 50; background: rgba(8,10,8,0.8);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.build__modal[hidden] { display: none; }
+.build__modal-panel {
+  position: relative; width: min(92vw, 380px); background: #171b13;
+  border: 1px solid rgba(255,255,255,0.14); border-radius: 20px; padding: 26px 22px; color: #fff;
+}
+.build__modal-panel h3 { margin: 0 0 8px; }
+.build__modal-sub { font-size: 12.5px; color: #9fd9bd; margin: 0 0 14px; line-height: 1.5; }
+.build__modal-panel label { display: block; font-size: 12px; color: #9ab; margin-bottom: 10px; }
+.build__modal-panel input {
+  width: 100%; margin-top: 4px; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid #3a4136; background: #1b1f17; color: #eee; font-size: 14px;
+}
+.build__modal-err { color: #ff9d9d; font-size: 12.5px; }
+.build__modal-close {
+  position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.2); background: transparent; color: #fff; cursor: pointer;
+}
+@media (max-width: 720px) {
+  .build__palette { width: 138px; top: 56px; }
+  .build__quote { width: 186px; top: 56px; }
+  .build__hint { display: none; }
+}
+
+/* ============ 집 카드: 행동 버튼(예약·전화) 강조 + 빌드룸 포털 CTA ============ */
+.town__card-btns--cta { margin-top: 7px; }
+.btn--reserve {
+  background: #2f5d46;
+  color: #fff;
+  border-color: #2f5d46;
+  font-weight: 800;
+}
+.btn--reserve:hover { background: #3b7357; border-color: #3b7357; }
+.btn--call {
+  background: #1fa25a;
+  color: #fff;
+  border-color: #1fa25a;
+  font-weight: 800;
+  text-decoration: none;
+}
+.btn--call:hover { background: #23b565; border-color: #23b565; }
+.town__buildcta {
+  position: absolute;
+  left: 50%;
+  bottom: 120px;
+  transform: translateX(-50%);
+  z-index: 6;
+  box-shadow: 0 10px 34px rgba(31, 162, 90, 0.45);
+}
+.town__buildcta[hidden] { display: none; }

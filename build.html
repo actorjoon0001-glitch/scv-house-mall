@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="메타하우스 빌드룸 — 모듈러 유닛을 조립해 내 집을 직접 구성하고 실시간 견적을 받아보세요." />
+  <title>메타하우스 빌드룸 — 내 집 지어보기</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="build-page">
+  <div class="build__stage" id="build-stage">
+    <canvas id="build-canvas"></canvas>
+    <div class="build__loading" id="build-loading">빌드룸 준비 중…</div>
+
+    <!-- 상단 바 -->
+    <div class="build__top">
+      <strong>🔨 메타하우스 빌드룸</strong>
+      <span class="build__hint">유닛을 눌러 올리고 · 드래그로 이동 · 빈 곳 드래그로 시점 회전</span>
+      <a class="btn btn--glass btn--sm" href="town.html">← 마을로</a>
+    </div>
+
+    <!-- 좌측: 유닛 팔레트 -->
+    <div class="build__palette" id="build-palette">
+      <p class="build__palette-title">모듈 유닛</p>
+      <div id="build-units"></div>
+      <p class="build__palette-title" style="margin-top:12px">선택한 유닛</p>
+      <div class="build__selbtns">
+        <button type="button" class="btn btn--glass btn--sm" id="build-rot" disabled>↻ 회전</button>
+        <button type="button" class="btn btn--glass btn--sm" id="build-del" disabled>🗑 삭제</button>
+      </div>
+    </div>
+
+    <!-- 우측: 견적 패널 -->
+    <div class="build__quote" id="build-quote">
+      <p class="build__quote-title">실시간 견적</p>
+      <div class="build__quote-body" id="build-quote-body"></div>
+      <div class="build__quote-total">
+        <div><span>총 면적</span><strong id="build-area">0평</strong></div>
+        <div><span>예상 견적</span><strong id="build-price">-</strong></div>
+      </div>
+      <p class="build__quote-note">* 예상 금액이며 실제 견적은 상담 후 확정됩니다</p>
+      <button type="button" class="btn btn--primary btn--block" id="build-consult">📞 이 집으로 상담받기</button>
+    </div>
+
+    <!-- 하단: 옵션 바 -->
+    <div class="build__options" id="build-options"></div>
+
+    <!-- 상담 모달 -->
+    <div class="build__modal" id="build-modal" hidden>
+      <div class="build__modal-panel">
+        <button type="button" class="build__modal-close" id="build-modal-close">✕</button>
+        <h3 id="build-modal-title">이 집으로 상담받기</h3>
+        <p class="build__modal-sub" id="build-modal-sub"></p>
+        <label>이름 <input id="build-name" maxlength="20" placeholder="홍길동" /></label>
+        <label>연락처 <input id="build-phone" type="tel" maxlength="20" placeholder="010-0000-0000" /></label>
+        <p class="build__modal-err" id="build-modal-err" hidden></p>
+        <button type="button" class="btn btn--primary btn--block" id="build-submit">상담 신청하기</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="importmap">
+    { "imports": { "three": "./assets/three.module.min.js" } }
+  </script>
+  <script src="assets/town-config.js"></script>
+  <script type="module" src="assets/build.js"></script>
+</body>
+</html>
