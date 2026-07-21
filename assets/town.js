@@ -302,6 +302,36 @@ function init() {
     src.connect(bp).connect(g).connect(masterGain);
     src.start(t);
   }
+  function playJump() {
+    if (!audioCtx || !soundOn || audioCtx.state !== "running") return;
+    // 게임식 점프음: 위로 슉 올라가는 스윕
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    o.type = "square";
+    o.frequency.setValueAtTime(260, t);
+    o.frequency.exponentialRampToValueAtTime(660, t + 0.13);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.09, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+    o.connect(g).connect(masterGain);
+    o.start(t);
+    o.stop(t + 0.2);
+  }
+  function playLand() {
+    if (!audioCtx || !soundOn || audioCtx.state !== "running") return;
+    // 착지: 짧고 묵직한 쿵
+    const t = audioCtx.currentTime;
+    const o = audioCtx.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(140, t);
+    o.frequency.exponentialRampToValueAtTime(50, t + 0.09);
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.3, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    o.connect(g).connect(masterGain);
+    o.start(t);
+    o.stop(t + 0.14);
+  }
   let stepT = 0;
   function stepTick(dt, moving, sprinting, grounded) {
     if (!moving || !grounded) { stepT = 0.3; return; }
@@ -1512,7 +1542,7 @@ function init() {
   let vy = 0;
   let airborne = false;
   function doJump() {
-    if (!airborne) { vy = 9.4; airborne = true; }
+    if (!airborne) { vy = 9.4; airborne = true; playJump(); }
   }
   const jumpBtn = document.getElementById("town-jump");
   if (jumpBtn) jumpBtn.addEventListener("pointerdown", (e) => { doJump(); e.preventDefault(); });
@@ -1883,7 +1913,7 @@ function init() {
     if (airborne) {
       vy -= 24 * dt;
       player.position.y += vy * dt;
-      if (player.position.y <= 0) { player.position.y = 0; vy = 0; airborne = false; }
+      if (player.position.y <= 0) { player.position.y = 0; vy = 0; airborne = false; playLand(); }
     }
 
     if (playerRig && playerRig.mixer) playerRig.mixer.update(dt);
