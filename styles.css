@@ -658,7 +658,8 @@ body.town-fs-lock { overflow: hidden; }
   align-items: center;
   gap: 14px;
   width: max-content;
-  max-width: min(420px, 90%);
+  max-width: min(520px, 92%);
+  flex-wrap: wrap;
   padding: 14px;
   background: rgba(16,19,15,0.78);
   border: 1px solid rgba(255,255,255,0.2);
@@ -682,11 +683,12 @@ body.town-fs-lock { overflow: hidden; }
   border-radius: 10px;
   flex-shrink: 0;
 }
-.town__card-body { min-width: 0; }
-.town__card-tag { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9fdcbb; }
+/* 본문 칸이 버튼에 밀려 글자가 세로로 꺾이지 않게 최소 폭 확보 (모자라면 버튼이 아랫줄로) */
+.town__card-body { flex: 1 1 auto; min-width: 116px; }
+.town__card-tag { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: #9fdcbb; white-space: nowrap; }
 .town__card-name { margin: 2px 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .town__card-spec { margin: 0; font-size: 12px; color: rgba(255,255,255,0.7); }
-.town__card-price { margin: 2px 0 0; font-size: 14px; font-weight: 700; }
+.town__card-price { margin: 2px 0 0; font-size: 14px; font-weight: 700; white-space: nowrap; }
 .town__card .btn { flex-shrink: 0; }
 .town__card-btns { display: grid; gap: 6px; flex-shrink: 0; }
 @media (pointer: coarse) {
@@ -1562,3 +1564,17 @@ body.build-page { margin: 0; overflow: hidden; background: #12150f; }
   .learn__hint { order: 3; width: 100%; }
   .learn__card { padding: 26px 18px; }
 }
+
+/* ============ 기존 회원 로그인 (시작 화면 보조 경로) ============ */
+.start__login {
+  width: min(340px, 100%);
+  margin: 8px auto 0;
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,0.22);
+  border-radius: 14px;
+  background: rgba(0,0,0,0.25);
+  text-align: left;
+}
+.start__login[hidden] { display: none; }
+#login-reset[hidden] { display: none; }
+#login-reset { margin-top: 8px; border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 10px; }

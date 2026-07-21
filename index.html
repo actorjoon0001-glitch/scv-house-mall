@@ -61,6 +61,39 @@
         <button type="button" class="btn btn--primary" id="start-town">🎮 닉네임으로 바로 입장</button>
         <button type="button" class="btn btn--glass" id="start-products">📋 모델·가격 바로 보기</button>
       </div>
+      <button type="button" class="start__skip" id="start-login-toggle">🔑 기존 회원 로그인 (아이디·비밀번호)</button>
+      <div class="start__login" id="start-login" hidden>
+        <label class="start__field">
+          <span>아이디</span>
+          <input id="login-id" maxlength="20" placeholder="가입한 아이디" autocomplete="username" />
+        </label>
+        <label class="start__field">
+          <span>비밀번호</span>
+          <input id="login-pw" type="password" maxlength="30" placeholder="비밀번호" autocomplete="current-password" />
+        </label>
+        <div class="start__btns" style="margin-top:8px">
+          <button type="button" class="btn btn--primary" id="login-btn" style="grid-column:1/-1">🔓 로그인하고 입장</button>
+        </div>
+        <button type="button" class="start__skip" id="login-reset-toggle">비밀번호를 잊으셨나요?</button>
+        <div id="login-reset" hidden>
+          <p class="start__why">가입할 때 적은 이름·핸드폰 번호가 맞으면 새 비밀번호로 바꿔드려요. (위 아이디 칸도 채워주세요)</p>
+          <label class="start__field">
+            <span>이름</span>
+            <input id="reset-name" maxlength="20" placeholder="가입한 이름" autocomplete="name" />
+          </label>
+          <label class="start__field">
+            <span>핸드폰 번호</span>
+            <input id="reset-phone" type="tel" maxlength="20" placeholder="010-0000-0000" autocomplete="tel" />
+          </label>
+          <label class="start__field">
+            <span>새 비밀번호</span>
+            <input id="reset-pw" type="password" maxlength="30" placeholder="4자 이상" autocomplete="new-password" />
+          </label>
+          <div class="start__btns" style="margin-top:8px">
+            <button type="button" class="btn btn--glass" id="reset-btn" style="grid-column:1/-1">비밀번호 재설정</button>
+          </div>
+        </div>
+      </div>
       <button type="button" class="start__skip" id="start-logout" hidden>로그아웃 · 다른 계정으로</button>
       <a class="start__skip" id="start-admin" href="admin.html">🔒 관리자 페이지</a>
     </div>
