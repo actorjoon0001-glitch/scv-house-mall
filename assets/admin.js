@@ -524,7 +524,7 @@
     ");\n" +
     "alter table town_users enable row level security;\n\n" +
     "create or replace function town_register(p_username text, p_pass text, p_name text, p_phone text, p_nick text)\n" +
-    "returns json language plpgsql security definer set search_path = public as $$\n" +
+    "returns json language plpgsql security definer set search_path = public, extensions as $$\n" +
     "declare u town_users;\n" +
     "begin\n" +
     "  if length(trim(p_username)) < 4 then raise exception 'bad_username'; end if;\n" +
@@ -537,7 +537,7 @@
     "  raise exception 'username_taken';\n" +
     "end $$;\n\n" +
     "create or replace function town_login(p_username text, p_pass text)\n" +
-    "returns json language plpgsql security definer set search_path = public as $$\n" +
+    "returns json language plpgsql security definer set search_path = public, extensions as $$\n" +
     "declare u town_users;\n" +
     "begin\n" +
     "  select * into u from town_users where username = lower(trim(p_username));\n" +
