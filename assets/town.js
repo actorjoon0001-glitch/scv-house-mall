@@ -1164,11 +1164,12 @@ function init() {
       new THREE.CylinderGeometry(0.07, 0.09, 2.5, 8),
       new THREE.MeshStandardMaterial({ color: 0x6b5b45, roughness: 0.85 })
     );
-    post.position.y = 1.25;
+    post.position.set(0, 1.25, -0.09);
     post.castShadow = true;
     // 체험존은 서쪽(-x) — 남쪽에서 보는 보드 기준 왼쪽 화살표
+    // 보드는 기둥 앞(+z)에 붙여 기둥이 글씨를 가리지 않게 (실제 표지판처럼)
     const b = makeBoardMesh("← 🎪 체험존 이쪽", 3.1, 0.75, { accent: EXP.color });
-    b.position.y = 2.15;
+    b.position.set(0, 2.15, 0.06);
     g.add(post, b);
     g.position.set(x, 0, z);
     g.rotation.y = ry;
