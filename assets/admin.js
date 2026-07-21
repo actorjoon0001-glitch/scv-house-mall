@@ -4,13 +4,13 @@
   const ZONES = ["전원주택", "세컨하우스", "체류형 쉼터", "특별모델", "LG가전 이벤트", "가구", "건축 자재"];
   // 지도 표시용 존 메타 (마을과 동일한 블록 배치, 북쪽이 위 / 아래 3개는 바깥 파트너 블록)
   const MAP_ZONES = [
-    { key: "전원주택", emoji: "🏡", color: "#69b25e" },   // 북서
-    { key: "체류형 쉼터", emoji: "🌿", color: "#b2a15e" }, // 북동
-    { key: "세컨하우스", emoji: "🏠", color: "#5e9db2" },  // 남서
-    { key: "특별모델", emoji: "⛳", color: "#9a7fc0" },    // 남동
-    { key: "건축 자재", emoji: "🧱", color: "#60788f" },   // 북서 바깥
-    { key: "LG가전 이벤트", emoji: "📺", color: "#a50034" }, // 북동 바깥
-    { key: "가구", emoji: "🛋️", color: "#d08a3e" },       // 남동 바깥
+    { key: "전원주택", emoji: "🏡", color: "#7d9471" },   // 북서
+    { key: "체류형 쉼터", emoji: "🌿", color: "#b3a284" }, // 북동
+    { key: "세컨하우스", emoji: "🏠", color: "#87a0ad" },  // 남서
+    { key: "특별모델", emoji: "⛳", color: "#9a8fa6" },    // 남동
+    { key: "건축 자재", emoji: "🧱", color: "#8b959c" },   // 북서 바깥
+    { key: "LG가전 이벤트", emoji: "📺", color: "#9c5a63" }, // 북동 바깥
+    { key: "가구", emoji: "🛋️", color: "#b08a66" },       // 남동 바깥
   ];
   const ROT_ARROW = { 0: "↓", 90: "→", 180: "↑", 270: "←" };
   // 파트너 존 부스 기본 이름 (town.js PARTNER_BOOTHS와 동일)
@@ -100,6 +100,15 @@
     }
   }
 
+  // 존 표시 이름 (존 관리에서 바꾼 이름을 관리자 UI 전체에 반영; 키는 내부 식별자로 유지)
+  function zoneLabelOf(key) {
+    const o = overrides.zones && overrides.zones[key];
+    return (o && o.label) || `${key} 존`;
+  }
+  function zoneShort(key) {
+    return zoneLabelOf(key).replace(/\s*존$/, "");
+  }
+
   // ---- 존 탭 필터: 목록을 존별로 나눠서 보기 ----
   let zoneFilter = "all";
   // 모델의 실제 소속 존 (관리자 존 오버라이드 반영, 미지정 카테고리는 특별모델)
@@ -117,7 +126,7 @@
       `<button type="button" class="tab${zoneFilter === key ? " is-active" : ""}" data-zf="${esc(key)}">${esc(label)}</button>`;
     tabsEl.innerHTML =
       mk("all", `전체 ${catalog.length}`) +
-      ZONES.map((z) => mk(z, `${z} ${counts[z] || 0}`)).join("");
+      ZONES.map((z) => mk(z, `${zoneShort(z)} ${counts[z] || 0}`)).join("");
     tabsEl.querySelectorAll(".tab").forEach((b) =>
       b.addEventListener("click", () => {
         zoneFilter = b.dataset.zf;
@@ -142,7 +151,7 @@
         <td><input type="text" class="num" data-f="size" placeholder="${esc(m.size || "")}" value="${esc(o.size || "")}" /></td>
         <td><select data-f="zone">
           <option value="">원본 (${esc(m.category || "미지정")})</option>
-          ${ZONES.map((z) => `<option value="${z}" ${o.zone === z ? "selected" : ""}>${z}</option>`).join("")}
+          ${ZONES.map((z) => `<option value="${z}" ${o.zone === z ? "selected" : ""}>${zoneShort(z)}</option>`).join("")}
         </select></td>
         <td><select data-f="curator">
           <option value="">자동 (여/남 교차)</option>
@@ -275,7 +284,7 @@
       const AREA = { "건축 자재": "za", "전원주택": "nw", "체류형 쉼터": "ne", "LG가전 이벤트": "zb", "세컨하우스": "sw", "특별모델": "se", "가구": "zc" };
       zoneEl.style.gridArea = AREA[mz.key] || "auto";
       zoneEl.style.borderColor = zc;
-      zoneEl.innerHTML = `<h3 style="color:${zc}">${mz.emoji} ${esc(mz.key)} 존 · ${inZone.length}개</h3>`;
+      zoneEl.innerHTML = `<h3 style="color:${zc}">${mz.emoji} ${esc(zoneLabelOf(mz.key))} · ${inZone.length}개</h3>`;
       const gridEl = document.createElement("div");
       gridEl.className = "map-grid";
       // 줄은 북쪽(위)부터: index가 큰 줄이 위, 0~2번 줄(통로 쪽)이 아래
@@ -376,7 +385,7 @@
             .join("")
         : "";
       card.innerHTML = `
-        <h3 style="color:${color}">${mz.emoji} ${esc(mz.key)}</h3>
+        <h3 style="color:${color}">${mz.emoji} ${esc(zoneLabelOf(mz.key))}${o.label ? ` <small style="color:#889">(원래: ${esc(mz.key)})</small>` : ""}</h3>
         <div class="row"><label>표시 이름</label><input type="text" data-zf="label" maxlength="20" placeholder="${esc(mz.key)} 존" value="${esc(o.label || "")}" /></div>
         <div class="row"><label>존 색상</label><input type="color" data-zf="color" value="${color}" />
           <button type="button" class="btn btn--ghost" data-zf="reset" style="padding:6px 12px;font-size:12px">기본색</button></div>
@@ -390,6 +399,12 @@
         if (!Object.keys(overrides.zones[mz.key]).length) delete overrides.zones[mz.key];
         markDirty();
       };
+      card.querySelector('[data-zf="label"]').addEventListener("change", (e) => {
+        setZ({ label: e.target.value.trim() });
+        renderZones();
+        renderTabs();
+        renderMap();
+      });
       card.querySelector('[data-zf="label"]').addEventListener("input", (e) => setZ({ label: e.target.value.trim() }));
       card.querySelector('[data-zf="color"]').addEventListener("change", (e) => {
         setZ({ color: e.target.value });
@@ -696,8 +711,9 @@
       const price = won ? Math.round(won / 1e4).toLocaleString() + "만원" : "가격 상담";
       const curator = o.curator === "f" ? "수아" : o.curator === "m" ? "준" : o.curator === "bot" ? "메타봇" : "자동";
       return {
+        img: o.image || raw.main_image || "",
         name: (m && m.name) || o.name || raw.name,
-        zone: p ? p.zone : effZone(raw),
+        zone: zoneShort(p ? p.zone : effZone(raw)),
         cell: p ? `${p.index + 1}번 칸${p.rot ? ` (${p.rot}°)` : ""}` : (m && !townSet.has(raw.slug) ? "마을 미표시 (중복 외형)" : "-"),
         size: (m && m.size) || raw.size || "",
         price,
@@ -722,6 +738,7 @@
       .map((d, i) => `
       <tr${d.shown ? "" : ' class="is-hidden-row"'}>
         <td>${i + 1}</td>
+        <td>${d.img ? `<img class="thumb" src="${esc(d.img)}" alt="" loading="lazy" />` : ""}</td>
         <td><b>${esc(d.name)}</b></td>
         <td>${esc(d.zone)}</td>
         <td>${esc(d.cell)}</td>
