@@ -21,7 +21,15 @@
 <body class="town-page">
   <div class="town__stage" id="town-stage">
     <canvas id="town-canvas"></canvas>
-    <div class="town__loading" id="town-loading">3D 타운 불러오는 중…</div>
+    <div class="town__loading" id="town-loading">
+      <p class="town__loading-brand"><span class="brand__mark">메타</span><span class="brand__sub">하우스</span></p>
+      <p class="town__loading-sub">3D 마을 불러오는 중…</p>
+      <div class="town__loading-bar"><div class="town__loading-fill" id="town-loading-fill"></div></div>
+      <p class="town__loading-tip" id="town-loading-tip">💡 SHIFT를 누르면 달릴 수 있어요</p>
+    </div>
+
+    <!-- 존 진입 배너 (존 경계를 넘을 때 잠깐 표시) -->
+    <div class="town__zonebanner" id="town-zonebanner" hidden></div>
 
     <!-- HUD: 좌상단 캐릭터·닉네임 / 우상단 전체화면·나가기 -->
     <button type="button" class="town__fs town__fs--char" id="town-char" aria-label="캐릭터 변경">
@@ -34,9 +42,9 @@
     <a class="town__fs town__exit" href="index.html" aria-label="마을에서 나가기">
       <span class="town__fs-icon" aria-hidden="true">✕</span>나가기
     </a>
-    <button type="button" class="town__mini" id="town-night" style="right:236px" aria-label="밤/낮 전환" title="밤/낮 전환">🌙</button>
-    <button type="button" class="town__mini" id="town-sound" style="right:282px" aria-label="소리 켜기/끄기" title="소리">🔊</button>
-    <button type="button" class="town__mini" id="town-share" style="right:328px" aria-label="공유하기" title="공유">🔗</button>
+    <button type="button" class="town__mini town__mini--night" id="town-night" aria-label="밤/낮 전환" title="밤/낮 전환">🌙</button>
+    <button type="button" class="town__mini town__mini--sound" id="town-sound" aria-label="소리 켜기/끄기" title="소리">🔊</button>
+    <button type="button" class="town__mini town__mini--share" id="town-share" aria-label="공유하기" title="공유">🔗</button>
     <div class="town__count" id="town-count" hidden></div>
 
     <button type="button" class="town__jump" id="town-jump" aria-label="점프">JUMP</button>
@@ -92,6 +100,16 @@
 
     <!-- 빌드룸 포털 진입 버튼 (포털 근처에서 표시) -->
     <a class="btn btn--primary town__buildcta" id="town-build-cta" href="build.html" hidden>🔨 빌드룸 입장 — 내 집 지어보기</a>
+
+    <!-- 큰 지도 (미니맵 탭 → 확대, 지도 탭 → 그 자리로 이동) -->
+    <div class="bigmap" id="bigmap" hidden>
+      <div class="bigmap__panel">
+        <button type="button" class="bigmap__close" id="bigmap-close" aria-label="지도 닫기">✕</button>
+        <h3>🗺️ 마을 지도</h3>
+        <canvas id="bigmap-canvas" width="520" height="520"></canvas>
+        <p class="bigmap__hint">지도를 누르면 그 자리로 순간이동해요</p>
+      </div>
+    </div>
 
     <!-- 공유 (링크 + QR) -->
     <div class="share" id="share" hidden>
