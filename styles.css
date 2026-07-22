@@ -1852,3 +1852,16 @@ body.build-page { margin: 0; overflow: hidden; background: #12150f; }
 @media (max-width: 640px) {
   .town__myhome { top: calc(132px + env(safe-area-inset-top, 0px)); padding: 8px 13px; font-size: 12px; }
 }
+
+/* 시작 화면: 기존 회원 안내 문구 */
+.start__member-hint {
+  margin: 0 0 4px;
+  padding: 9px 13px;
+  font-size: 12.5px;
+  color: #cfe9da;
+  background: rgba(127, 212, 168, 0.1);
+  border: 1px solid rgba(127, 212, 168, 0.3);
+  border-radius: 10px;
+  text-align: left;
+}
+.start__member-hint b { color: #8fe6b5; }
