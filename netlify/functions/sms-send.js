@@ -81,7 +81,8 @@ exports.handler = async (event) => {
     const d = await smsRes.json().catch(() => ({}));
     if (!smsRes.ok || Number(d.result_code) <= 0) {
       console.error("aligo send failed:", d.result_code, d.message);
-      return json(502, { error: "sms_failed" });
+      // 설정 문제(미등록 발신번호·IP 제한 등)를 진단할 수 있게 알리고 응답 코드를 함께 반환
+      return json(502, { error: "sms_failed", provider: "aligo", code: d.result_code, detail: d.message });
     }
   } else {
     // 솔라피 발송 (HMAC-SHA256 인증)
