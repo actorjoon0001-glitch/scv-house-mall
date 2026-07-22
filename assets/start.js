@@ -183,6 +183,14 @@
       }
       const d = await r.json().catch(() => ({}));
       if (r.status === 429) { showErr(d.error === "cooldown" ? `잠시 후 다시 받을 수 있어요 (${d.wait || 60}초)` : "발송 한도를 초과했어요. 1시간 뒤 다시 시도해주세요."); return; }
+      if (r.status === 502) {
+        // 발송사·통신사 쪽 장애(예: 발신번호 차단)로 문자를 못 보내는 상태 —
+        // 가입이 막히지 않게 미인증 폴백으로 입장시키고, 리드에는 "미인증"으로 기록된다.
+        smsAvailable = false;
+        showErr("문자 발송이 지금 원활하지 않아요 — 번호 입력만으로 입장할게요.");
+        otpSendBtn.hidden = true;
+        return;
+      }
       if (!r.ok) { showErr("인증번호 발송에 실패했어요. 잠시 후 다시 시도해주세요."); return; }
       smsAvailable = true;
       otpRow.hidden = false;
