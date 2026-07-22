@@ -143,7 +143,7 @@ function init() {
     (tex) => {
       tex.mapping = THREE.EquirectangularReflectionMapping;
       skyTex = tex;
-      if (nightMode) return; // 밤 모드 중이면 낮 복귀 때 적용
+      if (timeMode !== "day") return; // 낮이 아닌 동안엔 낮 복귀 때 적용
       scene.background = tex;
       scene.environment = tex; // 집·바닥·캐릭터에 자연광
       hemi.intensity = 0.18;   // 보조광을 낮춰 태양·그림자 대비 강화 (게임풍 라이팅)
@@ -185,23 +185,36 @@ function init() {
     lampGroup.visible = false;
     scene.add(lampGroup);
   }
-  function setNight(on) {
-    nightMode = on;
-    if (on && !lampGroup) buildLamps();
-    if (lampGroup) lampGroup.visible = on;
-    // 가로등 전구 발광 (밤 + 블룸에서 은은히 번짐)
-    lampBulbMat.emissive.set(on ? 0xffdf9e : 0x000000);
-    lampBulbMat.emissiveIntensity = on ? 1.6 : 1;
-    // 원경 산 능선: 밤에는 어두운 남색 실루엣으로
-    mountainMats.forEach((m) => m.color.set(on ? 0x1c2433 : 0xffffff));
-    // 간판(보드)들이 밤에 은은히 발광 — 야간 전시장 분위기
+  // 시간대 3단계: 낮 → 노을(골든아워) → 밤. 태양 오프셋은 tick에서 참조 (노을은 낮은 각도 = 긴 그림자)
+  let timeMode = "day";
+  const SUN_OFF = { x: 18, y: 30, z: 14 };
+  const windowGlows = []; // 밤 창문 불빛 (집 로드 시 채워짐)
+  const cloudShadows = []; // 구름 그림자 (아래 연출 섹션에서 채워짐)
+  const flagMeshes = []; // 정문 깃발 (tick에서 펄럭임)
+  function applyTimeMode(mode) {
+    timeMode = mode;
+    nightMode = mode === "night";
+    const night = mode === "night", dusk = mode === "dusk";
+    if ((night || dusk) && !lampGroup) buildLamps();
+    if (lampGroup) lampGroup.visible = night || dusk;
+    // 가로등 전구 발광 (블룸에서 은은히 번짐)
+    lampBulbMat.emissive.set(night || dusk ? 0xffdf9e : 0x000000);
+    lampBulbMat.emissiveIntensity = night ? 1.6 : dusk ? 1.1 : 1;
+    // 원경 산 능선 틴트: 낮 흰색(원색) / 노을 살구빛 / 밤 남색
+    mountainMats.forEach((m) => m.color.set(night ? 0x1c2433 : dusk ? 0xd9a184 : 0xffffff));
+    // 간판(보드) 발광: 밤은 또렷하게, 노을은 은은하게
     (BOARD_MATS || []).forEach((m) => {
-      m.emissive.set(on ? 0xffffff : 0x000000);
-      m.emissiveMap = on ? m.map : null;
-      m.emissiveIntensity = 0.5;
+      m.emissive.set(night || dusk ? 0xffffff : 0x000000);
+      m.emissiveMap = night || dusk ? m.map : null;
+      m.emissiveIntensity = night ? 0.5 : 0.28;
       m.needsUpdate = true;
     });
-    if (on) {
+    // 밤 창문 불빛 (노을부터 켜짐)
+    windowGlows.forEach((g) => { g.visible = night || dusk; });
+    // 구름 그림자는 해가 있는 낮·노을만
+    cloudShadows.forEach((s) => { s.visible = !night; });
+    if (night) {
+      SUN_OFF.x = 18; SUN_OFF.y = 30; SUN_OFF.z = 14;
       scene.background = new THREE.Color(0x0b1322);
       scene.environment = null;
       scene.fog.color.set(0x0b1322);
@@ -211,7 +224,20 @@ function init() {
       sun.color.set(0x9db8e8); // 달빛
       sun.intensity = 0.55;
       renderer.toneMappingExposure = 0.95;
+    } else if (dusk) {
+      // 골든아워: 낮은 태양 → 긴 그림자, 주황 하늘·안개
+      SUN_OFF.x = 34; SUN_OFF.y = 11; SUN_OFF.z = -6;
+      scene.background = new THREE.Color(0xe89a5e);
+      scene.environment = skyTex || null; // 환경 반사는 유지 (따뜻한 톤은 라이트가 담당)
+      scene.fog.color.set(0xe3a06c);
+      hemi.color.set(0xffd9b0);
+      hemi.groundColor.set(0x7a6a52);
+      hemi.intensity = 0.35;
+      sun.color.set(0xff9a4d);
+      sun.intensity = 1.75;
+      renderer.toneMappingExposure = 1.05;
     } else {
+      SUN_OFF.x = 18; SUN_OFF.y = 30; SUN_OFF.z = 14;
       hemi.color.set(0xdff0ff);
       hemi.groundColor.set(0x7da06a);
       sun.color.set(0xfff2df);
@@ -229,12 +255,25 @@ function init() {
       }
       renderer.toneMappingExposure = 1.12;
     }
+    // 시간대별 화면 그레이드 (골든아워는 화면 전체에 따뜻한 워시)
+    canvas.style.filter = night
+      ? "saturate(1.05) contrast(1.08) brightness(0.94)"
+      : dusk
+        ? "sepia(0.3) saturate(1.35) hue-rotate(-12deg) contrast(1.06) brightness(0.99)"
+        : "saturate(1.12) contrast(1.05) brightness(1.02)";
+    // 버튼에는 "다음 시간대" 아이콘 표시
     const nb = document.getElementById("town-night");
-    if (nb) nb.textContent = on ? "☀️" : "🌙";
+    if (nb) {
+      nb.textContent = mode === "day" ? "🌇" : mode === "dusk" ? "🌙" : "☀️";
+      nb.title = mode === "day" ? "노을 보기" : mode === "dusk" ? "밤 보기" : "낮 보기";
+    }
   }
+  function setNight(on) { applyTimeMode(on ? "night" : "day"); } // 하위 호환
   {
     const nb = document.getElementById("town-night");
-    if (nb) nb.addEventListener("click", () => setNight(!nightMode));
+    if (nb) nb.addEventListener("click", () => {
+      applyTimeMode(timeMode === "day" ? "dusk" : timeMode === "dusk" ? "night" : "day");
+    });
   }
 
   // ---------- 사운드 (BGM 음원 파일 + 신스 효과음) ----------
@@ -839,11 +878,13 @@ function init() {
         pole.position.set(x, 2.3, z);
         scene.add(pole);
         const flag = new THREE.Mesh(
-          new THREE.PlaneGeometry(1.15, 0.72),
+          new THREE.PlaneGeometry(1.15, 0.72, 6, 1), // 가로 분할 → 펄럭임 버텍스 웨이브용
           new THREE.MeshStandardMaterial({ color: flagCols[side * 2 + i], roughness: 0.7, side: THREE.DoubleSide })
         );
-        flag.position.set(x + (x < 0 ? 0.62 : -0.62), 4.05, z);
+        flag.geometry.translate(0.575, 0, 0); // 깃대 쪽을 회전축으로
+        flag.position.set(x + (x < 0 ? 0.06 : -0.06), 4.05, z);
         flag.rotation.y = x < 0 ? 0 : Math.PI;
+        flagMeshes.push({ m: flag, base: flag.rotation.y, phase: side * 2 + i });
         scene.add(flag);
       });
     });
@@ -872,6 +913,25 @@ function init() {
         })
         .catch(() => {});
     });
+    // 광장에서 서서 담소 나누는 방문객 2쌍 — 서로 마주 보고 느린 모션 (붐비는 광장 연출)
+    const CHAT_GROUPS = [
+      [["woman", -3.6, 31.4, 0.95], ["man", -2.5, 32.1, -2.2]],
+      [["grandma", 8.4, 24.0, 2.3], ["girl", 9.2, 24.7, -0.85]],
+    ];
+    CHAT_GROUPS.forEach((pair) => pair.forEach(([charKey, x, z, ry]) => {
+      buildCharInstance(charKey)
+        .then((rig) => {
+          const g = new THREE.Group();
+          g.add(rig.obj);
+          g.position.set(x, 0, z);
+          g.rotation.y = ry;
+          addBlob(g, 0.5);
+          scene.add(g);
+          if (rig.walk) { rig.walk.paused = false; rig.walk.timeScale = 0.13; } // 제자리 잔모션 = 담소
+          npcWalkers.push({ g, rig, cfg: null, wp: -1 });
+        })
+        .catch(() => {});
+    }));
   }
 
   // ---------- 구름 ----------
@@ -888,6 +948,99 @@ function init() {
     c.position.set((Math.random() - 0.5) * 90, 17 + Math.random() * 7, (Math.random() - 0.5) * 90);
     clouds.push(c);
     scene.add(c);
+  }
+  // 구름 그림자 — 큰 부드러운 어둠 얼룩이 마을 위를 흘러감 (낮·노을 전용, tick에서 드리프트)
+  {
+    const sc = document.createElement("canvas");
+    sc.width = sc.height = 256;
+    const sx = sc.getContext("2d");
+    // 뭉게구름 모양의 불규칙 얼룩 (원 3개 겹침)
+    [[128, 128, 110], [70, 150, 70], [190, 145, 78]].forEach(([px, py, r]) => {
+      const g = sx.createRadialGradient(px, py, 8, px, py, r);
+      g.addColorStop(0, "rgba(10,16,10,0.16)");
+      g.addColorStop(1, "rgba(10,16,10,0)");
+      sx.fillStyle = g;
+      sx.fillRect(0, 0, 256, 256);
+    });
+    const shadowTex = new THREE.CanvasTexture(sc);
+    const shadowMat = new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false });
+    for (let i = 0; i < 4; i++) {
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(46 + i * 8, 34 + i * 5), shadowMat);
+      s.rotation.x = -Math.PI / 2;
+      s.rotation.z = i * 1.4;
+      s.position.set(-90 + i * 55, 0.058, -60 + i * 30);
+      s.renderOrder = 0;
+      cloudShadows.push(s);
+      scene.add(s);
+    }
+  }
+
+  // ---------- 정문 브랜드 조형물 (METAHOUSE — 랜드마크 겸 포토 스팟) ----------
+  {
+    const mono = new THREE.Group();
+    const plinth = new THREE.Mesh(
+      new THREE.BoxGeometry(6.4, 0.55, 1.1),
+      new THREE.MeshStandardMaterial({ color: 0xd8d3c4, roughness: 0.7 })
+    );
+    plinth.position.y = 0.275;
+    plinth.castShadow = true;
+    // 브랜드 패널 (캔버스 — 흰 바탕에 진초록 로고 타이포)
+    const bc = document.createElement("canvas");
+    bc.width = 1024; bc.height = 288;
+    const bx = bc.getContext("2d");
+    bx.fillStyle = "#f6f3ea";
+    bx.beginPath();
+    bx.roundRect(6, 6, 1012, 276, 26);
+    bx.fill();
+    bx.strokeStyle = "rgba(47,74,58,0.5)";
+    bx.lineWidth = 8;
+    bx.stroke();
+    bx.fillStyle = "#2f4a3a";
+    bx.font = "800 128px Inter, sans-serif";
+    bx.textAlign = "center";
+    bx.textBaseline = "middle";
+    bx.fillText("METAHOUSE", 512, 118);
+    bx.font = "700 64px 'Noto Sans KR', sans-serif";
+    bx.fillStyle = "#5d7a68";
+    bx.fillText("메 타 하 우 스", 512, 224);
+    const panelMat = new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(bc), roughness: 0.6 });
+    (BOARD_MATS = BOARD_MATS || []).push(panelMat); // 밤에 간판처럼 은은히 발광
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(6.0, 1.72, 0.28), [
+      new THREE.MeshStandardMaterial({ color: 0x2f4a3a }), new THREE.MeshStandardMaterial({ color: 0x2f4a3a }),
+      new THREE.MeshStandardMaterial({ color: 0x2f4a3a }), new THREE.MeshStandardMaterial({ color: 0x2f4a3a }),
+      panelMat, panelMat,
+    ]);
+    panel.position.y = 1.42;
+    panel.castShadow = true;
+    mono.add(makeAoDisc(8), plinth, panel);
+    mono.position.set(-13, 0, 31.6);
+    mono.rotation.y = 0.5; // 정문 쪽을 바라보게 비스듬히
+    scene.add(mono);
+  }
+
+  // ---------- 하늘 새 떼 (V자 편대 — tick에서 비행) ----------
+  const flocks = [];
+  {
+    const birdMat = new THREE.MeshBasicMaterial({ color: 0x30363c, side: THREE.DoubleSide });
+    const birdGeo = new THREE.BufferGeometry();
+    // 갈매기형 V 날개 (삼각형 2개)
+    birdGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array([
+      -0.55, 0.12, 0, 0, 0, 0.08, 0, 0, -0.08,
+      0.55, 0.12, 0, 0, 0, -0.08, 0, 0, 0.08,
+    ]), 3));
+    for (let f = 0; f < 2; f++) {
+      const flock = new THREE.Group();
+      for (let b = 0; b < 5; b++) {
+        const bird = new THREE.Mesh(birdGeo, birdMat);
+        bird.position.set((b - 2) * 1.4, -Math.abs(b - 2) * 0.25, Math.abs(b - 2) * 1.3);
+        bird.userData.wing = b;
+        flock.add(bird);
+      }
+      flock.position.set(-160 - f * 220, 26 + f * 6, -30 + f * 44);
+      flock.userData.speed = 7 + f * 2;
+      flocks.push(flock);
+      scene.add(flock);
+    }
   }
 
   // ---------- 모델 로드 ----------
@@ -1647,6 +1800,35 @@ function init() {
         list.forEach((m, i) => placement.push([m, zoneSlot(zone, i), 0]));
       });
     }
+    // 부지 정원 조성 (배치 좌표는 동기적으로 확정 → 전체 인스턴싱 3드로우)
+    // 디딤돌(통로→현관) + 앞마당 모서리 관목 + 현관 화분. 회전(rot)에 맞춰 오프셋을 돌린다.
+    {
+      const stones = [], gBushes = [], gPots = [];
+      const rotOff = (dx, dz, rotDeg) => {
+        const a = THREE.MathUtils.degToRad(rotDeg || 0);
+        return [dx * Math.cos(a) + dz * Math.sin(a), -dx * Math.sin(a) + dz * Math.cos(a)];
+      };
+      placement.forEach(([m, lot, rot], i) => {
+        // 디딤돌 3개 (부지 앞 잔디 여백)
+        [4.55, 4.95, 5.35].forEach((dz, s) => {
+          const [ox, oz] = rotOff(0.9 + (s % 2) * 0.14 - 0.07, dz, rot);
+          stones.push({ x: lot.x + ox, y: 0.035, z: lot.z + oz, sx: 0.62, sy: 1, sz: 0.5, ry: (i + s) * 0.9 });
+        });
+        // 앞 모서리 관목 2개
+        [-3.9, 3.9].forEach((dx) => {
+          const [ox, oz] = rotOff(dx, 4.7, rot);
+          gBushes.push({ x: lot.x + ox, y: 0.32, z: lot.z + oz, sx: 0.85, sy: 0.8 + (i % 3) * 0.12, sz: 0.85, color: new THREE.Color(i % 2 ? 0x4e8f4e : 0x67a860) });
+        });
+        // 현관 옆 화분 (이름표 반대쪽)
+        const [px2, pz2] = rotOff(2.6, 4.5, rot);
+        gPots.push({ x: lot.x + px2, y: 0.24, z: lot.z + pz2 });
+      });
+      const stoneGeo = new THREE.CylinderGeometry(0.5, 0.55, 0.07, 7);
+      buildInstanced(stoneGeo, new THREE.MeshStandardMaterial({ color: 0xd9d4c6, roughness: 0.9 }), stones);
+      buildInstanced(new THREE.IcosahedronGeometry(0.42, 0), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true }), gBushes);
+      buildInstanced(new THREE.CylinderGeometry(0.3, 0.23, 0.5, 8), new THREE.MeshStandardMaterial({ color: 0xb9714f, roughness: 0.8 }), gPots);
+      buildInstanced(new THREE.IcosahedronGeometry(0.3, 0), new THREE.MeshStandardMaterial({ color: 0x5d9a52, roughness: 0.9, flatShading: true }), gPots.map((p) => ({ x: p.x, y: 0.62, z: p.z })));
+    }
     const catCounters = {};
     placement.forEach(([m, lot, rot], i) => {
       const c = m.category || "_";
@@ -1674,6 +1856,17 @@ function init() {
           const tag = makeHouseTag(m.name);
           tag.position.set(-2.9, 0.22, 4.05);
           wrap.add(tag);
+          // 밤 창문 불빛: 정면에 따뜻한 빛 무리 2개 (노을·밤에만 표시 — 사람 사는 동네 느낌)
+          [[-1.35, 1.45], [1.5, 1.3]].forEach(([gx, gy], wi) => {
+            const glow = new THREE.Mesh(
+              new THREE.PlaneGeometry(0.95, 0.7),
+              new THREE.MeshBasicMaterial({ color: wi ? 0xffc46a : 0xffd98f, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false })
+            );
+            glow.position.set(gx, gy, 3.58);
+            glow.visible = timeMode !== "day";
+            windowGlows.push(glow);
+            wrap.add(glow);
+          });
           wrap.position.set(lot.x, 0, lot.z);
           // 기본 0도 = 남쪽 통로 정면. 관리자 배치에서 90도 단위 회전 가능 (90=동, 180=북, 270=서)
           wrap.rotation.y = THREE.MathUtils.degToRad(rot || 0);
@@ -2822,6 +3015,31 @@ function init() {
     }
 
     clouds.forEach((c, i) => { c.position.x += dt * (0.25 + i * 0.05); if (c.position.x > 55) c.position.x = -55; });
+    // 구름 그림자 드리프트 (구름보다 살짝 빠르게 — 지면을 스치는 느낌)
+    cloudShadows.forEach((s, i) => {
+      if (!s.visible) return;
+      s.position.x += dt * (0.9 + i * 0.25);
+      if (s.position.x > 130) s.position.x = -130;
+    });
+    // 깃발 펄럭임 (깃대 축 기준 좌우 흔들림 + 미세 기울임)
+    {
+      const T = clock.elapsedTime;
+      flagMeshes.forEach((f) => {
+        f.m.rotation.y = f.base + Math.sin(T * 2.6 + f.phase * 1.4) * 0.28 + Math.sin(T * 5.1 + f.phase) * 0.07;
+        f.m.rotation.z = Math.sin(T * 3.4 + f.phase * 0.8) * 0.05;
+      });
+    }
+    // 새 떼 비행 (동→서 직선, 화면 밖에서 재등장 + 날갯짓)
+    flocks.forEach((fl, i) => {
+      fl.position.x += fl.userData.speed * dt;
+      if (fl.position.x > 200) {
+        fl.position.x = -200 - Math.random() * 120;
+        fl.position.z = -60 + Math.random() * 90;
+        fl.position.y = 24 + Math.random() * 10;
+      }
+      const T = clock.elapsedTime;
+      fl.children.forEach((b) => { b.rotation.z = Math.sin(T * 7 + b.userData.wing * 1.1 + i * 2) * 0.45; });
+    });
 
     // 분수: 물결 회전 + 물방울 통통
     if (fountainWater) {
@@ -2883,6 +3101,13 @@ function init() {
     // NPC 방문객: 통로 왕복 + 가까울 때만 애니메이션 (성능)
     npcWalkers.forEach((w) => {
       if (!w.g.visible) return;
+      if (!w.cfg) {
+        // 담소 그룹: 제자리에서 느린 모션만 (이동 없음)
+        if (w.rig.mixer && Math.abs(w.g.position.x - player.position.x) < 45 && Math.abs(w.g.position.z - player.position.z) < 45) {
+          w.rig.mixer.update(dt);
+        }
+        return;
+      }
       const [tx, tz] = w.cfg.path[w.wp];
       const dx = tx - w.g.position.x, dz = tz - w.g.position.z;
       const dist = Math.hypot(dx, dz);
@@ -2899,7 +3124,7 @@ function init() {
       }
     });
     // 태양·그림자 카메라를 플레이어 주변으로 이동 (선명한 그림자 유지)
-    sun.position.set(player.position.x + 18, 30, player.position.z + 14);
+    sun.position.set(player.position.x + SUN_OFF.x, SUN_OFF.y, player.position.z + SUN_OFF.z);
     sun.target.position.set(player.position.x, 0, player.position.z);
     // 고사양 티어: 블룸 후처리, 그 외: 기본 렌더
     if (composer && qLevel === 0) composer.render();
