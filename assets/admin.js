@@ -710,6 +710,24 @@
     "begin\n" +
     "  if pass is distinct from '931122' then raise exception 'unauthorized'; end if;\n" +
     "  return query select u.created_at, u.username, u.name, u.phone, u.nick from town_users u order by u.created_at desc limit 1000;\n" +
+    "end $$;\n\n" +
+    "-- 회원 삭제 (관리자 전용)\n" +
+    "create or replace function delete_user(pass text, p_username text)\n" +
+    "returns boolean language plpgsql security definer set search_path = public as $$\n" +
+    "begin\n" +
+    "  if pass is distinct from '931122' then raise exception 'unauthorized'; end if;\n" +
+    "  delete from town_users where username = lower(trim(p_username));\n" +
+    "  return found;\n" +
+    "end $$;";
+
+  const USERS_DELETE_SQL =
+    "-- 회원 삭제 기능. Supabase SQL Editor에서 한 번 실행하세요:\n" +
+    "create or replace function delete_user(pass text, p_username text)\n" +
+    "returns boolean language plpgsql security definer set search_path = public as $$\n" +
+    "begin\n" +
+    "  if pass is distinct from '931122' then raise exception 'unauthorized'; end if;\n" +
+    "  delete from town_users where username = lower(trim(p_username));\n" +
+    "  return found;\n" +
     "end $$;";
 
   async function loadDash() {
@@ -761,8 +779,27 @@
             <td>${esc(u.name)}</td>
             <td style="white-space:nowrap">${esc(u.phone)}</td>
             <td>${esc(u.nick)}</td>
+            <td><button type="button" class="btn btn--ghost" data-deluser="${esc(u.username)}" style="padding:4px 10px;font-size:12px;color:#c66">🗑 삭제</button></td>
           </tr>`).join("");
         uTable.hidden = users.length === 0;
+        uRows.querySelectorAll("[data-deluser]").forEach((b) =>
+          b.addEventListener("click", async () => {
+            const uname = b.dataset.deluser;
+            const target = users.find((x) => x.username === uname);
+            if (!confirm(`회원 "${(target && (target.nick || target.name)) || uname}" (${uname})을 삭제할까요?\n삭제하면 되돌릴 수 없어요.`)) return;
+            b.disabled = true;
+            try {
+              await CFG.deleteUser(pw, uname);
+              loadDash();
+            } catch (err) {
+              b.disabled = false;
+              alert(err && err.status === 404
+                ? "삭제 기능 SQL이 아직 없어요. 아래 SQL 안내의 delete_user 부분을 Supabase에서 실행해주세요."
+                : "삭제에 실패했어요: " + ((err && err.message) || "오류"));
+              if (err && err.status === 404 && sql2) { sql2.style.display = "block"; sql2.textContent = USERS_DELETE_SQL; }
+            }
+          })
+        );
       }
       chips.insertAdjacentHTML("beforeend", `<span class="statchip">회원 <b>${users.length}</b>명</span>`);
     } catch (e) {}
