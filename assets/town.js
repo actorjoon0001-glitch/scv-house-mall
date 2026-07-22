@@ -8,6 +8,7 @@ import { EffectComposer } from "./postprocessing/EffectComposer.js";
 import { RenderPass } from "./postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "./postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "./postprocessing/OutputPass.js";
+import { SSAOPass } from "./postprocessing/SSAOPass.js";
 
 const stage = document.getElementById("town-stage");
 const canvas = document.getElementById("town-canvas");
@@ -100,14 +101,25 @@ function init() {
     return t;
   }
 
-  // ---------- 후처리: 은은한 블룸 (고사양 티어 전용, 실패 시 기본 렌더 폴백) ----------
+  // ---------- 후처리: SSAO + 은은한 블룸 (고사양 티어 전용, 실패 시 기본 렌더 폴백) ----------
+  // SSAO는 장면을 추가로 그리는 비싼 효과라 qLevel 0(고사양)에서만 돈다 —
+  // 프레임이 떨어지면 자동 품질 조절이 composer 자체를 끄므로 이중 안전장치.
   let composer = null;
   try {
     const rt = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, samples: 4 });
     composer = new EffectComposer(renderer, rt);
-    composer.addPass(new RenderPass(scene, camera));
-    // 과하면 촌스러워지므로 강도 0.16, 문턱 0.9로 햇빛·조명만 살짝 번지게
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), 0.16, 0.5, 0.9));
+    let scenePassOk = false;
+    try {
+      const ssao = new SSAOPass(scene, camera, 2, 2);
+      ssao.kernelRadius = 0.85;      // 월드 단위(m) 기준 — 처마·모서리에만 어둠이 맺히게 좁게
+      ssao.minDistance = 0.0008;
+      ssao.maxDistance = 0.05;
+      composer.addPass(ssao);
+      scenePassOk = true;
+    } catch (e2) {}
+    if (!scenePassOk) composer.addPass(new RenderPass(scene, camera));
+    // 과하면 촌스러워지므로 강도는 낮게, 문턱은 햇빛·조명만 번지게
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), 0.2, 0.5, 0.85));
     composer.addPass(new OutputPass());
   } catch (e) {
     composer = null;
@@ -144,8 +156,9 @@ function init() {
       if (nightMode) return; // 밤 모드 중이면 낮 복귀 때 적용
       scene.background = tex;
       scene.environment = tex; // 집·바닥·캐릭터에 자연광
-      hemi.intensity = 0.25;   // HDRI가 주광을 맡으므로 보조광 축소
-      sun.intensity = 1.7;     // 그림자용 태양광은 유지
+      hemi.intensity = 0.18;   // 보조광을 낮춰 태양·그림자 대비 강화 (게임풍 라이팅)
+      sun.intensity = 1.95;
+      renderer.toneMappingExposure = 1.12;
       scene.fog.color.set(0xe7eef4); // 안개 색을 지평선 톤에 맞춤
     },
     undefined,
@@ -213,8 +226,8 @@ function init() {
       if (skyTex) {
         scene.background = skyTex;
         scene.environment = skyTex;
-        hemi.intensity = 0.25;
-        sun.intensity = 1.7;
+        hemi.intensity = 0.18;
+        sun.intensity = 1.95;
         scene.fog.color.set(0xe7eef4);
       } else {
         scene.background = new THREE.Color(0xbfe0f5);
@@ -222,7 +235,7 @@ function init() {
         sun.intensity = 2.2;
         scene.fog.color.set(0xbfe0f5);
       }
-      renderer.toneMappingExposure = 1.05;
+      renderer.toneMappingExposure = 1.12;
     }
     const nb = document.getElementById("town-night");
     if (nb) nb.textContent = on ? "☀️" : "🌙";
