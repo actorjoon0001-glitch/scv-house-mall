@@ -86,7 +86,7 @@ function init() {
   scene.background = new THREE.Color(0xbfe0f5);
   scene.fog = new THREE.Fog(0xbfe0f5, 55, 155);
 
-  const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 220);
+  const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 520); // 원경 산 능선까지 보이게
 
   // ---------- PBR 지면 텍스처 (ambientCG CC0, 512px 축소판 — 모바일 로딩 부담 최소화) ----------
   THREE.Cache.enabled = true; // 같은 텍스처 파일 재요청 방지
@@ -202,6 +202,8 @@ function init() {
     // 가로등 전구 발광 (밤 + 블룸에서 은은히 번짐)
     lampBulbMat.emissive.set(on ? 0xffdf9e : 0x000000);
     lampBulbMat.emissiveIntensity = on ? 1.6 : 1;
+    // 원경 산 능선: 밤에는 어두운 남색 실루엣으로
+    mountainMats.forEach((m) => m.color.set(on ? 0x1c2433 : 0xffffff));
     // 간판(보드)들이 밤에 은은히 발광 — 야간 전시장 분위기
     (BOARD_MATS || []).forEach((m) => {
       m.emissive.set(on ? 0xffffff : 0x000000);
@@ -686,6 +688,49 @@ function init() {
     car.position.set(19.7 + i * 3.4 + (i % 2) * 0.12, 0, SITE.zS + 5.9 + (i % 2) * 0.25);
     car.rotation.y = (i % 2 ? Math.PI : 0) + (Math.random() - 0.5) * 0.04;
     scene.add(car);
+  });
+
+  // ---------- 원경 산 능선 (지평선 실루엣 — 공기원근 연출, 드로우 2) ----------
+  // 안개 너머라 fog:false로 두고 대기색을 미리 입힌다. 밤에는 setNight에서 어둡게 틴트.
+  const mountainMats = [];
+  function ridgeTexture(fill, base, jag) {
+    const c = document.createElement("canvas");
+    c.width = 2048; c.height = 256;
+    const x = c.getContext("2d");
+    x.fillStyle = fill;
+    x.beginPath();
+    x.moveTo(0, 256);
+    const pts = [];
+    const N = 26;
+    for (let i = 0; i <= N; i++) {
+      const px = (i / N) * 2048;
+      const py = i === 0 || i === N ? base : base + (Math.random() - 0.5) * jag * 2 - Math.random() * jag; // 봉우리는 위로 더
+      pts.push([px, Math.max(30, Math.min(230, py))]);
+    }
+    pts[N][1] = pts[0][1]; // 원통 이음매가 맞물리게 (좌우 끝 동일)
+    x.lineTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i <= N; i++) {
+      const [px, py] = pts[i];
+      const [qx, qy] = pts[i - 1];
+      x.quadraticCurveTo(qx + (px - qx) * 0.5, Math.min(py, qy) - 14, px, py);
+    }
+    x.lineTo(2048, 256);
+    x.closePath();
+    x.fill();
+    return new THREE.CanvasTexture(c);
+  }
+  [
+    { r: 430, h: 130, fill: "#c3ced9", base: 150, jag: 46 }, // 먼 능선 (밝고 푸른 대기색)
+    { r: 320, h: 96, fill: "#a7b6c0", base: 130, jag: 60 },  // 가까운 능선 (조금 진하게)
+  ].forEach((cfg) => {
+    const mat = new THREE.MeshBasicMaterial({
+      map: ridgeTexture(cfg.fill, cfg.base, cfg.jag),
+      transparent: true, side: THREE.BackSide, fog: false, depthWrite: false,
+    });
+    mountainMats.push(mat);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(cfg.r, cfg.r, cfg.h, 72, 1, true), mat);
+    m.position.y = cfg.h / 2 - 6;
+    scene.add(m);
   });
 
   // ---------- 조경 (통로·경계를 따라 규칙 배치 — 인스턴싱으로 드로우 수 고정) ----------
