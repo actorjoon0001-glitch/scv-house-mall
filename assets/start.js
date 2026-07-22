@@ -262,9 +262,13 @@
     }
     const nick = ((nickEl && nickEl.value) || "").trim().slice(0, 10);
     if (!nick) { markBad(nickEl); showErr("닉네임을 입력해주세요."); return; }
-    // 핸드폰 번호는 문자 인증 복구 전까지 선택 입력 — 닉네임만으로 입장.
-    // 번호를 적었는데 형식이 틀린 경우만 잡아주고, 인증 여부는 리드에 기록만 한다.
-    if (phoneDigits() && !validPhone()) { markBad(phoneEl); showErr("핸드폰 번호 형식을 확인해주세요. (예: 010-1234-5678)"); return; }
+    // 핸드폰 번호 필수 + 문자 인증 (문자 시스템 장애 시에만 미인증 폴백 허용)
+    if (!validPhone()) { markBad(phoneEl); showErr("핸드폰 번호를 정확히 입력해주세요."); return; }
+    if (!phoneVerified && smsAvailable !== false) {
+      markBad(otpRow && !otpRow.hidden ? otpInput : phoneEl);
+      showErr('"인증번호 받기"를 눌러 문자 인증을 완료해주세요.');
+      return;
+    }
     persistCommon(nick);
     try { localStorage.setItem("seum_guest_ok", "1"); } catch (e) {}
     saveEntryLead(nick);
