@@ -1822,3 +1822,13 @@ body.build-page { margin: 0; overflow: hidden; background: #12150f; }
 }
 .start__char img { transition: transform .18s var(--ease); }
 .start__char.is-sel img { transform: scale(1.08); }
+
+/* ============ 그래픽 2차: 비네트 (화면 가장자리 은은한 어둠 — 시네마틱 프레이밍) ============ */
+.town__stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(8, 12, 8, 0.2) 100%);
+  z-index: 2;
+}
