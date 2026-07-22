@@ -111,6 +111,8 @@
     .statchip b { color: #8fe6b5; font-size: 15px; }
     /* ---- 사이드바 레이아웃 ---- */
     .admin { display: flex; min-height: 100vh; }
+    /* display:flex가 hidden 속성을 덮어쓰지 않게 — 비밀번호 입력 전에는 완전히 숨김 */
+    .admin[hidden] { display: none; }
     .side {
       position: fixed; top: 0; left: 0; bottom: 0; width: 224px;
       display: flex; flex-direction: column; gap: 6px;
