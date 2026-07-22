@@ -1832,3 +1832,23 @@ body.build-page { margin: 0; overflow: hidden; background: #12150f; }
   background: radial-gradient(ellipse at center, transparent 60%, rgba(8, 12, 8, 0.2) 100%);
   z-index: 2;
 }
+
+/* ============ 마을 내 "내 집 현황" 버튼 (계약 고객 전용) ============ */
+.town__myhome {
+  left: calc(14px + env(safe-area-inset-left, 0px));
+  right: auto;
+  top: calc(146px + env(safe-area-inset-top, 0px));
+  background: rgba(47, 93, 70, 0.82);
+  border-color: rgba(143, 230, 181, 0.55);
+  font-weight: 800;
+  animation: myhome-in .6s var(--ease);
+}
+.town__myhome[hidden] { display: none; }
+.town__myhome:hover { background: rgba(47, 93, 70, 0.95); }
+@keyframes myhome-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+@media (max-width: 640px) {
+  .town__myhome { top: calc(132px + env(safe-area-inset-top, 0px)); padding: 8px 13px; font-size: 12px; }
+}
