@@ -1669,7 +1669,7 @@ body.build-page { margin: 0; overflow: hidden; background: #12150f; }
 
 /* ============ 화질·UI 개선 10종 ============ */
 /* ② 색감 보정: 캔버스에 가벼운 채도·대비 그레이딩 (전 티어 공통, GPU 합성이라 부담 없음) */
-#town-canvas { filter: saturate(1.07) contrast(1.03); }
+#town-canvas { filter: saturate(1.12) contrast(1.05) brightness(1.02); }
 
 /* ⑤ 존 진입 배너 */
 .town__zonebanner {
