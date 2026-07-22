@@ -435,14 +435,18 @@ function init() {
 
   // ---------- 통로 (곧은 격자 포장, PBR 포장석 텍스처) ----------
   // 조각마다 크기가 달라 타일링이 일정하도록 스트립별 텍스처 반복값을 계산한다
-  function roadStrip(w, d, x, z) {
+  // asphalt=true면 차량 도로 느낌의 아스팔트 재질 (메인 대로·주차장), 아니면 보행 포장석
+  function roadStrip(w, d, x, z, asphalt) {
+    const cTex = asphalt ? "assets/tex/asphalt_c.jpg" : "assets/tex/paving_c.jpg";
+    const nTex = asphalt ? "assets/tex/asphalt_n.jpg" : "assets/tex/paving_n.jpg";
+    const rep = asphalt ? 5.2 : 2.6;
     const p = new THREE.Mesh(
       new THREE.PlaneGeometry(w, d),
       new THREE.MeshStandardMaterial({
-        color: 0xe3dbc8,
-        roughness: 0.95,
-        map: pbrTex("assets/tex/paving_c.jpg", true, Math.max(1, w / 2.6), Math.max(1, d / 2.6)),
-        normalMap: pbrTex("assets/tex/paving_n.jpg", false, Math.max(1, w / 2.6), Math.max(1, d / 2.6)),
+        color: asphalt ? 0xaaaaaa : 0xe3dbc8,
+        roughness: asphalt ? 0.98 : 0.95,
+        map: pbrTex(cTex, true, Math.max(1, w / rep), Math.max(1, d / rep)),
+        normalMap: pbrTex(nTex, false, Math.max(1, w / rep), Math.max(1, d / rep)),
       })
     );
     p.rotation.x = -Math.PI / 2;
@@ -464,14 +468,60 @@ function init() {
   plaza.position.set(0, 0.024, 26);
   plaza.receiveShadow = true;
   scene.add(plaza);
-  // 메인 대로 (남북 축, 정문→부지 끝)
-  roadStrip(7, SITE.zS - SITE.zN + 10, 0, (SITE.zN + SITE.zS) / 2 + 5);
-  // 집 줄 사이 통로 (동서, 각 줄 정면)
+  // 메인 대로 (남북 축, 정문→부지 끝) — 아스팔트 (전시장 관람차·서비스 차량 도로 컨셉)
+  roadStrip(7, SITE.zS - SITE.zN + 10, 0, (SITE.zN + SITE.zS) / 2 + 5, true);
+  // 집 줄 사이 통로 (동서, 각 줄 정면) — 보행 포장석
   const AISLES = [19.5, 8.5, -2.5, -13.5, -24.5, -35.5, -46.5, -57.5, -68.5];
   AISLES.forEach((z) => roadStrip(136, 2.4, 0, z));
   // 안쪽 블록 ↔ 파트너 블록 사이 세로 통로
   roadStrip(2.4, 92, 36.5, -25);
   roadStrip(2.4, 92, -36.5, -25);
+  // ---------- 메인 대로 차선·연석 (통로 교차부·광장은 비움) ----------
+  {
+    const CROSS = AISLES.map((a) => [a - 1.9, a + 1.9]).concat([[18.5, 33.5]]); // 광장 구간 포함
+    const isClear = (z0, z1) => !CROSS.some(([s, e]) => z1 > s && z0 < e);
+    // 가장자리 실선 + 연석: 교차부를 피해 구간별로
+    const lineMat = new THREE.MeshBasicMaterial({ color: 0xeeeadf });
+    const curbMat = new THREE.MeshStandardMaterial({ color: 0xcfcabb, roughness: 0.85 });
+    const curbGeo = new THREE.BoxGeometry(1, 1, 1);
+    const edgeItems = [], curbItems = [];
+    let segStart = SITE.zN + 1;
+    const bounds = CROSS.slice().sort((a, b) => a[0] - b[0]);
+    const pushSeg = (s, e) => {
+      const len = e - s;
+      if (len < 1.4) return;
+      const mid = (s + e) / 2;
+      [-3.35, 3.35].forEach((x) => edgeItems.push({ x, z: mid, len }));
+      [-3.72, 3.72].forEach((x) => curbItems.push({ x, z: mid, len }));
+    };
+    bounds.forEach(([s, e]) => { pushSeg(segStart, s); segStart = Math.max(segStart, e); });
+    pushSeg(segStart, SITE.zS + 7);
+    edgeItems.forEach((it) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.13, it.len), lineMat);
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(it.x, 0.027, it.z);
+      scene.add(m);
+    });
+    curbItems.forEach((it) => {
+      const m = new THREE.Mesh(curbGeo, curbMat);
+      m.scale.set(0.3, 0.13, it.len);
+      m.position.set(it.x, 0.065, it.z);
+      m.receiveShadow = true;
+      scene.add(m);
+    });
+    // 중앙 점선
+    const dashItems = [];
+    for (let z = SITE.zS + 5; z > SITE.zN + 2; z -= 4.6) {
+      if (!isClear(z - 1.1, z + 1.1)) continue;
+      dashItems.push(z);
+    }
+    dashItems.forEach((z) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 2.2), lineMat);
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(0, 0.027, z);
+      scene.add(m);
+    });
+  }
 
   // ---------- 울타리 + 정문 (부지 경계 마감) ----------
   // 반복 장식(포스트·나무·생울타리 등)은 InstancedMesh로 묶어 드로우콜을 최소화한다
@@ -534,28 +584,7 @@ function init() {
   archBoard.position.set(0, 7.35, SITE.zS + 0.55);
   scene.add(archBoard);
 
-  // ---------- 주차장 (정문 동측 바깥) ----------
-  const parking = new THREE.Mesh(
-    new THREE.PlaneGeometry(30, 13),
-    new THREE.MeshStandardMaterial({ color: 0x9a978e, roughness: 1 })
-  );
-  parking.rotation.x = -Math.PI / 2;
-  parking.position.set(30, 0.012, SITE.zS + 8.5);
-  parking.receiveShadow = true;
-  scene.add(parking);
-  const lineMat = new THREE.MeshBasicMaterial({ color: 0xf2efe6 });
-  for (let x = 18; x <= 42; x += 3.4) {
-    const line = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 5.4), lineMat);
-    line.rotation.x = -Math.PI / 2;
-    line.position.set(x, 0.016, SITE.zS + 5.6);
-    scene.add(line);
-  }
-  const parkSign = nameSign("🅿️ 주차장");
-  parkSign.position.set(30, 3, SITE.zS + 2.4);
-  scene.add(parkSign);
-
-  // ---------- 조경 (통로·경계를 따라 규칙 배치 — 인스턴싱으로 드로우 수 고정) ----------
-  // 접지 그림자(가짜 AO) 텍스처 — 나무·패드·부스 밑을 살짝 어둡게 해 "붕 뜬 느낌" 제거
+  // 접지 그림자(가짜 AO) 텍스처 — 차·나무·패드·부스 밑을 살짝 어둡게 해 "붕 뜬 느낌" 제거
   const aoTex = (() => {
     const c = document.createElement("canvas");
     c.width = c.height = 128;
@@ -579,6 +608,74 @@ function init() {
     return m;
   }
 
+  // ---------- 주차장 (정문 동측 바깥) — 아스팔트 + 실주차 차량 ----------
+  const parking = new THREE.Mesh(
+    new THREE.PlaneGeometry(30, 13),
+    new THREE.MeshStandardMaterial({
+      color: 0xa5a5a5,
+      roughness: 0.98,
+      map: pbrTex("assets/tex/asphalt_c.jpg", true, 6, 2.6),
+      normalMap: pbrTex("assets/tex/asphalt_n.jpg", false, 6, 2.6),
+    })
+  );
+  parking.rotation.x = -Math.PI / 2;
+  parking.position.set(30, 0.012, SITE.zS + 8.5);
+  parking.receiveShadow = true;
+  scene.add(parking);
+  const lineMat = new THREE.MeshBasicMaterial({ color: 0xf2efe6 });
+  for (let x = 18; x <= 42; x += 3.4) {
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 5.4), lineMat);
+    line.rotation.x = -Math.PI / 2;
+    line.position.set(x, 0.016, SITE.zS + 5.6);
+    scene.add(line);
+  }
+  const parkSign = nameSign("🅿️ 주차장");
+  parkSign.position.set(30, 3, SITE.zS + 2.4);
+  scene.add(parkSign);
+  // 주차 차량 (메탈릭 페인트 — HDRI 환경 반사로 실차 느낌, 각 ~7메시)
+  function makeCar(paint) {
+    const g = new THREE.Group();
+    const paintMat = new THREE.MeshStandardMaterial({ color: paint, metalness: 0.85, roughness: 0.28, envMapIntensity: 1.1 });
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x0d1218, metalness: 0.9, roughness: 0.08 });
+    const darkMat = new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.85 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.52, 4.15), paintMat);
+    body.position.y = 0.62;
+    body.castShadow = true;
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.16, 3.9), paintMat);
+    hood.position.y = 0.94;
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.58, 0.5, 2.1), glassMat);
+    cabin.position.set(0, 1.22, -0.25);
+    cabin.castShadow = true;
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.08, 2.14), paintMat);
+    roof.position.set(0, 1.5, -0.25);
+    const bumperF = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.3, 0.3), darkMat);
+    bumperF.position.set(0, 0.42, 2.05);
+    const bumperB = bumperF.clone();
+    bumperB.position.z = -2.05;
+    const wheelGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.26, 14);
+    wheelGeo.rotateZ(Math.PI / 2);
+    const hubGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.27, 10);
+    hubGeo.rotateZ(Math.PI / 2);
+    const hubMat = new THREE.MeshStandardMaterial({ color: 0xb9bcc2, metalness: 0.9, roughness: 0.3 });
+    [[-0.82, 1.35], [0.82, 1.35], [-0.82, -1.35], [0.82, -1.35]].forEach(([wx, wz]) => {
+      const w = new THREE.Mesh(wheelGeo, darkMat);
+      w.position.set(wx, 0.34, wz);
+      g.add(w);
+      const h = new THREE.Mesh(hubGeo, hubMat);
+      h.position.set(wx, 0.34, wz);
+      g.add(h);
+    });
+    g.add(makeAoDisc(5.2), body, hood, cabin, roof, bumperF, bumperB);
+    return g;
+  }
+  [0xb9bdc4, 0x27435f, 0x2b2d33, 0x7a2530, 0xe4e6e9].forEach((paint, i) => {
+    const car = makeCar(paint);
+    car.position.set(19.7 + i * 3.4 + (i % 2) * 0.12, 0, SITE.zS + 5.9 + (i % 2) * 0.25);
+    car.rotation.y = (i % 2 ? Math.PI : 0) + (Math.random() - 0.5) * 0.04;
+    scene.add(car);
+  });
+
+  // ---------- 조경 (통로·경계를 따라 규칙 배치 — 인스턴싱으로 드로우 수 고정) ----------
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8a6a4f, roughness: 1 });
   const leafMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true }); // 실제 색은 인스턴스 컬러
   const CROWN_COLS = [0x6fae63, 0x568f52, 0x7fb96e, 0x497f4b].map((c) => new THREE.Color(c));
