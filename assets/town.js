@@ -85,7 +85,8 @@ function init() {
   scene.background = new THREE.Color(0xbfe0f5);
   scene.fog = new THREE.Fog(0xbfe0f5, 55, 155);
 
-  const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 520); // 원경 산 능선까지 보이게
+  // near 0.5: 깊이 버퍼 정밀도 확보 (far 확장으로 인한 바닥 z-파이팅 방지 — 카메라가 0.5m 안까지 붙을 일 없음)
+  const camera = new THREE.PerspectiveCamera(48, 1, 0.5, 520);
 
   // ---------- PBR 지면 텍스처 (ambientCG CC0, 512px 축소판 — 모바일 로딩 부담 최소화) ----------
   THREE.Cache.enabled = true; // 같은 텍스처 파일 재요청 방지
@@ -178,7 +179,7 @@ function init() {
       lampGroup.add(pl);
       const pool = new THREE.Mesh(new THREE.PlaneGeometry(9, 9), poolMat);
       pool.rotation.x = -Math.PI / 2;
-      pool.position.set(0, 0.03, z);
+      pool.position.set(0, 0.055, z);
       lampGroup.add(pool);
     }
     lampGroup.visible = false;
@@ -440,7 +441,8 @@ function init() {
   // ---------- 통로 (곧은 격자 포장, PBR 포장석 텍스처) ----------
   // 조각마다 크기가 달라 타일링이 일정하도록 스트립별 텍스처 반복값을 계산한다
   // asphalt=true면 차량 도로 느낌의 아스팔트 재질 (메인 대로·주차장), 아니면 보행 포장석
-  function roadStrip(w, d, x, z, asphalt) {
+  // y: 겹치는 바닥끼리 z-파이팅하지 않게 층별 높이를 분리 (메인 0.02 < 세로 0.028 < 동서 0.036)
+  function roadStrip(w, d, x, z, asphalt, y) {
     const cTex = asphalt ? "assets/tex/asphalt_c.jpg" : "assets/tex/paving_c.jpg";
     const nTex = asphalt ? "assets/tex/asphalt_n.jpg" : "assets/tex/paving_n.jpg";
     const rep = asphalt ? 5.2 : 2.6;
@@ -454,7 +456,7 @@ function init() {
       })
     );
     p.rotation.x = -Math.PI / 2;
-    p.position.set(x, 0.02, z);
+    p.position.set(x, y == null ? 0.02 : y, z);
     p.receiveShadow = true;
     scene.add(p);
   }
@@ -474,12 +476,12 @@ function init() {
   scene.add(plaza);
   // 메인 대로 (남북 축, 정문→부지 끝) — 아스팔트 (전시장 관람차·서비스 차량 도로 컨셉)
   roadStrip(7, SITE.zS - SITE.zN + 10, 0, (SITE.zN + SITE.zS) / 2 + 5, true);
-  // 집 줄 사이 통로 (동서, 각 줄 정면) — 보행 포장석
+  // 집 줄 사이 통로 (동서, 각 줄 정면) — 보행 포장석 (메인 도로 위를 지나므로 한 층 위)
   const AISLES = [19.5, 8.5, -2.5, -13.5, -24.5, -35.5, -46.5, -57.5, -68.5];
-  AISLES.forEach((z) => roadStrip(136, 2.4, 0, z));
-  // 안쪽 블록 ↔ 파트너 블록 사이 세로 통로
-  roadStrip(2.4, 92, 36.5, -25);
-  roadStrip(2.4, 92, -36.5, -25);
+  AISLES.forEach((z) => roadStrip(136, 2.4, 0, z, false, 0.036));
+  // 안쪽 블록 ↔ 파트너 블록 사이 세로 통로 (동서 통로 아래·메인 위)
+  roadStrip(2.4, 92, 36.5, -25, false, 0.028);
+  roadStrip(2.4, 92, -36.5, -25, false, 0.028);
   // ---------- 메인 대로 차선·연석 (통로 교차부·광장은 비움) ----------
   {
     const CROSS = AISLES.map((a) => [a - 1.9, a + 1.9]).concat([[18.5, 33.5]]); // 광장 구간 포함
@@ -503,7 +505,7 @@ function init() {
     edgeItems.forEach((it) => {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(0.13, it.len), lineMat);
       m.rotation.x = -Math.PI / 2;
-      m.position.set(it.x, 0.027, it.z);
+      m.position.set(it.x, 0.032, it.z);
       scene.add(m);
     });
     curbItems.forEach((it) => {
@@ -522,7 +524,7 @@ function init() {
     dashItems.forEach((z) => {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 2.2), lineMat);
       m.rotation.x = -Math.PI / 2;
-      m.position.set(0, 0.027, z);
+      m.position.set(0, 0.032, z);
       scene.add(m);
     });
   }
@@ -1827,7 +1829,7 @@ function init() {
       new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false })
     );
     m.rotation.x = -Math.PI / 2;
-    m.position.y = 0.021;
+    m.position.y = 0.05;
     m.renderOrder = 1;
     group.add(m);
     return m;
@@ -2659,7 +2661,7 @@ function init() {
     tuneQuality(Math.min(rawDt, 1)); // FPS 측정은 실제 프레임 간격으로
 
     // 발밑 블롭 그림자: 점프 중에도 지면에 붙어 있고, 높이에 따라 작아짐
-    playerBlob.position.y = 0.021 - player.position.y;
+    playerBlob.position.y = 0.05 - player.position.y;
     playerBlob.scale.setScalar(Math.max(0.45, 1 - player.position.y * 0.22));
     // 존 진입 감지 (0.35초 간격이면 충분)
     zoneCheckT += dt;
