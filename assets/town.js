@@ -406,6 +406,32 @@ function init() {
   ground.position.set(0, 0, (SITE.zN + SITE.zS) / 2);
   ground.receiveShadow = true;
   scene.add(ground);
+  // 잔디 매크로 얼룩 오버레이 — 큰 스케일의 명암 변화로 텍스처 타일 반복이 눈에 안 띄게
+  {
+    const c = document.createElement("canvas");
+    c.width = c.height = 512;
+    const x = c.getContext("2d");
+    for (let i = 0; i < 70; i++) {
+      const px = Math.random() * 512, py = Math.random() * 512;
+      const r = 34 + Math.random() * 78;
+      const dark = Math.random() < 0.55;
+      const g = x.createRadialGradient(px, py, 2, px, py, r);
+      g.addColorStop(0, dark ? "rgba(38,66,32,0.13)" : "rgba(214,236,168,0.11)");
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      x.fillStyle = g;
+      x.fillRect(px - r, py - r, r * 2, r * 2);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(3, 3);
+    const macro = new THREE.Mesh(
+      new THREE.PlaneGeometry(SITE.x * 2, SITE.zS - SITE.zN),
+      new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false })
+    );
+    macro.rotation.x = -Math.PI / 2;
+    macro.position.set(0, 0.006, (SITE.zN + SITE.zS) / 2);
+    scene.add(macro);
+  }
 
   // ---------- 통로 (곧은 격자 포장, PBR 포장석 텍스처) ----------
   // 조각마다 크기가 달라 타일링이 일정하도록 스트립별 텍스처 반복값을 계산한다
@@ -528,10 +554,34 @@ function init() {
   parkSign.position.set(30, 3, SITE.zS + 2.4);
   scene.add(parkSign);
 
-  // ---------- 조경 (통로·경계를 따라 규칙 배치, 전체 4드로우) ----------
+  // ---------- 조경 (통로·경계를 따라 규칙 배치 — 인스턴싱으로 드로우 수 고정) ----------
+  // 접지 그림자(가짜 AO) 텍스처 — 나무·패드·부스 밑을 살짝 어둡게 해 "붕 뜬 느낌" 제거
+  const aoTex = (() => {
+    const c = document.createElement("canvas");
+    c.width = c.height = 128;
+    const x = c.getContext("2d");
+    const g = x.createRadialGradient(64, 64, 6, 64, 64, 62);
+    g.addColorStop(0, "rgba(12,18,12,0.34)");
+    g.addColorStop(0.65, "rgba(12,18,12,0.14)");
+    g.addColorStop(1, "rgba(12,18,12,0)");
+    x.fillStyle = g;
+    x.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(c);
+  })();
+  const aoMat = new THREE.MeshBasicMaterial({ map: aoTex, transparent: true, depthWrite: false });
+  const aoGeo = new THREE.PlaneGeometry(1, 1);
+  aoGeo.rotateX(-Math.PI / 2); // buildInstanced가 ry만 지원하므로 지오메트리 자체를 눕힘
+  function makeAoDisc(size) {
+    const m = new THREE.Mesh(aoGeo, aoMat);
+    m.scale.set(size, 1, size);
+    m.position.y = 0.013;
+    m.renderOrder = 0;
+    return m;
+  }
+
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8a6a4f, roughness: 1 });
-  const leafMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }); // 실제 색은 인스턴스 컬러
-  const CROWN_COLS = [new THREE.Color(0x67a860), new THREE.Color(0x4e8f4e)];
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true }); // 실제 색은 인스턴스 컬러
+  const CROWN_COLS = [0x6fae63, 0x568f52, 0x7fb96e, 0x497f4b].map((c) => new THREE.Color(c));
   const treeSpots = [];
   // 동·서 울타리 바깥 가로수
   for (let z = -76; z <= 28; z += 13) {
@@ -546,15 +596,30 @@ function init() {
     trunkMat,
     treeSpots.map(([x, z], i) => ({ x, y: (2 + (i % 3) * 0.5) / 2, z, sy: 2 + (i % 3) * 0.5 }))
   );
-  buildInstanced(
-    new THREE.IcosahedronGeometry(1, 0),
-    leafMat,
-    treeSpots.map(([x, z], i) => {
-      const h = 2 + (i % 3) * 0.5;
-      const r = 1 + (i % 2) * 0.35;
-      return { x, y: h + 0.5, z, sx: r, sy: r, sz: r, color: CROWN_COLS[i % 2] };
-    })
-  );
+  // 수관(잎)은 3겹 로브 — 그루마다 색·크기·방향이 달라 훨씬 자연스러운 실루엣 (드로우 3)
+  const crownGeo = new THREE.IcosahedronGeometry(1, 1);
+  const crownCol = (i, j) => {
+    const c = CROWN_COLS[(i + j) % CROWN_COLS.length].clone();
+    return c.offsetHSL(0, 0, ((i * 37 + j * 53) % 10 - 5) / 100); // 그루별 미묘한 명도 변화
+  };
+  buildInstanced(crownGeo, leafMat, treeSpots.map(([x, z], i) => {
+    const h = 2 + (i % 3) * 0.5;
+    const r = 1.05 + (i % 2) * 0.32;
+    return { x, y: h + 0.42, z, sx: r, sy: r * 0.92, sz: r, ry: i * 1.3, color: crownCol(i, 0) };
+  }));
+  buildInstanced(crownGeo, leafMat, treeSpots.map(([x, z], i) => {
+    const h = 2 + (i % 3) * 0.5;
+    const r = (1.05 + (i % 2) * 0.32) * 0.62;
+    const a = i * 2.1;
+    return { x: x + Math.cos(a) * 0.62, y: h + 0.18, z: z + Math.sin(a) * 0.62, sx: r, sy: r, sz: r, ry: i * 0.7, color: crownCol(i, 1) };
+  }));
+  buildInstanced(crownGeo, leafMat, treeSpots.map(([x, z], i) => {
+    const h = 2 + (i % 3) * 0.5;
+    const r = (1.05 + (i % 2) * 0.32) * 0.55;
+    return { x: x + Math.sin(i) * 0.2, y: h + 1.08, z: z + Math.cos(i) * 0.2, sx: r, sy: r, sz: r, ry: i * 2.4, color: crownCol(i, 2) };
+  }));
+  // 나무 밑 접지 그림자
+  buildInstanced(aoGeo, aoMat, treeSpots.map(([x, z], i) => ({ x, y: 0.012, z, sx: 3.2 + (i % 2) * 0.6, sz: 3.2 + (i % 2) * 0.6 })));
   // 메인 대로 양옆 생울타리 + 꽃 화단 (통로 교차부는 비움)
   const hedgeMat = new THREE.MeshStandardMaterial({ color: 0x3f7a44, roughness: 0.9 });
   const flowerMat = new THREE.MeshStandardMaterial({ color: 0xd9799b, roughness: 0.8 });
@@ -1023,6 +1088,83 @@ function init() {
   buildInstanced(new THREE.IcosahedronGeometry(0.42, 0), new THREE.MeshStandardMaterial({ color: 0x4e8f4e, roughness: 0.9 }), bushes);
   buildBooths(zoneOvData);
   buildExperienceZone(zoneOvData);
+  scatterGreenery();
+  }
+
+  // ---------- 풀 포기·들꽃 스캐터 (걷는 잔디밭에만 — 도로·존 블록·광장 회피) ----------
+  // 존 경계(ZONES)가 확정된 뒤에 호출된다. 십자 교차 쿼드 인스턴싱으로 드로우 4회 고정.
+  function scatterGreenery() {
+    const tuftTex = (() => {
+      const c = document.createElement("canvas");
+      c.width = 64; c.height = 64;
+      const x = c.getContext("2d");
+      for (let i = 0; i < 9; i++) {
+        const bx = 10 + i * 5 + (Math.random() - 0.5) * 4;
+        x.strokeStyle = ["#5d9a52", "#6fae63", "#4c8746"][i % 3];
+        x.lineWidth = 2.6;
+        x.beginPath();
+        x.moveTo(bx, 64);
+        x.quadraticCurveTo(bx + (Math.random() - 0.5) * 10, 34, bx + (Math.random() - 0.5) * 16, 10 + Math.random() * 12);
+        x.stroke();
+      }
+      return new THREE.CanvasTexture(c);
+    })();
+    const petalDotTex = (() => {
+      const c = document.createElement("canvas");
+      c.width = c.height = 32;
+      const x = c.getContext("2d");
+      x.fillStyle = "#fff";
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2;
+        x.beginPath();
+        x.ellipse(16 + Math.cos(a) * 6, 16 + Math.sin(a) * 6, 5, 5, 0, 0, Math.PI * 2);
+        x.fill();
+      }
+      x.fillStyle = "#ffd75e";
+      x.beginPath();
+      x.arc(16, 16, 4, 0, Math.PI * 2);
+      x.fill();
+      return new THREE.CanvasTexture(c);
+    })();
+    const inZone = (x, z) => {
+      for (const zn of Object.values(ZONES)) {
+        const minX = Math.min(...zn.cols) - XP / 2 - 1;
+        const maxX = Math.max(...zn.cols) + XP / 2 + 1;
+        const front = zn.rowStart + PITCH / 2 + 1;
+        const back = zn.rowStart - ((zn.rowStart < 0 ? 6 : 3) - 0.5) * PITCH - 1;
+        if (x >= minX && x <= maxX && z >= back && z <= front) return true;
+      }
+      return x >= EXP.minX - 1 && x <= EXP.maxX + 1 && z >= EXP.back - 1 && z <= EXP.front + 1;
+    };
+    const tufts = [], flowers = [];
+    let guard = 0;
+    while (tufts.length < 240 && guard++ < 4000) {
+      const x = -68 + Math.random() * 136;
+      const z = -78 + Math.random() * 108;
+      if (Math.abs(x) < 5.4) continue;                       // 메인 대로
+      if (AISLES.some((a) => Math.abs(z - a) < 2.2)) continue; // 동서 통로
+      if (Math.abs(Math.abs(x) - 36.5) < 2.2) continue;      // 남북 보조로
+      if (Math.hypot(x, z - 26) < 9.5) continue;             // 입구 광장
+      if (inZone(x, z)) continue;                            // 존 블록(부지) 내부
+      const s = 0.55 + Math.random() * 0.5;
+      const item = { x, y: 0.16 * s, z, sx: s, sy: s, sz: s, ry: Math.random() * Math.PI };
+      tufts.push(item);
+      if (tufts.length % 6 === 0) {
+        flowers.push({
+          x: x + 0.3, y: 0.1, z: z + 0.2, sx: 0.34, sy: 0.34, sz: 0.34, ry: Math.random() * Math.PI,
+          color: new THREE.Color([0xf3a6c0, 0xf6e08a, 0xffffff, 0xc9a6f3][flowers.length % 4]),
+        });
+      }
+    }
+    const tuftGeo = new THREE.PlaneGeometry(0.62, 0.34);
+    tuftGeo.translate(0, 0.02, 0);
+    const tuftMat = new THREE.MeshStandardMaterial({ map: tuftTex, transparent: true, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 1 });
+    buildInstanced(tuftGeo, tuftMat, tufts);
+    buildInstanced(tuftGeo, tuftMat, tufts.map((t) => Object.assign({}, t, { ry: t.ry + Math.PI / 2 })));
+    const flowerGeo = new THREE.PlaneGeometry(0.5, 0.5);
+    flowerGeo.rotateX(-Math.PI / 2);
+    const flowerMat2 = new THREE.MeshBasicMaterial({ map: petalDotTex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide });
+    buildInstanced(flowerGeo, flowerMat2, flowers);
   }
   let zoneOvData = {}; // buildZoneDecor 호출 전에 설정됨
 
@@ -1065,7 +1207,7 @@ function init() {
       // 부스 간판: 백월 위 보드 (존 accent 언더라인)
       const sign = makeBoardMesh(label, 4.2, 1.0, { accent: z.color });
       sign.position.set(0, 3.55, -2.55);
-      b.add(floor, backWall, sideL, sideR, counter, canopy, sign);
+      b.add(makeAoDisc(11.5), floor, backWall, sideL, sideR, counter, canopy, sign);
       b.position.set(slot.x, 0, slot.z);
       scene.add(b);
     }
@@ -1110,6 +1252,80 @@ function init() {
     infoDesk.add(base, top, infoSign);
     infoDesk.position.set(INFO_POS.x - 2.5, 0, INFO_POS.z);
     scene.add(infoDesk);
+  }
+
+  // ---------- 광장 분수 (입구 광장 서측 — 물결·물방울 애니메이션) ----------
+  let fountainWater = null;
+  const fountainDrops = [];
+  {
+    const f = new THREE.Group();
+    const stone = new THREE.MeshStandardMaterial({ color: 0xd8d3c4, roughness: 0.75 });
+    const basin = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.75, 0.5, 18), stone);
+    basin.position.y = 0.25;
+    basin.castShadow = true;
+    // 물결 텍스처 (동심원 링) — 회전시키면 잔잔히 이는 물결처럼 보인다
+    const wc = document.createElement("canvas");
+    wc.width = wc.height = 128;
+    const wx = wc.getContext("2d");
+    wx.fillStyle = "#7fc4d8";
+    wx.fillRect(0, 0, 128, 128);
+    wx.strokeStyle = "rgba(255,255,255,0.5)";
+    for (let r = 10; r < 70; r += 9) {
+      wx.lineWidth = 1.6;
+      wx.beginPath();
+      wx.arc(64, 64, r + Math.random() * 3, Math.random(), Math.random() + 4.5);
+      wx.stroke();
+    }
+    fountainWater = new THREE.Mesh(
+      new THREE.CircleGeometry(1.42, 24),
+      new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(wc), transparent: true, opacity: 0.9, roughness: 0.25, metalness: 0.1 })
+    );
+    fountainWater.rotation.x = -Math.PI / 2;
+    fountainWater.position.y = 0.46;
+    const column = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.9, 10), stone);
+    column.position.y = 0.9;
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.4, 0.16, 14), stone);
+    bowl.position.y = 1.38;
+    // 물방울 (은은한 하늘빛 발광 구슬이 상하로 통통)
+    const dropMat = new THREE.MeshBasicMaterial({ color: 0xbfe8f5, transparent: true, opacity: 0.85 });
+    for (let i = 0; i < 6; i++) {
+      const d = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), dropMat);
+      d.userData.a = (i / 6) * Math.PI * 2;
+      fountainDrops.push(d);
+      f.add(d);
+    }
+    f.add(makeAoDisc(4.6), basin, fountainWater, column, bowl);
+    f.position.set(-6.5, 0, 29.5);
+    scene.add(f);
+  }
+
+  // ---------- 떠다니는 꽃잎 파티클 (산들바람 — 저사양에서는 자동 꺼짐) ----------
+  let petals = null;
+  {
+    const pc = document.createElement("canvas");
+    pc.width = pc.height = 32;
+    const px = pc.getContext("2d");
+    px.fillStyle = "rgba(255,214,228,0.95)";
+    px.beginPath();
+    px.ellipse(16, 16, 9, 6, 0.6, 0, Math.PI * 2);
+    px.fill();
+    const N = 80;
+    const pos = new Float32Array(N * 3);
+    const seed = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      pos[i * 3] = -60 + Math.random() * 120;
+      pos[i * 3 + 1] = 0.5 + Math.random() * 6;
+      pos[i * 3 + 2] = -70 + Math.random() * 102;
+      seed[i] = Math.random() * Math.PI * 2;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    petals = new THREE.Points(geo, new THREE.PointsMaterial({
+      map: new THREE.CanvasTexture(pc), size: 0.26, transparent: true, opacity: 0.85,
+      depthWrite: false, sizeAttenuation: true,
+    }));
+    petals.userData.seed = seed;
+    scene.add(petals);
   }
 
   // ---------- 체험존 (부대시설 구역) ----------
@@ -1299,6 +1515,7 @@ function init() {
           const pad = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.22, 8.6), padMat);
           pad.position.y = 0.11;
           pad.receiveShadow = true;
+          wrap.add(makeAoDisc(11.5)); // 패드 접지 그림자 — 판이 잔디에 붙어 보이게
           wrap.add(pad);
           const inst = seed.clone(true);
           const foot = 7.2 + ((i * 2654435761) % 100) / 100 * 0.8; // 부지 내 크기 변화 (최대 8)
@@ -2207,6 +2424,7 @@ function init() {
     sun.castShadow = qLevel < 2; // 저사양: 그림자 끔
     // 저사양: NPC 방문객 수 축소 (앞의 2명만)
     npcWalkers.forEach((w, i) => { if (w.g) w.g.visible = qLevel < 2 || i < 2; });
+    if (petals) petals.visible = qLevel < 2; // 저사양: 꽃잎 파티클 끔
   }
 
   // ---------- 존 진입 배너 (존 경계를 넘으면 상단에 잠깐 표시) ----------
@@ -2440,6 +2658,34 @@ function init() {
     }
 
     clouds.forEach((c, i) => { c.position.x += dt * (0.25 + i * 0.05); if (c.position.x > 55) c.position.x = -55; });
+
+    // 분수: 물결 회전 + 물방울 통통
+    if (fountainWater) {
+      fountainWater.rotation.z += dt * 0.35;
+      const T = clock.elapsedTime;
+      fountainDrops.forEach((d, i) => {
+        const p = (T * 1.4 + i * 0.55) % 1;
+        d.position.set(Math.cos(d.userData.a) * (0.3 + p * 0.9), 1.45 + Math.sin(p * Math.PI) * 0.75 - p * 0.5, Math.sin(d.userData.a) * (0.3 + p * 0.9));
+        d.scale.setScalar(1 - p * 0.5);
+      });
+    }
+    // 꽃잎: 천천히 낙하 + 좌우 하늘하늘 (바닥에 닿으면 위에서 재등장)
+    if (petals && petals.visible) {
+      const arr = petals.geometry.attributes.position.array;
+      const seed = petals.userData.seed;
+      const T = clock.elapsedTime;
+      for (let i = 0; i < seed.length; i++) {
+        arr[i * 3] += Math.sin(T * 0.9 + seed[i]) * dt * 0.5;
+        arr[i * 3 + 1] -= dt * (0.28 + (seed[i] % 1) * 0.2);
+        arr[i * 3 + 2] += Math.cos(T * 0.7 + seed[i]) * dt * 0.35;
+        if (arr[i * 3 + 1] < 0.15) {
+          arr[i * 3] = player.position.x - 40 + Math.random() * 80;
+          arr[i * 3 + 1] = 5 + Math.random() * 3;
+          arr[i * 3 + 2] = player.position.z - 35 + Math.random() * 70;
+        }
+      }
+      petals.geometry.attributes.position.needsUpdate = true;
+    }
 
     // 풍선 둥실거림
     const bobT = clock.elapsedTime;
