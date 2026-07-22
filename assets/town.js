@@ -15,6 +15,32 @@ const loadingEl = document.getElementById("town-loading");
 const joyBase = document.getElementById("town-joystick");
 const joyStick = document.getElementById("town-stick");
 
+// ---------- 로딩 화면: 진행률 + 팁 로테이션 ----------
+// GLB·HDRI·텍스처가 모두 기본 로딩매니저를 쓰므로 전체 진행률을 한 번에 집계할 수 있다.
+{
+  const fill = document.getElementById("town-loading-fill");
+  const tipEl = document.getElementById("town-loading-tip");
+  const TIPS = [
+    "💡 SHIFT를 누르면 달릴 수 있어요",
+    "💡 집 앞에 서면 가격·상담 카드가 떠요",
+    "💡 왼쪽 아래 미니맵을 누르면 큰 지도가 열려요",
+    "💡 남서쪽 체험존에서 내 집을 직접 지어볼 수 있어요",
+    "💡 🌙 버튼으로 밤의 전시장도 구경해보세요",
+    "💡 안내봇 메타봇에게 다가가면 존을 안내해줘요",
+  ];
+  let tipIdx = 0;
+  const tipTimer = setInterval(() => {
+    if (!loadingEl || loadingEl.hidden) { clearInterval(tipTimer); return; }
+    tipIdx = (tipIdx + 1) % TIPS.length;
+    if (tipEl) tipEl.textContent = TIPS[tipIdx];
+  }, 2200);
+  let maxTotal = 0;
+  THREE.DefaultLoadingManager.onProgress = (url, loaded, total) => {
+    maxTotal = Math.max(maxTotal, total);
+    if (fill && maxTotal) fill.style.width = Math.min(100, Math.round((loaded / maxTotal) * 100)) + "%";
+  };
+}
+
 let started = false;
 let running = false;
 
@@ -99,6 +125,7 @@ function init() {
   sun.shadow.camera.left = -36; sun.shadow.camera.right = 36;
   sun.shadow.camera.top = 36; sun.shadow.camera.bottom = -36;
   sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.02; // 벽면 그림자 줄무늬(acne) 제거
   scene.add(sun);
   scene.add(sun.target);
 
@@ -131,10 +158,26 @@ function init() {
   function buildLamps() {
     // 밤 전용 가로등 불빛 (기둥·전구는 소품 섹션에서 상시 표시)
     lampGroup = new THREE.Group();
+    // 바닥 불빛 웅덩이 텍스처 (라디얼 그라데이션 — 조명 웅덩이 연출, 드로우 부담 거의 없음)
+    const pc = document.createElement("canvas");
+    pc.width = pc.height = 128;
+    const px = pc.getContext("2d");
+    const grad = px.createRadialGradient(64, 64, 4, 64, 64, 62);
+    grad.addColorStop(0, "rgba(255,220,160,0.85)");
+    grad.addColorStop(0.5, "rgba(255,205,130,0.35)");
+    grad.addColorStop(1, "rgba(255,200,120,0)");
+    px.fillStyle = grad;
+    px.fillRect(0, 0, 128, 128);
+    const poolTex = new THREE.CanvasTexture(pc);
+    const poolMat = new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
     for (let z = 12; z >= -60; z -= 18) {
       const pl = new THREE.PointLight(0xffd9a0, 15, 26, 2);
       pl.position.set(0, 3.6, z);
       lampGroup.add(pl);
+      const pool = new THREE.Mesh(new THREE.PlaneGeometry(9, 9), poolMat);
+      pool.rotation.x = -Math.PI / 2;
+      pool.position.set(0, 0.03, z);
+      lampGroup.add(pool);
     }
     lampGroup.visible = false;
     scene.add(lampGroup);
@@ -146,6 +189,13 @@ function init() {
     // 가로등 전구 발광 (밤 + 블룸에서 은은히 번짐)
     lampBulbMat.emissive.set(on ? 0xffdf9e : 0x000000);
     lampBulbMat.emissiveIntensity = on ? 1.6 : 1;
+    // 간판(보드)들이 밤에 은은히 발광 — 야간 전시장 분위기
+    (BOARD_MATS || []).forEach((m) => {
+      m.emissive.set(on ? 0xffffff : 0x000000);
+      m.emissiveMap = on ? m.map : null;
+      m.emissiveIntensity = 0.5;
+      m.needsUpdate = true;
+    });
     if (on) {
       scene.background = new THREE.Color(0x0b1322);
       scene.environment = null;
@@ -604,6 +654,7 @@ function init() {
           const g = new THREE.Group();
           g.add(rig.obj);
           g.position.set(cfg.path[0][0], 0, cfg.path[0][1]);
+          addBlob(g, 0.5);
           scene.add(g);
           if (rig.walk) rig.walk.paused = false; // 항상 걷기 모션
           npcWalkers.push({ g, rig, cfg, wp: 1 });
@@ -840,13 +891,13 @@ function init() {
     return t;
   }
   function hex(n) { return `#${n.toString(16).padStart(6, "0")}`; }
+  // 밤 모드에서 간판을 은은히 발광시키기 위한 재질 목록 (makeBoardMesh가 상단 코드에서도 호출되므로 var로 호이스팅)
+  var BOARD_MATS;
   function makeBoardMesh(text, w, h, o) {
     o = o || {};
-    const mesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(w, h),
-      new THREE.MeshStandardMaterial({ map: boardTexture(text, { w, h, bg: o.bg, fg: o.fg, accent: o.accent != null ? hex(o.accent) : null }), roughness: 0.85, side: THREE.DoubleSide })
-    );
-    return mesh;
+    const mat = new THREE.MeshStandardMaterial({ map: boardTexture(text, { w, h, bg: o.bg, fg: o.fg, accent: o.accent != null ? hex(o.accent) : null }), roughness: 0.85, side: THREE.DoubleSide });
+    (BOARD_MATS = BOARD_MATS || []).push(mat);
+    return new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
   }
   const tagPostMat = new THREE.MeshStandardMaterial({ color: 0x8a6a4f, roughness: 0.85 });
   function makeHouseTag(name) {
@@ -1396,6 +1447,32 @@ function init() {
   const player = new THREE.Group();
   scene.add(player);
 
+  // 캐릭터 발밑 블롭 그림자 — 떠 보이는 느낌 제거 (실그림자 꺼진 저사양에서 특히 효과)
+  const blobTex = (() => {
+    const c = document.createElement("canvas");
+    c.width = c.height = 64;
+    const x = c.getContext("2d");
+    const g = x.createRadialGradient(32, 32, 2, 32, 32, 30);
+    g.addColorStop(0, "rgba(10,14,10,0.42)");
+    g.addColorStop(0.7, "rgba(10,14,10,0.18)");
+    g.addColorStop(1, "rgba(10,14,10,0)");
+    x.fillStyle = g;
+    x.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  })();
+  function addBlob(group, r) {
+    const m = new THREE.Mesh(
+      new THREE.PlaneGeometry(r * 2, r * 2),
+      new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false })
+    );
+    m.rotation.x = -Math.PI / 2;
+    m.position.y = 0.021;
+    m.renderOrder = 1;
+    group.add(m);
+    return m;
+  }
+  const playerBlob = addBlob(player, 0.62);
+
   const CHARACTERS = {
     // 메타봇은 안내봇·큐레이터 전용 — 방문객 선택 불가 (reserved)
     robot: { label: "메타봇", walk: "assets/robot-walk.glb", run: "assets/robot-run.glb", height: 1.9, reserved: true },
@@ -1577,6 +1654,7 @@ function init() {
     const charKey = CHARACTERS[meta.char] ? meta.char : "robot";
     const group = new THREE.Group();
     group.position.set((Math.random() - 0.5) * 4, 0, 4 + Math.random() * 3);
+    addBlob(group, 0.55);
     scene.add(group);
     const metaKey = `${charKey}|${meta.color || ""}|${meta.scale || 1}|${meta.nick || ""}`;
     const entry = { group, rig: null, metaKey, target: null };
@@ -1770,6 +1848,7 @@ function init() {
       npc.add(label);
       npc.position.set(INFO_POS.x + 2.6, 0, INFO_POS.z);
       npc.rotation.y = Math.atan2(0 - (INFO_POS.x + 2.6), 30 - INFO_POS.z);
+      addBlob(npc, 0.6);
       scene.add(npc);
       npcGroup = npc;
     })
@@ -1961,107 +2040,137 @@ function init() {
   const mapCanvas = document.getElementById("town-map");
   const mapCtx = mapCanvas ? mapCanvas.getContext("2d") : null;
   let mapTimer = 0;
-  // 미니맵 탭 → 해당 존 입구로 순간이동
+  // 미니맵 탭 → 큰 지도 열기 (큰 지도에서 원하는 자리를 탭하면 순간이동)
+  const bigmapEl = document.getElementById("bigmap");
+  const bigCanvas = document.getElementById("bigmap-canvas");
+  const bigCtx = bigCanvas ? bigCanvas.getContext("2d") : null;
+  function openBigMap() {
+    if (!bigmapEl) return;
+    bigmapEl.hidden = false;
+    if (bigCtx) paintMap(bigCtx, bigCanvas.width, true);
+  }
   if (mapCanvas) {
     mapCanvas.style.pointerEvents = "auto";
     mapCanvas.style.cursor = "pointer";
-    mapCanvas.addEventListener("click", (e) => {
-      const r = mapCanvas.getBoundingClientRect();
-      const S = mapCanvas.width;
-      const scale = (S / 2 - 6) / MAP_EXT;
+    mapCanvas.addEventListener("click", openBigMap);
+  }
+  {
+    const closeBtn = document.getElementById("bigmap-close");
+    if (closeBtn) closeBtn.addEventListener("click", () => { bigmapEl.hidden = true; });
+    if (bigmapEl) bigmapEl.addEventListener("click", (e) => { if (e.target === bigmapEl) bigmapEl.hidden = true; });
+    if (bigCanvas) bigCanvas.addEventListener("click", (e) => {
+      const r = bigCanvas.getBoundingClientRect();
+      const S = bigCanvas.width;
+      const scale = (S / 2 - 10) / MAP_EXT;
       const wx = (((e.clientX - r.left) / r.width) * S - S / 2) / scale;
       const wz = (((e.clientY - r.top) / r.height) * S - S / 2) / scale;
-      let bestCat = null, bestD = Infinity;
-      Object.entries(ZONES).forEach(([cat, z]) => {
-        const cx = (Math.min(...z.cols) + Math.max(...z.cols)) / 2;
-        const cz = z.rowStart - PITCH;
-        const d = Math.hypot(wx - cx, wz - cz);
-        if (d < bestD) { bestD = d; bestCat = cat; }
-      });
-      if (bestCat && window.__seumTown) window.__seumTown.gotoZone(bestCat);
+      // 대지 안으로 클램프 후 그 자리로 이동
+      const tx = Math.max(-SITE.x + 2, Math.min(SITE.x - 2, wx));
+      const tz = Math.max(SITE.zN + 2, Math.min(SITE.zS - 1.5, wz));
+      player.position.x = tx;
+      player.position.z = tz;
+      updateNearCard();
+      bigmapEl.hidden = true;
+      if (window.SeumTownConfig && window.SeumTownConfig.logEvent) window.SeumTownConfig.logEvent("bigmap_tp", "");
     });
   }
-  function drawMap() {
-    const S = mapCanvas.width;
+  // 미니맵·큰 지도 공용 페인터 (big=true면 존 이름 라벨·큰 글씨)
+  function paintMap(ctx, S, big) {
     const c = S / 2;
-    const scale = (S / 2 - 6) / MAP_EXT;
-    mapCtx.clearRect(0, 0, S, S);
-    mapCtx.save();
-    mapCtx.beginPath();
-    mapCtx.arc(c, c, S / 2 - 3, 0, Math.PI * 2);
-    mapCtx.clip();
+    const pad = big ? 10 : 6;
+    const scale = (S / 2 - pad) / MAP_EXT;
+    ctx.clearRect(0, 0, S, S);
+    ctx.save();
+    ctx.beginPath();
+    if (big) ctx.roundRect(2, 2, S - 4, S - 4, 18);
+    else ctx.arc(c, c, S / 2 - 3, 0, Math.PI * 2);
+    ctx.clip();
     // 부지 바깥(짙은 녹지) + 사각 대지 + 울타리
-    mapCtx.fillStyle = "#6e8f58";
-    mapCtx.fillRect(0, 0, S, S);
-    mapCtx.fillStyle = "#93c178";
-    mapCtx.fillRect(c - SITE.x * scale, c + SITE.zN * scale, SITE.x * 2 * scale, (SITE.zS - SITE.zN) * scale);
-    mapCtx.strokeStyle = "rgba(255,255,255,0.75)";
-    mapCtx.lineWidth = 1;
-    mapCtx.strokeRect(c - SITE.x * scale, c + SITE.zN * scale, SITE.x * 2 * scale, (SITE.zS - SITE.zN) * scale);
-    // 존 사각 블록 + 이모지
+    ctx.fillStyle = "#6e8f58";
+    ctx.fillRect(0, 0, S, S);
+    ctx.fillStyle = "#93c178";
+    ctx.fillRect(c - SITE.x * scale, c + SITE.zN * scale, SITE.x * 2 * scale, (SITE.zS - SITE.zN) * scale);
+    ctx.strokeStyle = "rgba(255,255,255,0.75)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(c - SITE.x * scale, c + SITE.zN * scale, SITE.x * 2 * scale, (SITE.zS - SITE.zN) * scale);
+    // 도로 (존 블록보다 먼저 깔아 블록·라벨이 위에 오게)
+    ctx.fillStyle = "rgba(210,200,178,0.95)";
+    ctx.fillRect(c - 3.5 * scale, c + SITE.zN * scale, 7 * scale, (SITE.zS - SITE.zN + 8) * scale);
+    AISLES.forEach((z) => {
+      ctx.fillRect(c - 68 * scale, c + (z - 1.2) * scale, 136 * scale, Math.max(2.4 * scale, 1.6));
+    });
+    [-36.5, 36.5].forEach((x) => {
+      ctx.fillRect(c + (x - 1.2) * scale, c - 71 * scale, Math.max(2.4 * scale, 1.6), 92 * scale);
+    });
+    // 존 사각 블록 + 이모지(+큰 지도는 존 이름)
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const zoneCell = (minX, maxX, front, back, color, emoji, label) => {
+      ctx.fillStyle = `#${color.toString(16).padStart(6, "0")}88`;
+      ctx.fillRect(c + minX * scale, c + back * scale, (maxX - minX) * scale, (front - back) * scale);
+      const zx = c + ((minX + maxX) / 2) * scale;
+      const zy = c + ((front + back) / 2) * scale;
+      if (big) {
+        ctx.font = "22px sans-serif";
+        ctx.fillText(emoji, zx, zy - 10);
+        ctx.font = "700 12px 'Noto Sans KR', sans-serif";
+        ctx.fillStyle = "#233527";
+        ctx.fillText(label, zx, zy + 12);
+      } else {
+        ctx.font = "12px sans-serif";
+        ctx.fillText(emoji, zx, zy);
+      }
+    };
     Object.values(ZONES).forEach((z) => {
       const minX = Math.min(...z.cols) - XP / 2;
       const maxX = Math.max(...z.cols) + XP / 2;
       const front = z.rowStart + PITCH / 2;
       const back = z.rowStart - ((z.rowsDeep || 3) - 0.5) * PITCH;
-      mapCtx.fillStyle = `#${z.color.toString(16).padStart(6, "0")}88`;
-      mapCtx.fillRect(c + minX * scale, c + back * scale, (maxX - minX) * scale, (front - back) * scale);
-      mapCtx.font = "12px sans-serif";
-      mapCtx.textAlign = "center";
-      mapCtx.textBaseline = "middle";
-      mapCtx.fillText(z.emoji, c + ((minX + maxX) / 2) * scale, c + ((front + back) / 2) * scale);
+      zoneCell(minX, maxX, front, back, z.color, z.emoji, z.label.replace(/\s*존$/, ""));
     });
-    // 체험존 블록 (부대시설 구역)
-    mapCtx.fillStyle = `#${EXP.color.toString(16).padStart(6, "0")}88`;
-    mapCtx.fillRect(c + EXP.minX * scale, c + EXP.back * scale, (EXP.maxX - EXP.minX) * scale, (EXP.front - EXP.back) * scale);
-    mapCtx.font = "12px sans-serif";
-    mapCtx.textAlign = "center";
-    mapCtx.textBaseline = "middle";
-    mapCtx.fillText("🎪", c + EXP.cx * scale, c + ((EXP.front + EXP.back) / 2) * scale);
-    // 도로 (메인 남북 + 동서 통로 + 파트너 블록 세로 통로)
-    mapCtx.fillStyle = "rgba(210,200,178,0.95)";
-    mapCtx.fillRect(c - 3.5 * scale, c + SITE.zN * scale, 7 * scale, (SITE.zS - SITE.zN + 8) * scale);
-    AISLES.forEach((z) => {
-      mapCtx.fillRect(c - 68 * scale, c + (z - 1.2) * scale, 136 * scale, Math.max(2.4 * scale, 1.6));
-    });
-    [-36.5, 36.5].forEach((x) => {
-      mapCtx.fillRect(c + (x - 1.2) * scale, c - 71 * scale, Math.max(2.4 * scale, 1.6), 92 * scale);
-    });
+    zoneCell(EXP.minX, EXP.maxX, EXP.front, EXP.back, EXP.color, "🎪", "체험존");
     // 입구 광장 + 인포메이션
-    mapCtx.fillStyle = "#d9cfbb";
-    mapCtx.beginPath();
-    mapCtx.arc(c, c + 26 * scale, 7 * scale, 0, Math.PI * 2);
-    mapCtx.fill();
-    mapCtx.font = "11px sans-serif";
-    mapCtx.fillText("ℹ️", c, c + 26 * scale);
+    ctx.fillStyle = "#d9cfbb";
+    ctx.beginPath();
+    ctx.arc(c, c + 26 * scale, 7 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = big ? "16px sans-serif" : "11px sans-serif";
+    ctx.fillText("ℹ️", c, c + 26 * scale);
     // 집
-    mapCtx.fillStyle = "#274b38";
+    ctx.fillStyle = "#274b38";
+    const hs = big ? 3.6 : 2.4;
     houseLots.forEach((l) => {
-      mapCtx.fillRect(c + l.wrap.position.x * scale - 2.4, c + l.wrap.position.z * scale - 2.4, 4.8, 4.8);
+      ctx.fillRect(c + l.wrap.position.x * scale - hs, c + l.wrap.position.z * scale - hs, hs * 2, hs * 2);
     });
     // 다른 방문자
-    mapCtx.fillStyle = "#f39c12";
+    ctx.fillStyle = "#f39c12";
     remotes.forEach((r) => {
-      mapCtx.beginPath();
-      mapCtx.arc(c + r.group.position.x * scale, c + r.group.position.z * scale, 3, 0, Math.PI * 2);
-      mapCtx.fill();
+      ctx.beginPath();
+      ctx.arc(c + r.group.position.x * scale, c + r.group.position.z * scale, big ? 4.5 : 3, 0, Math.PI * 2);
+      ctx.fill();
     });
     // 내 위치 (진행 방향 화살표)
-    mapCtx.save();
-    mapCtx.translate(c + player.position.x * scale, c + player.position.z * scale);
-    mapCtx.rotate(Math.PI - heading);
-    mapCtx.fillStyle = "#e74c3c";
-    mapCtx.strokeStyle = "#fff";
-    mapCtx.lineWidth = 1.5;
-    mapCtx.beginPath();
-    mapCtx.moveTo(0, -6.5);
-    mapCtx.lineTo(4.4, 4.6);
-    mapCtx.lineTo(-4.4, 4.6);
-    mapCtx.closePath();
-    mapCtx.fill();
-    mapCtx.stroke();
-    mapCtx.restore();
-    mapCtx.restore();
+    ctx.save();
+    ctx.translate(c + player.position.x * scale, c + player.position.z * scale);
+    ctx.rotate(Math.PI - heading);
+    const as = big ? 1.6 : 1;
+    ctx.fillStyle = "#e74c3c";
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, -6.5 * as);
+    ctx.lineTo(4.4 * as, 4.6 * as);
+    ctx.lineTo(-4.4 * as, 4.6 * as);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+  }
+  function drawMap() {
+    paintMap(mapCtx, mapCanvas.width, false);
+    // 큰 지도가 열려 있으면 같이 갱신 (내 위치·방문자 실시간)
+    if (bigmapEl && !bigmapEl.hidden && bigCtx) paintMap(bigCtx, bigCanvas.width, true);
   }
   const lookAt = new THREE.Vector3();
   const clock = new THREE.Clock();
@@ -2098,6 +2207,40 @@ function init() {
     sun.castShadow = qLevel < 2; // 저사양: 그림자 끔
     // 저사양: NPC 방문객 수 축소 (앞의 2명만)
     npcWalkers.forEach((w, i) => { if (w.g) w.g.visible = qLevel < 2 || i < 2; });
+  }
+
+  // ---------- 존 진입 배너 (존 경계를 넘으면 상단에 잠깐 표시) ----------
+  const zoneBannerEl = document.getElementById("town-zonebanner");
+  let curZoneKey = null, zoneBannerTimer = null, zoneCheckT = 0;
+  function zoneAt(x, z) {
+    // front(게이트) 쪽은 통로·입구까지 존 영역으로 인정 (+4) — 입구에 서자마자 배너가 뜨게
+    const M = 4;
+    if (x >= EXP.minX && x <= EXP.maxX && z >= EXP.back && z <= EXP.front + M) {
+      return { key: "체험존", emoji: "🎪", label: "체험존", color: EXP.color };
+    }
+    for (const [key, zn] of Object.entries(ZONES)) {
+      const minX = Math.min(...zn.cols) - XP / 2;
+      const maxX = Math.max(...zn.cols) + XP / 2;
+      const front = zn.rowStart + PITCH / 2;
+      const back = zn.rowStart - ((zn.rowsDeep || 3) - 0.5) * PITCH;
+      if (x >= minX && x <= maxX && z >= back && z <= front + M) return { key, emoji: zn.emoji, label: zn.label, color: zn.color };
+    }
+    return null;
+  }
+  function checkZoneBanner() {
+    const zn = zoneAt(player.position.x, player.position.z);
+    const key = zn ? zn.key : null;
+    if (key === curZoneKey) return;
+    curZoneKey = key;
+    if (!zn || !zoneBannerEl) return;
+    zoneBannerEl.textContent = `${zn.emoji} ${zn.label}`;
+    zoneBannerEl.style.borderColor = hex(zn.color);
+    zoneBannerEl.hidden = false;
+    zoneBannerEl.classList.remove("is-show");
+    void zoneBannerEl.offsetWidth; // 애니메이션 재시작
+    zoneBannerEl.classList.add("is-show");
+    if (zoneBannerTimer) clearTimeout(zoneBannerTimer);
+    zoneBannerTimer = setTimeout(() => { zoneBannerEl.classList.remove("is-show"); }, 2400);
   }
 
   // 외부(시작 화면)·디버그용 훅
@@ -2152,6 +2295,13 @@ function init() {
     const dt = Math.min(rawDt, 0.05); // 게임 로직용 클램프 (프레임 급락 시 순간이동 방지)
     if (!running) return;
     tuneQuality(Math.min(rawDt, 1)); // FPS 측정은 실제 프레임 간격으로
+
+    // 발밑 블롭 그림자: 점프 중에도 지면에 붙어 있고, 높이에 따라 작아짐
+    playerBlob.position.y = 0.021 - player.position.y;
+    playerBlob.scale.setScalar(Math.max(0.45, 1 - player.position.y * 0.22));
+    // 존 진입 감지 (0.35초 간격이면 충분)
+    zoneCheckT += dt;
+    if (zoneCheckT > 0.35) { zoneCheckT = 0; checkZoneBanner(); }
 
     let mx = 0, mz = 0;
     if (keys.has("f")) mz -= 1;
