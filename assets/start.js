@@ -66,11 +66,6 @@
     if (fieldsEl) fieldsEl.hidden = ret; // 재방문은 입력 없이 바로
     if (kakaoBtn) kakaoBtn.hidden = ret && !!account; // 이미 카카오 로그인 상태면 숨김
     if (logoutBtn) logoutBtn.hidden = !ret;
-    // 이미 로그인된 상태면 기존 회원 로그인 토글 숨김
-    const loginToggle = document.getElementById("start-login-toggle");
-    const loginBox = document.getElementById("start-login");
-    if (loginToggle) loginToggle.hidden = ret;
-    if (loginBox && ret) loginBox.hidden = true;
     showErr("");
   }
 
@@ -273,80 +268,6 @@
     try { localStorage.setItem("seum_guest_ok", "1"); } catch (e) {}
     saveEntryLead(nick);
     goTown();
-  }
-
-  // ---------- 기존 회원 로그인 (아이디·비밀번호 — 이전 게임식 가입 회원용) ----------
-  // 새 기기·새 브라우저에서도 아이디로 다시 로그인할 수 있게 보조 경로로 유지한다.
-  {
-    const loginToggle = document.getElementById("start-login-toggle");
-    const loginBox = document.getElementById("start-login");
-    const loginId = document.getElementById("login-id");
-    const loginPw = document.getElementById("login-pw");
-    const loginBtn = document.getElementById("login-btn");
-    const resetToggle = document.getElementById("login-reset-toggle");
-    const resetBox = document.getElementById("login-reset");
-    const resetName = document.getElementById("reset-name");
-    const resetPhone = document.getElementById("reset-phone");
-    const resetPw = document.getElementById("reset-pw");
-    const resetBtn = document.getElementById("reset-btn");
-    if (loginToggle && loginBox) {
-      loginToggle.addEventListener("click", () => {
-        loginBox.hidden = !loginBox.hidden;
-        if (!loginBox.hidden && loginId) loginId.focus();
-      });
-    }
-    if (resetToggle && resetBox) {
-      resetToggle.addEventListener("click", () => { resetBox.hidden = !resetBox.hidden; });
-    }
-    async function doLogin() {
-      const id = ((loginId && loginId.value) || "").trim();
-      const pw = (loginPw && loginPw.value) || "";
-      if (!id) { markBad(loginId); showErr("아이디를 입력해주세요."); return; }
-      if (!pw) { markBad(loginPw); showErr("비밀번호를 입력해주세요."); return; }
-      loginBtn.disabled = true;
-      showErr("");
-      try {
-        const acc = await CFG.authLogin(id, pw);
-        account = acc;
-        try {
-          localStorage.setItem("seum_user", JSON.stringify(acc));
-          if (acc.nick) localStorage.setItem("seum_nick", acc.nick);
-        } catch (e) {}
-        persistCommon(acc.nick || acc.name || id);
-        goTown();
-      } catch (e) {
-        if (e && e.status === 404) showErr("회원 시스템 준비 중이에요. 닉네임으로 바로 입장해주세요.");
-        else showErr("아이디 또는 비밀번호가 달라요.");
-      } finally {
-        loginBtn.disabled = false;
-      }
-    }
-    async function doReset() {
-      const id = ((loginId && loginId.value) || "").trim();
-      if (!id) { markBad(loginId); showErr("위의 아이디 칸을 먼저 채워주세요."); return; }
-      const nm = ((resetName && resetName.value) || "").trim();
-      const ph = ((resetPhone && resetPhone.value) || "").trim();
-      const np = (resetPw && resetPw.value) || "";
-      if (!nm) { markBad(resetName); return; }
-      if (!ph) { markBad(resetPhone); return; }
-      if (np.length < 4) { markBad(resetPw); showErr("새 비밀번호는 4자 이상으로 해주세요."); return; }
-      resetBtn.disabled = true;
-      showErr("");
-      try {
-        await CFG.authResetPass({ username: id, name: nm, phone: ph, newPass: np });
-        resetBox.hidden = true;
-        if (loginPw) loginPw.value = np;
-        showErr("비밀번호가 바뀌었어요! 바로 로그인해주세요 ✅");
-      } catch (e) {
-        if (e && e.status === 404) showErr("회원 시스템 준비 중이에요.");
-        else showErr("아이디·이름·번호가 가입 정보와 달라요. 다시 확인해주세요.");
-      } finally {
-        resetBtn.disabled = false;
-      }
-    }
-    if (loginBtn) loginBtn.addEventListener("click", doLogin);
-    if (loginPw) loginPw.addEventListener("keydown", (e) => { if (e.key === "Enter") doLogin(); });
-    if (resetBtn) resetBtn.addEventListener("click", doReset);
   }
 
   // ---------- 카카오로 시작하기 (Supabase 소셜 로그인) ----------

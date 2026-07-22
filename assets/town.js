@@ -2653,6 +2653,24 @@ function init() {
     _expPortals: expPortals,
   };
 
+  // ---------- 계약 고객 감지: 인증된 번호가 시공 고객과 일치하면 마을 안에 "내 집 현황" 노출 ----------
+  (async () => {
+    try {
+      const CFGp = window.SeumTownConfig;
+      const phone = ((localStorage.getItem("seum_phone_verified") || "")).replace(/[^0-9]/g, "");
+      if (!phone || !CFGp || !CFGp.getMyProject) return;
+      const rows = await CFGp.getMyProject(phone, localStorage.getItem("seum_nick") || "");
+      const p = Array.isArray(rows) ? rows[0] : rows;
+      if (!p) return;
+      const btn = document.getElementById("town-myhome");
+      if (btn) {
+        btn.textContent = p.status === "완공" ? "🏡 내 집 (완공)" : `🏗️ 내 집 현황 · ${CFGp.BUILD_STAGES[Math.min(CFGp.BUILD_STAGES.length - 1, Number(p.stage) || 0)]} 중`;
+        btn.hidden = false;
+      }
+      window.__seumTown.hasProject = true; // 안내봇 메뉴에서도 사용
+    } catch (e) {}
+  })();
+
   function tick() {
     requestAnimationFrame(tick);
     const rawDt = clock.getDelta();

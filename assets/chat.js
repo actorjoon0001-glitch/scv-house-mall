@@ -435,6 +435,20 @@
       ].filter(Boolean));
     });
     quickEl.appendChild(bd);
+    // 계약 고객이면 내 집 시공 현황 바로가기
+    if (window.__seumTown && window.__seumTown.hasProject) {
+      const mh = document.createElement("button");
+      mh.type = "button";
+      mh.className = "chat__quickbtn";
+      mh.textContent = "🏗️ 내 집 시공 현황 보기";
+      mh.addEventListener("click", () => {
+        bubble("내 집 현황 보여줘", "me");
+        botSay("고객님 댁 시공 현황 페이지로 모실게요! 단계별 현장 사진과 일정을 보실 수 있어요 🏗️", [
+          { label: "🏗️ 내 집 현황 열기", action: () => { window.location.href = "my.html"; } },
+        ]);
+      });
+      quickEl.appendChild(mh);
+    }
     const rv = document.createElement("button");
     rv.type = "button";
     rv.className = "chat__quickbtn";
