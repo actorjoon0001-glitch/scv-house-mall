@@ -720,6 +720,16 @@
     "  return found;\n" +
     "end $$;";
 
+  const LEADS_DELETE_SQL =
+    "-- 상담 리드 삭제 기능. Supabase SQL Editor에서 한 번 실행하세요:\n" +
+    "create or replace function delete_lead(pass text, p_id bigint)\n" +
+    "returns boolean language plpgsql security definer set search_path = public as $$\n" +
+    "begin\n" +
+    "  if pass is distinct from '931122' then raise exception 'unauthorized'; end if;\n" +
+    "  delete from town_leads where id = p_id;\n" +
+    "  return found;\n" +
+    "end $$;";
+
   const USERS_DELETE_SQL =
     "-- 회원 삭제 기능. Supabase SQL Editor에서 한 번 실행하세요:\n" +
     "create or replace function delete_user(pass text, p_username text)\n" +
@@ -815,9 +825,28 @@
           <td>${esc(l.interest || "")}</td>
           <td>${esc(l.memo || "")}</td>
           <td>${esc(l.source || "")}</td>
+          <td><button type="button" class="btn btn--ghost" data-dellead="${l.id}" style="padding:4px 10px;font-size:12px;color:#c66">🗑 삭제</button></td>
         </tr>`).join("");
       table.hidden = leads.length === 0;
       empty.hidden = leads.length !== 0;
+      rows.querySelectorAll("[data-dellead]").forEach((b) =>
+        b.addEventListener("click", async () => {
+          const id = Number(b.dataset.dellead);
+          const target = leads.find((x) => x.id === id);
+          if (!confirm(`상담 리드 "${(target && (target.name || target.phone)) || id}"를 삭제할까요?`)) return;
+          b.disabled = true;
+          try {
+            await CFG.deleteLead(pw, id);
+            loadDash();
+          } catch (err) {
+            b.disabled = false;
+            if (err && err.status === 404) {
+              alert("삭제 기능 SQL이 아직 없어요. 화면에 표시된 delete_lead SQL을 Supabase에서 실행해주세요.");
+              if (sql2) { sql2.style.display = "block"; sql2.textContent = LEADS_DELETE_SQL; }
+            } else alert("삭제에 실패했어요: " + ((err && err.message) || "오류"));
+          }
+        })
+      );
     } catch (e) {
       table.hidden = true;
       empty.hidden = false;

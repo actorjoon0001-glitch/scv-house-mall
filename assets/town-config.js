@@ -160,6 +160,7 @@
   const authKakaoUpsert = (d) => rpc("town_kakao_upsert", { p_kid: d.kid, p_name: d.name, p_nick: d.nick });
   const getUsers = (pass) => rpc("get_users", { pass });
   const deleteUser = (pass, username) => rpc("delete_user", { pass, p_username: username });
+  const deleteLead = (pass, id) => rpc("delete_lead", { pass, p_id: id });
 
   // ---------- 계약 고객 시공 현황 (town_projects — 손님은 본인 것만 RPC로 조회) ----------
   // 시공 7단계 (진행바·사진첩 그룹 기준)
@@ -313,7 +314,7 @@
 
   window.SeumTownConfig = {
     load, save, apply, computePlacement, keyOf, ZONE_ORDER, RESERVED_SLOTS, SB_URL, SB_KEY,
-    addLead, logEvent, getLeads, getEvents,
+    addLead, logEvent, getLeads, getEvents, deleteLead,
     authRegister, authLogin, authResetPass, authKakaoUpsert, getUsers, deleteUser,
     addBuild, getBuilds,
     HOUSE_GLBS, CAT_POOL, DEFAULT_GLB, archetypeFor, dedupeForTown,

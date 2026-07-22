@@ -69,10 +69,11 @@
     showErr("");
   }
 
-  function showErr(msg) {
+  function showErr(msg, ok) {
     if (!errEl) return;
     errEl.textContent = msg;
     errEl.hidden = !msg;
+    errEl.style.color = ok ? "#8fe6b5" : "";
   }
 
   function renderChars() {
@@ -207,14 +208,29 @@
       const r = await fetch("/.netlify/functions/sms-verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phoneDigits(), code }),
+        body: JSON.stringify({
+          phone: phoneDigits(),
+          code,
+          nick: ((nickEl && nickEl.value) || "").trim().slice(0, 10),
+          name: ((nameEl && nameEl.value) || "").trim().slice(0, 20),
+        }),
       });
       const d = await r.json().catch(() => ({}));
       if (r.ok && d.ok) {
         phoneVerified = true;
         try { localStorage.setItem("seum_phone_verified", phoneDigits()); } catch (e) {}
+        // 번호 인증 = 로그인: 이 번호로 가입된 회원이면 닉네임·이름 자동 복원 (새 기기에서도 같은 계정)
+        if (d.member) {
+          account = d.member;
+          try {
+            localStorage.setItem("seum_user", JSON.stringify(d.member));
+            if (d.member.nick) localStorage.setItem("seum_nick", d.member.nick);
+          } catch (e) {}
+          if (d.member.nick && nickEl) nickEl.value = d.member.nick;
+          savedNick = d.member.nick || savedNick;
+          showErr(`${d.member.nick || d.member.name}님, 다시 오셨네요! 바로 입장하세요 👋`, true);
+        }
         setVerifiedUI();
-        showErr("");
       } else if (d.error === "expired") showErr("인증번호가 만료됐어요. 재발송을 눌러주세요.");
       else if (d.error === "wrong_code") showErr(`인증번호가 달라요. (남은 시도 ${d.left != null ? d.left : "-"}회)`);
       else showErr("인증에 실패했어요. 다시 시도해주세요.");
