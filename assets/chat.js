@@ -476,6 +476,68 @@
     renderInfoQuick();
   }
 
+  // ---------- 시공 감리사 챗봇 (메타하우스 전담 감리 — 신뢰 메시지) ----------
+  function openSupervisor() {
+    mode = "supervisor";
+    curModel = null;
+    clearBody();
+    setHeader("김현장 감리사 👷 · 시공 감리", "메타하우스 전담 감리");
+    setHeadIcon("assets/chars/man.webp");
+    panel.hidden = false;
+    fab.classList.add("is-open");
+    botSay(
+      "안녕하세요, 메타하우스 전담 시공 감리사입니다 👷\n" +
+      "메타하우스에서 계약하시는 집은 어느 시공사가 짓든 메타하우스가 배정한 전담 감리사가 기초부터 준공까지 전 과정을 직접 검수합니다.\n" +
+      "건축주님은 믿고 맡겨주시면 됩니다!"
+    );
+    renderSupervisorQuick();
+  }
+  function renderSupervisorQuick() {
+    quickEl.innerHTML = "";
+    const add = (label, fn) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chat__quickbtn";
+      b.textContent = label;
+      b.addEventListener("click", fn);
+      quickEl.appendChild(b);
+    };
+    add("🤔 감리사가 뭐예요?", () => {
+      bubble("감리사가 뭐예요?", "me");
+      botSay(
+        "감리사는 시공이 도면과 규정대로 진행되는지 시공사와 별개의 제3자 입장에서 검사하는 건축 전문가예요.\n" +
+        "보통은 건축주가 직접 감리를 알아봐야 하지만, 메타하우스는 입점 업체 시공 건마다 감리사를 자체 배정해 품질을 책임져요. 이게 메타하우스에서 계약하는 가장 큰 이유이기도 해요 💪"
+      );
+    });
+    add("🔍 어떤 걸 검사하나요?", () => {
+      bubble("어떤 걸 검사하나요?", "me");
+      botSay(
+        "단계마다 통과해야 다음 공정으로 넘어가요:\n" +
+        "· 기초: 배근·콘크리트 강도\n" +
+        "· 골조: 치수·수평·구조 접합\n" +
+        "· 외장: 단열·방수·창호 시공\n" +
+        "· 설비: 전기·수도·정화조 연결\n" +
+        "· 마감: 내장 품질·하자 여부\n" +
+        "검수 사진은 내 집 현황 페이지에 단계별로 올라가서 건축주님도 직접 확인하실 수 있어요 📸"
+      );
+    });
+    if (window.__seumTown && window.__seumTown.hasProject) {
+      add("🏗️ 내 집 검수 현황 보기", () => { window.location.href = "my.html"; });
+    }
+    add("📚 시공 과정 배우기", () => {
+      bubble("시공 과정이 궁금해요", "me");
+      const canGo = window.__seumTown && window.__seumTown.gotoExperience;
+      botSay("체험존의 교육관에서 집이 지어지는 6단계를 직접 배워보실 수 있어요!", [
+        canGo ? { label: "🚀 체험존으로 이동", action: () => { closeChat(); window.__seumTown.gotoExperience(); } } : null,
+        { label: "📚 교육관 바로 열기", action: () => {
+          if (window.__seumTown && window.__seumTown.saveReturnSpot) window.__seumTown.saveReturnSpot();
+          window.location.href = "learn.html";
+        } },
+      ].filter(Boolean));
+    });
+    add("📅 방문 상담", goContact);
+  }
+
   function openChat() {
     // 3D 타운에서 집 근처면 그 집 큐레이터로, 타운이면 인포로, 그 외엔 일반 모드
     if (nearModel) return openCurator(nearModel);
@@ -534,6 +596,7 @@
     close: closeChat,
     openInfo,
     openCurator,
+    openSupervisor,
     setContext(model) { nearModel = model || null; },
   };
 })();
