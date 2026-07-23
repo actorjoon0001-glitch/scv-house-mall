@@ -927,8 +927,8 @@ function init() {
           g.rotation.y = ry;
           addBlob(g, 0.5);
           scene.add(g);
-          if (rig.walk) { rig.walk.paused = false; rig.walk.timeScale = 0.13; } // 제자리 잔모션 = 담소
-          npcWalkers.push({ g, rig, cfg: null, wp: -1 });
+          poseIdle(rig); // 서 있는 자세로 정지 (제자리 걷기 어색함 방지)
+          npcWalkers.push({ g, rig, cfg: null, wp: -1, baseRy: ry, baseObjY: rig.obj.position.y, swayP: Math.random() * 6.28 });
         })
         .catch(() => {});
     }));
@@ -2140,6 +2140,34 @@ function init() {
     });
   }
 
+  // 서 있는 NPC용 대기 자세 — 캐릭터 GLB에 Idle 클립이 없어서,
+  // 걷기 사이클에서 두 발이 가장 모이는 순간(교차 자세)을 찾아 그 프레임에서 정지시킨다.
+  function poseIdle(rig) {
+    if (!rig.walk || !rig.mixer) return;
+    const act = rig.walk;
+    act.paused = false;
+    const feet = [];
+    rig.obj.traverse((o) => { if (o.isBone && /foot/i.test(o.name)) feet.push(o); });
+    let bestT = 0;
+    if (feet.length >= 2) {
+      const va = new THREE.Vector3(), vb = new THREE.Vector3();
+      const dur = act.getClip().duration;
+      let bestD = Infinity;
+      for (let i = 0; i < 36; i++) {
+        act.time = (dur * i) / 36;
+        rig.mixer.update(0);
+        rig.obj.updateMatrixWorld(true);
+        feet[0].getWorldPosition(va);
+        feet[1].getWorldPosition(vb);
+        const d = Math.hypot(va.x - vb.x, va.z - vb.z);
+        if (d < bestD) { bestD = d; bestT = act.time; }
+      }
+    }
+    act.time = bestT;
+    rig.mixer.update(0);
+    act.paused = true;
+  }
+
   function capsuleFallback() {
     const g = new THREE.Group();
     const bodyMat = new THREE.MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.4 });
@@ -2417,13 +2445,31 @@ function init() {
     .then((rig) => {
       const g = new THREE.Group();
       g.add(rig.obj);
-      // 노란 안전모 (반구 + 챙) — 머리 위에 얹어 감리사임을 한눈에
-      const hatMat = new THREE.MeshStandardMaterial({ color: 0xf6c945, roughness: 0.35 });
-      const hatTop = new THREE.Mesh(new THREE.SphereGeometry(0.155, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), hatMat);
-      hatTop.position.y = 1.63;
-      const hatBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.025, 14), hatMat);
-      hatBrim.position.y = 1.63;
-      g.add(hatTop, hatBrim);
+      // 노란 안전모 (돔 + 짧은 챙 + 정수리 리브) — 밀짚모자처럼 보이지 않게 챙을 좁힌다
+      const hatMat = new THREE.MeshStandardMaterial({ color: 0xffc918, roughness: 0.3 });
+      const hatTop = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), hatMat);
+      hatTop.position.y = 1.62;
+      hatTop.scale.y = 0.85;
+      const hatBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.172, 0.182, 0.022, 16), hatMat);
+      hatBrim.position.y = 1.615;
+      const hatRib = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.02, 0.24), hatMat);
+      hatRib.position.y = 1.735;
+      g.add(hatTop, hatBrim, hatRib);
+      // 형광 안전조끼 + 반사띠 — 시공 현장 작업복
+      const vestMat = new THREE.MeshStandardMaterial({ color: 0xff6a13, roughness: 0.55, side: THREE.DoubleSide });
+      const vest = new THREE.Mesh(new THREE.CylinderGeometry(0.185, 0.205, 0.5, 16, 1, true), vestMat);
+      vest.position.y = 1.17;
+      vest.scale.z = 0.72;
+      const stripeMat = new THREE.MeshStandardMaterial({ color: 0xdfe3e6, roughness: 0.25, metalness: 0.35, side: THREE.DoubleSide });
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.196, 0.204, 0.055, 16, 1, true), stripeMat);
+      band.position.y = 1.06;
+      band.scale.z = 0.72;
+      g.add(vest, band);
+      [-0.08, 0.08].forEach((sx) => {
+        const s = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.32, 0.012), stripeMat);
+        s.position.set(sx, 1.27, 0.145);
+        g.add(s);
+      });
       // 손에 든 점검판 (클립보드)
       const board = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 0.02), new THREE.MeshStandardMaterial({ color: 0xf4efe3, roughness: 0.8 }));
       board.position.set(0.24, 1.02, 0.14);
@@ -2434,11 +2480,12 @@ function init() {
       label.position.y = 2.35;
       g.add(label);
       addBlob(g, 0.55);
-      g.position.set(6.4, 0, 6.6); // 메인 대로 동측, 특별모델 존 가는 길목
-      g.rotation.y = -0.9;
+      // 인포메이션 데스크 앞쪽 옆(메타봇 반대편) — 데스크에 가리지 않게 앞으로 빼서 입구 쪽을 바라본다
+      g.position.set(INFO_POS.x - 3.1, 0, INFO_POS.z + 2.6);
+      g.rotation.y = Math.atan2(0 - g.position.x, 32 - g.position.z);
       scene.add(g);
-      if (rig.walk) { rig.walk.paused = false; rig.walk.timeScale = 0.12; } // 제자리 잔모션
-      npcWalkers.push({ g, rig, cfg: null, wp: -1 });
+      poseIdle(rig); // 서 있는 자세로 정지 (제자리 걷기 어색함 방지)
+      npcWalkers.push({ g, rig, cfg: null, wp: -1, keep: true, baseRy: g.rotation.y, baseObjY: rig.obj.position.y, swayP: Math.random() * 6.28 });
       supGroup = g;
     })
     .catch(() => {});
@@ -2795,7 +2842,7 @@ function init() {
     }
     sun.castShadow = qLevel < 2; // 저사양: 그림자 끔
     // 저사양: NPC 방문객 수 축소 (앞의 2명만)
-    npcWalkers.forEach((w, i) => { if (w.g) w.g.visible = qLevel < 2 || i < 2; });
+    npcWalkers.forEach((w, i) => { if (w.g) w.g.visible = qLevel < 2 || i < 2 || !!w.keep; }); // 감리사는 저사양에서도 유지 (채팅 트리거)
     if (petals) petals.visible = qLevel < 2; // 저사양: 꽃잎 파티클 끔
   }
 
@@ -3143,10 +3190,11 @@ function init() {
     npcWalkers.forEach((w) => {
       if (!w.g.visible) return;
       if (!w.cfg) {
-        // 담소 그룹: 제자리에서 느린 모션만 (이동 없음)
-        if (w.rig.mixer && Math.abs(w.g.position.x - player.position.x) < 45 && Math.abs(w.g.position.z - player.position.z) < 45) {
-          w.rig.mixer.update(dt);
-        }
+        // 서 있는 NPC: 모션은 정지 자세(poseIdle) 유지, 숨쉬기·무게중심 미세 흔들림만 준다
+        const t = clock.elapsedTime + (w.swayP || 0);
+        if (w.baseRy !== undefined) w.g.rotation.y = w.baseRy + Math.sin(t * 0.7) * 0.045;
+        w.rig.obj.rotation.z = Math.sin(t * 1.15) * 0.012;
+        if (w.baseObjY !== undefined) w.rig.obj.position.y = w.baseObjY + (Math.sin(t * 2.2) + 1) * 0.003;
         return;
       }
       const [tx, tz] = w.cfg.path[w.wp];
