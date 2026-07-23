@@ -2484,15 +2484,16 @@ function init() {
     .then((rig) => {
       const g = new THREE.Group();
       g.add(rig.obj);
-      // 노란 안전모 (돔 + 짧은 챙 + 정수리 리브) — 밀짚모자처럼 보이지 않게 챙을 좁힌다
+      // 노란 안전모 (돔 + 짧은 챙 + 정수리 리브)
+      // 머리 본 측정값: Head y1.625, head_end(정수리) y1.86 — 정수리를 덮도록 씌운다
       const hatMat = new THREE.MeshStandardMaterial({ color: 0xffc918, roughness: 0.3 });
-      const hatTop = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), hatMat);
-      hatTop.position.y = 1.62;
+      const hatTop = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), hatMat);
+      hatTop.position.set(0.02, 1.75, 0.05);
       hatTop.scale.y = 0.85;
-      const hatBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.172, 0.182, 0.022, 16), hatMat);
-      hatBrim.position.y = 1.615;
-      const hatRib = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.02, 0.24), hatMat);
-      hatRib.position.y = 1.735;
+      const hatBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.195, 0.205, 0.022, 16), hatMat);
+      hatBrim.position.set(0.02, 1.745, 0.05);
+      const hatRib = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.02, 0.28), hatMat);
+      hatRib.position.set(0.02, 1.9, 0.05);
       g.add(hatTop, hatBrim, hatRib);
       // 형광 안전조끼 + 반사띠 — 시공 현장 작업복
       const vestMat = new THREE.MeshStandardMaterial({ color: 0xff6a13, roughness: 0.55, side: THREE.DoubleSide });
