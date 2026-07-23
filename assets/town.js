@@ -2410,6 +2410,39 @@ function init() {
     })
     .catch(() => {});
 
+  // 시공 감리사 NPC — 다가가면 감리 안내 챗봇 (메타하우스 전담 감리 신뢰 메시지)
+  let supGroup = null;
+  let supNear = false;
+  buildCharInstance("man")
+    .then((rig) => {
+      const g = new THREE.Group();
+      g.add(rig.obj);
+      // 노란 안전모 (반구 + 챙) — 머리 위에 얹어 감리사임을 한눈에
+      const hatMat = new THREE.MeshStandardMaterial({ color: 0xf6c945, roughness: 0.35 });
+      const hatTop = new THREE.Mesh(new THREE.SphereGeometry(0.155, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), hatMat);
+      hatTop.position.y = 1.63;
+      const hatBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.025, 14), hatMat);
+      hatBrim.position.y = 1.63;
+      g.add(hatTop, hatBrim);
+      // 손에 든 점검판 (클립보드)
+      const board = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 0.02), new THREE.MeshStandardMaterial({ color: 0xf4efe3, roughness: 0.8 }));
+      board.position.set(0.24, 1.02, 0.14);
+      board.rotation.set(-0.5, 0.2, 0);
+      g.add(board);
+      const label = nameSign("시공 감리사 👷");
+      label.scale.set(2.6, 0.65, 1);
+      label.position.y = 2.35;
+      g.add(label);
+      addBlob(g, 0.55);
+      g.position.set(6.4, 0, 6.6); // 메인 대로 동측, 특별모델 존 가는 길목
+      g.rotation.y = -0.9;
+      scene.add(g);
+      if (rig.walk) { rig.walk.paused = false; rig.walk.timeScale = 0.12; } // 제자리 잔모션
+      npcWalkers.push({ g, rig, cfg: null, wp: -1 });
+      supGroup = g;
+    })
+    .catch(() => {});
+
   // 마을 첫 입장 시 인포 안내 자동 오픈 (세션당 1회)
   function maybeAutoInfo() {
     try {
@@ -2985,6 +3018,14 @@ function init() {
         if (window.__metaChat.openInfo) window.__metaChat.openInfo();
         else window.__metaChat.open();
       } else if (nd > 4.8) npcNear = false;
+    }
+    // 시공 감리사 근접 → 감리 안내 채팅
+    if (supGroup && window.__metaChat && window.__metaChat.openSupervisor) {
+      const sd = Math.hypot(supGroup.position.x - player.position.x, supGroup.position.z - player.position.z);
+      if (sd < 2.6 && !supNear) {
+        supNear = true;
+        window.__metaChat.openSupervisor();
+      } else if (sd > 4.8) supNear = false;
     }
 
     // 체험존 포털들: 이중 링 역회전 + 포털면 맥동 + 빛 구슬 공전 + 근접 입장 버튼
