@@ -893,12 +893,49 @@ function init() {
   // ---------- NPC 방문객 (통로·광장을 오가는 사람들 — 마을이 붐비는 느낌) ----------
   // 통로 축을 따라 왕복 (집 부지 안으로는 들어가지 않음)
   const NPC_WALKS = [
-    { char: "woman", path: [[-26, 19.5], [26, 19.5]], speed: 1.1 },
-    { char: "man", path: [[26, 8.5], [-26, 8.5]], speed: 1.25 },
-    { char: "boy", path: [[1.8, 22], [1.8, -30]], speed: 1.6 },
-    { char: "girl", path: [[-21, -13.5], [21, -13.5]], speed: 1.0 },
-    { char: "grandpa", path: [[13, 25.5], [30, 25.5]], speed: 0.75 },
+    { char: "woman", path: [[-26, 19.5], [26, 19.5]], speed: 1.1, tint: 0xf2a0bb },
+    { char: "man", path: [[26, 8.5], [-26, 8.5]], speed: 1.25, tint: 0x8fb4e8 },
+    { char: "boy", path: [[1.8, 22], [1.8, -30]], speed: 1.6, tint: 0xf3cf5e },
+    { char: "girl", path: [[-21, -13.5], [21, -13.5]], speed: 1.0, tint: 0xb9a5ec },
+    { char: "grandpa", path: [[13, 25.5], [30, 25.5]], speed: 0.75, tint: 0x9fcc9f },
   ];
+  // NPC 옷 염색 — 텍스처에서 밝은 무채색(흰 옷) 픽셀만 골라 색을 입힌다.
+  // 피부·머리·바지 색은 그대로 유지되어, 방문객(흰 옷 원본 캐릭터)과 한눈에 구분된다.
+  function tintNpc(rig, hex) {
+    const tint = new THREE.Color(hex);
+    rig.obj.traverse((o) => {
+      if (!o.isMesh || !o.material) return;
+      const src = Array.isArray(o.material) ? o.material[0] : o.material;
+      const mat = src.clone();
+      const img = mat.map && mat.map.image;
+      if (img && img.width) {
+        try {
+          const cv = document.createElement("canvas");
+          cv.width = img.width; cv.height = img.height;
+          const cx = cv.getContext("2d");
+          cx.drawImage(img, 0, 0);
+          const d = cx.getImageData(0, 0, cv.width, cv.height);
+          const p = d.data;
+          for (let i = 0; i < p.length; i += 4) {
+            const r = p[i], g = p[i + 1], b = p[i + 2];
+            const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+            if (mn > 150 && mx - mn < 34) {
+              p[i] = r * tint.r; p[i + 1] = g * tint.g; p[i + 2] = b * tint.b;
+            }
+          }
+          cx.putImageData(d, 0, 0);
+          const nt = new THREE.CanvasTexture(cv);
+          nt.flipY = mat.map.flipY;
+          nt.colorSpace = mat.map.colorSpace;
+          nt.wrapS = mat.map.wrapS; nt.wrapT = mat.map.wrapT;
+          mat.map = nt;
+        } catch (e) { if (mat.color) mat.color = new THREE.Color(hex); }
+      } else if (mat.color) {
+        mat.color = new THREE.Color(hex);
+      }
+      o.material = mat;
+    });
+  }
   function spawnWalkers() {
     NPC_WALKS.forEach((cfg, i) => {
       buildCharInstance(cfg.char)
@@ -908,6 +945,7 @@ function init() {
           g.position.set(cfg.path[0][0], 0, cfg.path[0][1]);
           addBlob(g, 0.5);
           scene.add(g);
+          if (cfg.tint) tintNpc(rig, cfg.tint);
           if (rig.walk) rig.walk.paused = false; // 항상 걷기 모션
           npcWalkers.push({ g, rig, cfg, wp: 1 });
         })
@@ -915,10 +953,10 @@ function init() {
     });
     // 광장에서 서서 담소 나누는 방문객 2쌍 — 서로 마주 보고 느린 모션 (붐비는 광장 연출)
     const CHAT_GROUPS = [
-      [["woman", -3.6, 31.4, 0.95], ["man", -2.5, 32.1, -2.2]],
-      [["grandma", 8.4, 24.0, 2.3], ["girl", 9.2, 24.7, -0.85]],
+      [["woman", -3.6, 31.4, 0.95, 0xf0b06c], ["man", -2.5, 32.1, -2.2, 0x7fc4b6]],
+      [["grandma", 8.4, 24.0, 2.3, 0xd9a8a0], ["girl", 9.2, 24.7, -0.85, 0xe88d80]],
     ];
-    CHAT_GROUPS.forEach((pair) => pair.forEach(([charKey, x, z, ry]) => {
+    CHAT_GROUPS.forEach((pair) => pair.forEach(([charKey, x, z, ry, tint]) => {
       buildCharInstance(charKey)
         .then((rig) => {
           const g = new THREE.Group();
@@ -927,6 +965,7 @@ function init() {
           g.rotation.y = ry;
           addBlob(g, 0.5);
           scene.add(g);
+          if (tint) tintNpc(rig, tint);
           poseIdle(rig); // 서 있는 자세로 정지 (제자리 걷기 어색함 방지)
           npcWalkers.push({ g, rig, cfg: null, wp: -1, baseRy: ry, baseObjY: rig.obj.position.y, swayP: Math.random() * 6.28 });
         })
