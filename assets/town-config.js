@@ -10,7 +10,7 @@
   const SETTINGS_KEY = "sb_publishable_k_gQuXbUVRwmFnfCzNGmMg_UvLhesnZ";
   const LS_KEY = "seum_town_overrides";
   // 대표 전화번호 — 실제 번호를 넣으면 마을 집 카드에 "📞 전화 상담" 버튼이 활성화된다 (빈 값이면 숨김)
-  const CONTACT_PHONE = "";
+  const CONTACT_PHONE = "070-8080-5393"; // 메타하우스 대표번호 (아톡 070)
   const HEADERS = { apikey: SETTINGS_KEY, Authorization: `Bearer ${SETTINGS_KEY}` };
 
   async function load() {
