@@ -951,26 +951,7 @@ function init() {
         })
         .catch(() => {});
     });
-    // 광장에서 서서 담소 나누는 방문객 2쌍 — 서로 마주 보고 느린 모션 (붐비는 광장 연출)
-    const CHAT_GROUPS = [
-      [["woman", -3.6, 31.4, 0.95, 0xf0b06c], ["man", -2.5, 32.1, -2.2, 0x7fc4b6]],
-      [["grandma", 8.4, 24.0, 2.3, 0xd9a8a0], ["girl", 9.2, 24.7, -0.85, 0xe88d80]],
-    ];
-    CHAT_GROUPS.forEach((pair) => pair.forEach(([charKey, x, z, ry, tint]) => {
-      buildCharInstance(charKey)
-        .then((rig) => {
-          const g = new THREE.Group();
-          g.add(rig.obj);
-          g.position.set(x, 0, z);
-          g.rotation.y = ry;
-          addBlob(g, 0.5);
-          scene.add(g);
-          if (tint) tintNpc(rig, tint);
-          poseIdle(rig); // 서 있는 자세로 정지 (제자리 걷기 어색함 방지)
-          npcWalkers.push({ g, rig, cfg: null, wp: -1, baseRy: ry, baseObjY: rig.obj.position.y, swayP: Math.random() * 6.28 });
-        })
-        .catch(() => {});
-    }));
+    // (서서 담소 나누는 NPC는 어색해서 제거 — 걸어다니는 NPC만 유지)
   }
 
   // ---------- 구름 ----------
