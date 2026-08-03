@@ -2104,6 +2104,41 @@ function init() {
     group.userData.balloon = b;
   }
 
+  // 등에 다는 천사 날개 — 방문객 캐릭터 액세서리. 점프 키를 꾹 누르면 날아오를 수 있다.
+  const wingGeoCache = {};
+  function makeWings(charH) {
+    if (!wingGeoCache.geo) {
+      const shape = new THREE.Shape();
+      shape.moveTo(0, 0);
+      shape.quadraticCurveTo(0.3, 0.4, 0.8, 0.36); // 위쪽 아치
+      shape.quadraticCurveTo(0.58, 0.18, 0.66, 0.02); // 깃털 1
+      shape.quadraticCurveTo(0.44, 0.1, 0.48, -0.1); // 깃털 2
+      shape.quadraticCurveTo(0.28, -0.02, 0.3, -0.22); // 깃털 3
+      shape.quadraticCurveTo(0.1, -0.1, 0, 0);
+      wingGeoCache.geo = new THREE.ShapeGeometry(shape, 10);
+      wingGeoCache.mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4, side: THREE.DoubleSide });
+    }
+    const s = charH / 1.7;
+    const g = new THREE.Group();
+    const r = new THREE.Mesh(wingGeoCache.geo, wingGeoCache.mat);
+    const l = new THREE.Mesh(wingGeoCache.geo, wingGeoCache.mat);
+    l.scale.x = -1;
+    r.rotation.y = -0.45;
+    l.rotation.y = 0.45;
+    g.add(l, r);
+    g.position.set(0, charH * 0.66, -0.14 * s);
+    g.scale.setScalar(s);
+    g.userData.l = l;
+    g.userData.r = r;
+    return g;
+  }
+  function attachWings(group, charH) {
+    if (group.userData.wings) group.remove(group.userData.wings);
+    const w = makeWings(charH);
+    group.add(w);
+    group.userData.wings = w;
+  }
+
   // 스킨드 메시는 뼈대 변형 기준으로 바운딩을 재야 크기가 맞는다
   function skinnedBox(obj) {
     obj.updateMatrixWorld(true);
@@ -2228,6 +2263,7 @@ function init() {
         player.add(myLabel);
         // 풍선 액세서리는 내 캐릭터에만
         attachBalloon(player, myColor, CHARACTERS[myChar].height);
+        attachWings(player, CHARACTERS[myChar].height);
         player.scale.setScalar(myScale);
         updateNickChip();
         loadingEl.hidden = true;
@@ -2274,6 +2310,7 @@ function init() {
         label.position.y = h + 0.55;
         group.add(label);
         // 풍선은 내 캐릭터 전용 — 다른 방문자에게는 표시하지 않음 (내 위치 구분용)
+        attachWings(group, h);
         const sc = parseFloat(meta.scale);
         if (sc && sc > 0.5 && sc < 2) group.scale.setScalar(sc);
         entry.rig = rig;
@@ -2529,20 +2566,25 @@ function init() {
     ArrowUp: "f", KeyW: "f", ArrowDown: "b", KeyS: "b",
     ArrowLeft: "l", KeyA: "l", ArrowRight: "r", KeyD: "r",
   };
-  // 점프
+  // 점프·비행 — 점프 키(SPACE/버튼)를 꾹 누르고 있으면 날개로 날아오른다
   let vy = 0;
   let airborne = false;
+  let flyHeld = false;
+  const FLY_MAX_Y = 14; // 최고 비행 고도 (마을 전경이 보이는 높이)
   function doJump() {
     if (!airborne) { vy = 9.4; airborne = true; playJump(); }
   }
   const jumpBtn = document.getElementById("town-jump");
-  if (jumpBtn) jumpBtn.addEventListener("pointerdown", (e) => { doJump(); e.preventDefault(); });
+  if (jumpBtn) {
+    jumpBtn.addEventListener("pointerdown", (e) => { doJump(); flyHeld = true; e.preventDefault(); });
+    ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => jumpBtn.addEventListener(ev, () => { flyHeld = false; }));
+  }
 
   window.addEventListener("keydown", (e) => {
     if (e.code === "ShiftLeft" || e.code === "ShiftRight") { shiftHeld = true; return; }
     const tag = document.activeElement && document.activeElement.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-    if (e.code === "Space" && running) { doJump(); e.preventDefault(); return; }
+    if (e.code === "Space" && running) { doJump(); flyHeld = true; e.preventDefault(); return; }
     const dir = KEYMAP[e.code];
     if (!dir || !running) return;
     keys.add(dir);
@@ -2550,6 +2592,7 @@ function init() {
   });
   window.addEventListener("keyup", (e) => {
     if (e.code === "ShiftLeft" || e.code === "ShiftRight") { shiftHeld = false; return; }
+    if (e.code === "Space") { flyHeld = false; return; }
     const dir = KEYMAP[e.code];
     if (dir) keys.delete(dir);
   });
@@ -3027,10 +3070,18 @@ function init() {
       if (playerRig.run) playerRig.run.paused = true;
     }
 
-    // 점프 물리
+    // 점프·비행 물리 — 키를 꾹 누르면 날개 추진으로 상승, 놓으면 활공하며 천천히 하강
     if (airborne) {
-      vy -= 24 * dt;
+      if (flyHeld) {
+        vy += 50 * dt;
+        if (vy > 5.4) vy = 5.4;
+      } else {
+        vy -= 24 * dt;
+        // 높이 떠 있으면 날개 활공 — 낙하 속도 제한 (일반 점프 높이에선 미적용)
+        if (player.position.y > 2.0 && vy < -2.6) vy = -2.6;
+      }
       player.position.y += vy * dt;
+      if (player.position.y >= FLY_MAX_Y) { player.position.y = FLY_MAX_Y; if (vy > 0) vy = 0; }
       if (player.position.y <= 0) { player.position.y = 0; vy = 0; airborne = false; playLand(); }
     }
 
@@ -3190,6 +3241,22 @@ function init() {
     bob(player, 0);
     let ph = 1;
     remotes.forEach((r) => bob(r.group, ph++));
+
+    // 날개 펄럭임 — 지상: 잔잔한 접힘, 공중: 힘차게 날갯짓 (상승 시 더 빠르게)
+    const flapWings = (g, y, thrust, phase) => {
+      const w = g.userData.wings;
+      if (!w) return;
+      const air = y > 0.05;
+      const spd = air ? (thrust ? 15 : 8) : 2;
+      const amp = air ? 0.8 : 0.1;
+      const a = Math.sin(bobT * spd + phase) * amp;
+      w.userData.r.rotation.y = -0.45 - a;
+      w.userData.l.rotation.y = 0.45 + a;
+      w.rotation.x = air ? -0.25 : 0;
+    };
+    flapWings(player, player.position.y, flyHeld && vy > 0, 0);
+    let wph = 1;
+    remotes.forEach((r) => flapWings(r.group, r.group.position.y, true, wph++));
 
     // 시점: 줌·회전 반영
     camOffset.set(Math.sin(camAz) * 9.5 * camZoom, 6.2 * camZoom, Math.cos(camAz) * 9.5 * camZoom);
