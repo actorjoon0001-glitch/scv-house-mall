@@ -2,6 +2,7 @@
 // 마을과 완전히 분리된 전용 화면. 유닛·옵션·가격은 Supabase(town_settings data.build)로
 // 오버라이드 가능하며, 아래 DEFAULT_*는 데이터가 없을 때의 폴백이다.
 import * as THREE from "three";
+import { GLTFLoader } from "./GLTFLoader.js";
 
 const stage = document.getElementById("build-stage");
 const canvas = document.getElementById("build-canvas");
@@ -31,6 +32,41 @@ const DEFAULT_OPTIONS = {
 };
 let UNITS = DEFAULT_UNITS;
 let OPTIONS = DEFAULT_OPTIONS;
+
+// ---------- 실제 판매 모델 (카탈로그 연동) ----------
+const CAT_SB = "https://aypugjvzvwinnmpquguj.supabase.co";
+const CAT_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5cHVnanZ6dndpbm5tcHF1Z3VqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1NjQ0ODIsImV4cCI6MjA4OTE0MDQ4Mn0.yLBG31-8VGWai9Rpv9RtVxZwwWMsKI_syGs0QN7PkUU";
+let MODELS = [];
+const gltfLoader = new GLTFLoader();
+const glbCache = {};
+function loadGlb(url) {
+  if (!glbCache[url]) {
+    glbCache[url] = new Promise((resolve, reject) =>
+      gltfLoader.load(url, (g) => resolve(g.scene), undefined, reject)
+    );
+  }
+  return glbCache[url];
+}
+// "24평" 같은 문자열에서 평수 합산 → ㎡
+function pyeongOf(m) {
+  let sum = 0;
+  String(m.size || "").replace(/([\d.]+)\s*평/g, (_, n) => { sum += parseFloat(n); return _; });
+  return sum || 10;
+}
+function priceOf(m) {
+  return Number(m.event_on && m.event_price ? m.event_price : m.base_price) || 0;
+}
+function normalizeFootprint(obj, maxXZ, maxH) {
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = box.getSize(new THREE.Vector3());
+  const s = Math.min(maxXZ / Math.max(size.x, size.z, 0.01), maxH / Math.max(size.y, 0.01));
+  obj.scale.setScalar(s);
+  const box2 = new THREE.Box3().setFromObject(obj);
+  obj.position.y -= box2.min.y;
+  const c = box2.getCenter(new THREE.Vector3());
+  obj.position.x -= c.x; obj.position.z -= c.z;
+  return box2.getSize(new THREE.Vector3());
+}
 
 const GRID = 1.5; // 스냅 격자 (m)
 const LOT_W = 21, LOT_D = 15; // 부지 크기
@@ -338,6 +374,7 @@ function buildUnitMesh(u) {
 }
 function refreshUnitMeshes() {
   placed.forEach((p) => {
+    if (p.kind === "model") return; // 실제 모델은 외장 옵션 영향 없음
     const old = p.group;
     p.group = buildUnitMesh(unitDef(p.typeId));
     p.group.position.set(p.x, 0, p.z);
@@ -358,9 +395,9 @@ ring.visible = false;
 scene.add(ring);
 function refreshSelectionRing() {
   if (!selected) { ring.visible = false; setSelBtns(false); return; }
-  const u = unitDef(selected.typeId);
+  const [w, d] = fpOfEntry(selected);
   ring.visible = true;
-  ring.scale.setScalar(Math.max(u.w, u.d) * 0.72);
+  ring.scale.setScalar(Math.max(w, d) * 0.72);
   ring.position.set(selected.x, 0.03, selected.z);
   setSelBtns(true);
 }
@@ -369,13 +406,21 @@ function setSelBtns(on) {
   document.getElementById("build-del").disabled = !on;
 }
 const snap = (v) => Math.round(v / GRID) * GRID;
-function clampToLot(u, x, z, rot) {
-  const w = rot % 180 === 0 ? u.w : u.d;
-  const d = rot % 180 === 0 ? u.d : u.w;
+// 배치물(유닛/실제 모델) 공용 풋프린트 — 회전 반영 [가로, 세로]
+function fpOfEntry(p, rotOverride) {
+  const rot = rotOverride != null ? rotOverride : p.rot;
+  if (p.kind === "model") return rot % 180 === 0 ? [p.fw, p.fd] : [p.fd, p.fw];
+  return footprint(unitDef(p.typeId), rot);
+}
+function clampToLotFp(w, d, x, z) {
   return [
     Math.max(-LOT_W / 2 + w / 2, Math.min(LOT_W / 2 - w / 2, x)),
     Math.max(-LOT_D / 2 + d / 2, Math.min(LOT_D / 2 - d / 2, z)),
   ];
+}
+function clampToLot(u, x, z, rot) {
+  const [w, d] = footprint(u, rot);
+  return clampToLotFp(w, d, x, z);
 }
 function addUnit(typeId, px, pz, rot) {
   const u = unitDef(typeId);
@@ -396,14 +441,53 @@ function addUnit(typeId, px, pz, rot) {
 function footprint(u, rot) {
   return rot % 180 === 0 ? [u.w, u.d] : [u.d, u.w];
 }
-function overlapsAny(u, x, z, rot, ignore) {
-  const [w, d] = footprint(u, rot);
+
+// 실제 판매 모델을 부지에 배치 — 카탈로그 평수에 맞춰 스케일한 실제 3D 외형
+function addModel(m) {
+  const url = (window.SeumTownConfig && window.SeumTownConfig.archetypeFor && window.SeumTownConfig.archetypeFor(m, 0)) || "assets/house-3d.glb";
+  loadGlb(url)
+    .catch(() => loadGlb("assets/house-3d.glb"))
+    .then((seed) => {
+      const inst = seed.clone(true);
+      inst.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      const py = pyeongOf(m);
+      // 평수 → 한 변 목표 길이 (㎡의 제곱근 근사, 부지에 들어가게 클램프)
+      const target = Math.min(11, Math.max(5.5, Math.sqrt(py * PYEONG) * 1.2));
+      const bs = normalizeFootprint(inst, target, 6.5);
+      const fw = Math.max(GRID, Math.ceil(bs.x / GRID) * GRID);
+      const fd = Math.max(GRID, Math.ceil(bs.z / GRID) * GRID);
+      // 빈 자리 탐색 (부지 중앙부터 동→서)
+      let x = 0, z = 0, found = false;
+      outer: for (const tz of [0, -3, 3, -6, 6]) {
+        for (const tx of [0, 3, -3, 6, -6, 9, -9]) {
+          const [cx2, cz] = clampToLotFp(fw, fd, tx, tz);
+          if (!overlapsAnyFp(fw, fd, cx2, cz, null)) { x = cx2; z = cz; found = true; break outer; }
+        }
+      }
+      if (!found) { alert("부지에 자리가 부족해요. 유닛을 정리한 뒤 다시 시도해주세요!"); return; }
+      const g = new THREE.Group();
+      g.add(inst);
+      g.add(makeAoDisc(fw + 2, fd + 2, 0.014));
+      g.position.set(x, 0, z);
+      scene.add(g);
+      const p = { uid: uidSeq++, kind: "model", model: m, fw, fd, x, z, rot: 0, group: g };
+      placed.push(p);
+      selected = p;
+      refreshSelectionRing();
+      refreshQuote();
+    })
+    .catch(() => {});
+}
+function overlapsAnyFp(w, d, x, z, ignore) {
   return placed.some((p) => {
     if (p === ignore) return false;
-    const pu = unitDef(p.typeId);
-    const [pw, pd] = footprint(pu, p.rot);
+    const [pw, pd] = fpOfEntry(p);
     return Math.abs(p.x - x) < (w + pw) / 2 - 0.01 && Math.abs(p.z - z) < (d + pd) / 2 - 0.01;
   });
+}
+function overlapsAny(u, x, z, rot, ignore) {
+  const [w, d] = footprint(u, rot);
+  return overlapsAnyFp(w, d, x, z, ignore);
 }
 
 // ---------- 카메라 (궤도 + 줌) ----------
@@ -466,10 +550,10 @@ canvas.addEventListener("pointermove", (e) => {
   const gp = groundHit(e);
   if (!gp) return;
   const p = dragging.p;
-  const u = unitDef(p.typeId);
+  const [w, d] = fpOfEntry(p);
   let nx = snap(gp.x + dragging.offX), nz = snap(gp.z + dragging.offZ);
-  [nx, nz] = clampToLot(u, nx, nz, p.rot);
-  if (!overlapsAny(u, nx, nz, p.rot, p)) {
+  [nx, nz] = clampToLotFp(w, d, nx, nz);
+  if (!overlapsAnyFp(w, d, nx, nz, p)) {
     p.x = nx; p.z = nz;
     p.group.position.set(nx, 0, nz);
     refreshSelectionRing();
@@ -493,10 +577,10 @@ canvas.addEventListener("touchend", () => { pinch = null; });
 
 document.getElementById("build-rot").addEventListener("click", () => {
   if (!selected) return;
-  const u = unitDef(selected.typeId);
   const nr = (selected.rot + 90) % 360;
-  let [nx, nz] = clampToLot(u, selected.x, selected.z, nr);
-  if (overlapsAny(u, nx, nz, nr, selected)) return;
+  const [w, d] = fpOfEntry(selected, nr);
+  let [nx, nz] = clampToLotFp(w, d, selected.x, selected.z);
+  if (overlapsAnyFp(w, d, nx, nz, selected)) return;
   selected.rot = nr;
   selected.x = nx; selected.z = nz;
   selected.group.rotation.y = (nr * Math.PI) / 180;
@@ -576,8 +660,16 @@ const PYEONG = 3.3058;
 function quote() {
   const items = [];
   const counts = {};
-  placed.forEach((p) => (counts[p.typeId] = (counts[p.typeId] || 0) + 1));
+  placed.forEach((p) => { if (p.kind !== "model") counts[p.typeId] = (counts[p.typeId] || 0) + 1; });
   let area = 0, price = 0;
+  // 실제 판매 모델
+  placed.filter((p) => p.kind === "model").forEach((p) => {
+    const py = pyeongOf(p.model);
+    const won = priceOf(p.model);
+    area += py * PYEONG;
+    price += won;
+    items.push({ label: `🏠 ${p.model.name}`, amt: won });
+  });
   Object.entries(counts).forEach(([tid, n]) => {
     const u = unitDef(tid);
     area += u.w * u.d * n;
@@ -615,6 +707,21 @@ function renderPalette() {
   ).join("");
   document.querySelectorAll("[data-unit]").forEach((b) =>
     b.addEventListener("click", () => addUnit(b.dataset.unit))
+  );
+}
+function renderModels() {
+  const el2 = document.getElementById("build-models");
+  if (!el2) return;
+  if (!MODELS.length) { el2.parentElement && (el2.innerHTML = `<p class="build__qempty">모델을 불러오지 못했어요</p>`); return; }
+  el2.innerHTML = MODELS.map(
+    (m, i) => `
+    <button type="button" class="build__unitbtn" data-model="${i}">
+      ${m.main_image ? `<img class="build__unitbtn-img" src="${m.main_image}" alt="" loading="lazy" />` : `<span class="build__unitbtn-ic">🏠</span>`}
+      <span><b>${m.name}</b><br /><small>${pyeongOf(m).toFixed(0)}평 · ${priceOf(m) ? priceOf(m).toLocaleString() + "만" : "상담"}</small></span>
+    </button>`
+  ).join("");
+  el2.querySelectorAll("[data-model]").forEach((b) =>
+    b.addEventListener("click", () => addModel(MODELS[+b.dataset.model]))
   );
 }
 function renderOptions() {
@@ -660,7 +767,9 @@ function summaryText() {
     if (!/^01[016789][-\s]?\d{3,4}[-\s]?\d{4}$/.test(phone)) { err.textContent = "핸드폰 번호를 정확히 입력해주세요."; err.hidden = false; return; }
     const q = quote();
     const config = {
-      units: placed.map((p) => ({ type: p.typeId, x: p.x, z: p.z, rot: p.rot })),
+      units: placed.map((p) => p.kind === "model"
+        ? { model: p.model.slug || p.model.name, x: p.x, z: p.z, rot: p.rot }
+        : { type: p.typeId, x: p.x, z: p.z, rot: p.rot }),
       options: opt,
       area_m2: +q.area.toFixed(1),
       pyeong: +q.pyeong.toFixed(1),
@@ -688,6 +797,12 @@ function summaryText() {
 // ---------- 시작: 데이터 로드 + 프리셋 ----------
 function applyPreset() {
   const q = new URLSearchParams(location.search);
+  // 구경하던 실제 모델 그대로 시작 (?model=슬러그 또는 이름 — 마을 집 카드에서 넘어옴)
+  const slug = q.get("model");
+  if (slug) {
+    const m = MODELS.find((mm) => mm.slug === slug || mm.name === slug);
+    if (m) { addModel(m); return; }
+  }
   const pyeong = parseFloat(q.get("pyeong"));
   if (!pyeong || pyeong <= 0) {
     addUnit("living", 0, 0, 0); // 기본 시작: 거실동 1개
@@ -705,15 +820,22 @@ function applyPreset() {
   selected = null;
   refreshSelectionRing();
 }
-(CFG && CFG.load ? CFG.load() : Promise.resolve({ data: {} }))
-  .then((cfg) => {
+Promise.all([
+  (CFG && CFG.load ? CFG.load() : Promise.resolve({ data: {} })).catch(() => ({ data: {} })),
+  fetch(
+    `${CAT_SB}/rest/v1/models?select=slug,name,category,size,base_price,main_image,event_on,event_price&order=created_at.asc`,
+    { headers: { apikey: CAT_KEY, Authorization: `Bearer ${CAT_KEY}` } }
+  ).then((r) => { if (!r.ok) throw new Error("catalog"); return r.json(); }).catch(() => []),
+])
+  .then(([cfg, models]) => {
     const b = (cfg.data && cfg.data.build) || {};
     if (Array.isArray(b.units) && b.units.length) UNITS = b.units;
     if (b.options) OPTIONS = Object.assign({}, DEFAULT_OPTIONS, b.options);
+    MODELS = Array.isArray(models) ? models : [];
   })
-  .catch(() => {})
   .then(() => {
     renderPalette();
+    renderModels();
     renderOptions();
     applyPreset();
     refreshQuote();
@@ -744,6 +866,8 @@ renderer.setAnimationLoop((t) => {
 // 디버그 훅
 window.__seumBuild = {
   add: addUnit,
+  addModel: (i) => MODELS[i] && addModel(MODELS[i]),
+  models: () => MODELS,
   units: () => placed.map((p) => ({ type: p.typeId, x: p.x, z: p.z, rot: p.rot })),
   quote,
   setOpt: (k, v) => { opt[k] = v; renderOptions(); refreshUnitMeshes(); refreshQuote(); },
