@@ -69,7 +69,12 @@ function normalizeFootprint(obj, maxXZ, maxH) {
 }
 
 const GRID = 1.5; // 스냅 격자 (m)
-const LOT_W = 21, LOT_D = 15; // 부지 크기
+// 부지 크기 — 고객 땅 크기로 변경 가능 (localStorage에 유지)
+let LOT_W = 21, LOT_D = 15;
+try {
+  const saved = JSON.parse(localStorage.getItem("seum_build_lot") || "null");
+  if (saved && saved.w >= 9 && saved.w <= 60 && saved.d >= 9 && saved.d <= 60) { LOT_W = saved.w; LOT_D = saved.d; }
+} catch (e) {}
 
 // ---------- 씬 ----------
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -172,30 +177,33 @@ lawn.rotation.x = -Math.PI / 2;
 lawn.position.y = -0.02;
 lawn.receiveShadow = true;
 scene.add(lawn);
-const lot = new THREE.Mesh(
-  new THREE.PlaneGeometry(LOT_W, LOT_D),
-  new THREE.MeshStandardMaterial({
-    map: pbrTex("assets/tex/concrete_c.jpg", true, 5.2, 3.7),
-    normalMap: pbrTex("assets/tex/concrete_n.jpg", false, 5.2, 3.7),
-    color: 0xe9e3d5,
-    roughness: 0.95,
-  })
-);
-lot.rotation.x = -Math.PI / 2;
-lot.receiveShadow = true;
-scene.add(lot);
-const grid = new THREE.GridHelper(Math.max(LOT_W, LOT_D), Math.max(LOT_W, LOT_D) / GRID, 0xa9a28c, 0xbdb59e);
-grid.scale.set(LOT_W / Math.max(LOT_W, LOT_D), 1, LOT_D / Math.max(LOT_W, LOT_D));
-grid.position.y = 0.01;
-grid.material.transparent = true;
-grid.material.opacity = 0.35;
-scene.add(grid);
+// 부지·격자·울타리·나무 — 고객 땅 크기에 맞춰 재구성 가능
+const lotMat = new THREE.MeshStandardMaterial({
+  map: pbrTex("assets/tex/concrete_c.jpg", true, 5.2, 3.7),
+  normalMap: pbrTex("assets/tex/concrete_n.jpg", false, 5.2, 3.7),
+  color: 0xe9e3d5,
+  roughness: 0.95,
+});
+let lot = null, grid = null, fenceGroup = null, treeGroup = null;
+function rebuildGround() {
+  [lot, grid, fenceGroup, treeGroup].forEach((o) => { if (o) scene.remove(o); });
+  lot = new THREE.Mesh(new THREE.PlaneGeometry(LOT_W, LOT_D), lotMat);
+  lotMat.map.repeat.set(LOT_W / 4, LOT_D / 4);
+  lotMat.normalMap.repeat.set(LOT_W / 4, LOT_D / 4);
+  lot.rotation.x = -Math.PI / 2;
+  lot.receiveShadow = true;
+  scene.add(lot);
+  const mx = Math.max(LOT_W, LOT_D);
+  grid = new THREE.GridHelper(mx, mx / GRID, 0xa9a28c, 0xbdb59e);
+  grid.scale.set(LOT_W / mx, 1, LOT_D / mx);
+  grid.position.y = 0.01;
+  grid.material.transparent = true;
+  grid.material.opacity = 0.35;
+  scene.add(grid);
 
-// ---------- 주변 연출: 울타리 · 나무 · 구름 ----------
-{
-  // 부지 둘레 흰 울타리 (남쪽 가운데는 입구로 비움)
+  // 흰 울타리 (남쪽 가운데는 입구로 비움)
   const fenceMat = new THREE.MeshStandardMaterial({ color: 0xf4f4ee, roughness: 0.55 });
-  const fg = new THREE.Group();
+  const fg = (fenceGroup = new THREE.Group());
   const FW = LOT_W / 2 + 1.6, FD = LOT_D / 2 + 1.6;
   const addPost = (x, z) => {
     const p = new THREE.Mesh(new THREE.BoxGeometry(0.13, 1.0, 0.13), fenceMat);
@@ -211,11 +219,12 @@ scene.add(grid);
       fg.add(r);
     });
   };
-  for (let x = -FW; x <= FW + 0.01; x += 2.9) {
+  const step = 2.9;
+  for (let x = -FW; x <= FW + 0.01; x += step) {
     addPost(x, -FD);
     if (Math.abs(x) > 2.2) addPost(x, FD); // 남쪽 입구 틈
   }
-  for (let z = -FD; z <= FD + 0.01; z += 2.9) { addPost(-FW, z); addPost(FW, z); }
+  for (let z = -FD; z <= FD + 0.01; z += step) { addPost(-FW, z); addPost(FW, z); }
   addRail(0, -FD, FW * 2, 0);
   addRail(-FW, 0, FD * 2, Math.PI / 2);
   addRail(FW, 0, FD * 2, Math.PI / 2);
@@ -224,10 +233,15 @@ scene.add(grid);
   addRail(2.2 + segLen / 2, FD, segLen, 0);
   scene.add(fg);
 
-  // 주변 나무 (3겹 수풀 + 접지 그림자)
+  // 주변 나무 (울타리 바깥 링, 3겹 수풀 + 접지 그림자)
+  treeGroup = new THREE.Group();
   const trunkMat = new THREE.MeshStandardMaterial({ color: 0x7d5f43, roughness: 0.9 });
   const crownCols = [0x5e9455, 0x6da562, 0x4f8a4c, 0x79b06b];
-  const spots = [[-17, -10], [-14, 6], [-19, 1], [17, -9], [15, 7], [19, -1], [-8, -14], [9, -14.5], [0, -17], [-16, 12], [16, 13]];
+  const ox = FW + 4.5, oz = FD + 4.5;
+  const spots = [
+    [-ox, -oz * 0.65], [-ox * 0.8, oz * 0.45], [-ox * 1.1, 0.08 * oz], [ox, -oz * 0.6], [ox * 0.85, oz * 0.5],
+    [ox * 1.1, -0.05 * oz], [-ox * 0.45, -oz], [ox * 0.5, -oz * 1.05], [0, -oz * 1.2], [-ox * 0.9, oz * 0.85], [ox * 0.9, oz * 0.9],
+  ];
   spots.forEach(([x, z], i) => {
     const g = new THREE.Group();
     const h = 1.6 + (i % 3) * 0.35;
@@ -248,9 +262,17 @@ scene.add(grid);
     g.add(makeAoDisc(3, 3, 0.015));
     g.position.set(x, 0, z);
     g.rotation.y = i * 1.7;
-    scene.add(g);
+    treeGroup.add(g);
   });
+  scene.add(treeGroup);
+
+  // 그림자 카메라를 부지 크기에 맞춤
+  const half = Math.max(22, Math.max(LOT_W, LOT_D) / 2 + 12);
+  sun.shadow.camera.left = -half; sun.shadow.camera.right = half;
+  sun.shadow.camera.top = half; sun.shadow.camera.bottom = -half;
+  sun.shadow.camera.updateProjectionMatrix();
 }
+rebuildGround();
 // 구름 (렌더 루프에서 천천히 드리프트)
 const clouds = [];
 {
@@ -492,6 +514,7 @@ function overlapsAny(u, x, z, rot, ignore) {
 
 // ---------- 카메라 (궤도 + 줌) ----------
 let az = 0.6, el = 0.85, dist = 26;
+const maxDist = () => Math.max(46, Math.hypot(LOT_W, LOT_D) * 1.8);
 function applyCam() {
   camera.position.set(
     Math.sin(az) * Math.cos(el) * dist,
@@ -562,13 +585,13 @@ canvas.addEventListener("pointermove", (e) => {
 window.addEventListener("pointerup", () => { dragging = null; });
 canvas.addEventListener("wheel", (e) => {
   e.preventDefault();
-  dist = Math.max(12, Math.min(46, dist + e.deltaY * 0.03));
+  dist = Math.max(12, Math.min(maxDist(), dist + e.deltaY * 0.03));
   applyCam();
 }, { passive: false });
 canvas.addEventListener("touchmove", (e) => {
   if (e.touches.length === 2) {
     const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-    if (pinch != null) { dist = Math.max(12, Math.min(46, dist - (d - pinch) * 0.05)); applyCam(); }
+    if (pinch != null) { dist = Math.max(12, Math.min(maxDist(), dist - (d - pinch) * 0.05)); applyCam(); }
     pinch = d;
     e.preventDefault();
   }
@@ -595,6 +618,45 @@ document.getElementById("build-del").addEventListener("click", () => {
   refreshSelectionRing();
   refreshQuote();
 });
+
+// ---------- 내 땅 크기 (고객 대지 입력) ----------
+function updateLotUI() {
+  const wEl = document.getElementById("build-lot-w");
+  const dEl = document.getElementById("build-lot-d");
+  const info = document.getElementById("build-lot-info");
+  if (wEl) wEl.value = LOT_W;
+  if (dEl) dEl.value = LOT_D;
+  if (info) info.textContent = `대지 ${(LOT_W * LOT_D / PYEONG).toFixed(0)}평 (${LOT_W * LOT_D}㎡)`;
+}
+function applyLotSize(w, d) {
+  LOT_W = Math.round(Math.max(9, Math.min(60, w || LOT_W)));
+  LOT_D = Math.round(Math.max(9, Math.min(60, d || LOT_D)));
+  try { localStorage.setItem("seum_build_lot", JSON.stringify({ w: LOT_W, d: LOT_D })); } catch (e) {}
+  rebuildGround();
+  // 기존 배치물을 새 부지 안으로 이동
+  placed.forEach((p) => {
+    const [fw, fd] = fpOfEntry(p);
+    [p.x, p.z] = clampToLotFp(fw, fd, p.x, p.z);
+    p.group.position.set(p.x, 0, p.z);
+  });
+  dist = Math.max(24, Math.hypot(LOT_W, LOT_D) * 1.25);
+  applyCam();
+  refreshSelectionRing();
+  refreshQuote();
+  updateLotUI();
+}
+{
+  const applyBtn = document.getElementById("build-lot-apply");
+  const readApply = () => applyLotSize(
+    parseFloat(document.getElementById("build-lot-w").value),
+    parseFloat(document.getElementById("build-lot-d").value)
+  );
+  if (applyBtn) applyBtn.addEventListener("click", readApply);
+  ["build-lot-w", "build-lot-d"].forEach((id) => {
+    const el2 = document.getElementById(id);
+    if (el2) el2.addEventListener("keydown", (e) => { if (e.key === "Enter") readApply(); });
+  });
+}
 
 // ---------- 옵션 소품 (데크·조경) ----------
 function refreshExtras() {
@@ -743,7 +805,7 @@ function renderOptions() {
 function summaryText() {
   const q = quote();
   const parts = q.items.map((i) => i.label.replace(/[🛋️🛏️🍳🛁🎨🏠🪵🌳]/g, "").trim());
-  return `[빌드룸] ${q.pyeong.toFixed(1)}평 · ${q.price.toLocaleString()}만원~ | ${parts.join(", ")}`;
+  return `[빌드룸] 대지 ${(LOT_W * LOT_D / PYEONG).toFixed(0)}평(${LOT_W}×${LOT_D}m) · 건물 ${q.pyeong.toFixed(1)}평 · ${q.price.toLocaleString()}만원~ | ${parts.join(", ")}`;
 }
 {
   const modal = document.getElementById("build-modal");
@@ -771,6 +833,7 @@ function summaryText() {
         ? { model: p.model.slug || p.model.name, x: p.x, z: p.z, rot: p.rot }
         : { type: p.typeId, x: p.x, z: p.z, rot: p.rot }),
       options: opt,
+      lot: { w: LOT_W, d: LOT_D, pyeong: +(LOT_W * LOT_D / PYEONG).toFixed(1) },
       area_m2: +q.area.toFixed(1),
       pyeong: +q.pyeong.toFixed(1),
       price_manwon: q.price,
@@ -837,6 +900,10 @@ Promise.all([
     renderPalette();
     renderModels();
     renderOptions();
+    updateLotUI();
+    // 저장된 고객 땅이 기본값과 다르면 카메라를 부지에 맞춤
+    dist = Math.max(26, Math.hypot(LOT_W, LOT_D) * 1.25);
+    applyCam();
     applyPreset();
     refreshQuote();
     loadingEl.hidden = true;
@@ -868,6 +935,8 @@ window.__seumBuild = {
   add: addUnit,
   addModel: (i) => MODELS[i] && addModel(MODELS[i]),
   models: () => MODELS,
+  setLot: applyLotSize,
+  lot: () => ({ w: LOT_W, d: LOT_D }),
   units: () => placed.map((p) => ({ type: p.typeId, x: p.x, z: p.z, rot: p.rot })),
   quote,
   setOpt: (k, v) => { opt[k] = v; renderOptions(); refreshUnitMeshes(); refreshQuote(); },
