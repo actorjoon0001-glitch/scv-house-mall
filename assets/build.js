@@ -271,6 +271,11 @@ function rebuildGround() {
   sun.shadow.camera.left = -half; sun.shadow.camera.right = half;
   sun.shadow.camera.top = half; sun.shadow.camera.bottom = -half;
   sun.shadow.camera.updateProjectionMatrix();
+  // 위성 지도가 켜져 있으면 새 부지 크기로 다시 깐다
+  if (typeof sat !== "undefined" && sat.on) {
+    lot.material = satMat;
+    renderSatTexture();
+  }
 }
 rebuildGround();
 // 구름 (렌더 루프에서 천천히 드리프트)
@@ -618,6 +623,108 @@ document.getElementById("build-del").addEventListener("click", () => {
   refreshSelectionRing();
   refreshQuote();
 });
+
+// ---------- 위성 지도로 내 땅 깔기 ----------
+// 주소 → 좌표(Nominatim) → 위성 타일(Esri World Imagery)을 실제 축척(m/px)에 맞춰
+// 부지 바닥 텍스처로 스티칭. 북쪽이 화면 안쪽(-z)으로 오는 정북 방향.
+var sat = { on: false, lat: 0, lon: 0, offX: 0, offZ: 0, z: 19 }; // var: rebuildGround 초기 호출 시 typeof 가드용
+const satMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 });
+function lon2px(lon, z) { return ((lon + 180) / 360) * 256 * Math.pow(2, z); }
+function lat2px(lat, z) {
+  const s = Math.sin((lat * Math.PI) / 180);
+  return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * 256 * Math.pow(2, z);
+}
+function satMpp(lat, z) { return (156543.03392 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, z); }
+function loadTile(z, x, y) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => res(img);
+    img.onerror = rej;
+    img.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
+  });
+}
+function renderSatTexture() {
+  if (!sat.on) return Promise.resolve();
+  const z = sat.z;
+  const mpp = satMpp(sat.lat, z);
+  const wPx = Math.max(64, Math.round(LOT_W / mpp));
+  const dPx = Math.max(64, Math.round(LOT_D / mpp));
+  const cx2 = lon2px(sat.lon, z) + sat.offX / mpp;
+  const cy = lat2px(sat.lat, z) + sat.offZ / mpp;
+  const left = cx2 - wPx / 2, top = cy - dPx / 2;
+  const cv = document.createElement("canvas");
+  cv.width = wPx; cv.height = dPx;
+  const c2 = cv.getContext("2d");
+  c2.fillStyle = "#3a4438";
+  c2.fillRect(0, 0, wPx, dPx);
+  const jobs = [];
+  for (let tx = Math.floor(left / 256); tx <= Math.floor((left + wPx) / 256); tx++) {
+    for (let ty = Math.floor(top / 256); ty <= Math.floor((top + dPx) / 256); ty++) {
+      jobs.push(loadTile(z, tx, ty).then((img) => c2.drawImage(img, Math.round(tx * 256 - left), Math.round(ty * 256 - top))).catch(() => {}));
+    }
+  }
+  return Promise.all(jobs).then(() => {
+    const t = new THREE.CanvasTexture(cv);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 4;
+    if (satMat.map) satMat.map.dispose();
+    satMat.map = t;
+    satMat.needsUpdate = true;
+    if (lot) lot.material = satMat;
+  });
+}
+function setSatStatus(msg) {
+  const el2 = document.getElementById("build-sat-status");
+  if (el2) el2.textContent = msg || "";
+}
+function loadSatFromAddress(addr) {
+  if (!addr || addr.trim().length < 3) { setSatStatus("주소를 입력해주세요 (도로명 또는 지번)"); return; }
+  setSatStatus("📍 주소 찾는 중…");
+  fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=kr&q=${encodeURIComponent(addr.trim())}`)
+    .then((r) => r.json())
+    .then((rows) => {
+      if (!rows || !rows.length) { setSatStatus("주소를 찾지 못했어요. 도로명 주소로 다시 시도해보세요."); return; }
+      sat.on = true;
+      sat.lat = parseFloat(rows[0].lat);
+      sat.lon = parseFloat(rows[0].lon);
+      sat.offX = 0; sat.offZ = 0; sat.z = 19;
+      setSatStatus("🛰️ 위성사진 불러오는 중…");
+      // 고배율(z19) 타일이 없는 지역은 z18로 폴백
+      const ctx2 = Math.floor(lon2px(sat.lon, 19) / 256), cty = Math.floor(lat2px(sat.lat, 19) / 256);
+      loadTile(19, ctx2, cty)
+        .catch(() => { sat.z = 18; })
+        .then(() => renderSatTexture())
+        .then(() => {
+          const pan = document.getElementById("build-sat-pan");
+          if (pan) pan.hidden = false;
+          setSatStatus(`📍 ${String(rows[0].display_name || "").split(",")[0]} · 화살표로 미세조정 (위성 © Esri)`);
+        });
+    })
+    .catch(() => setSatStatus("불러오기 실패 — 잠시 후 다시 시도해주세요."));
+}
+function clearSat() {
+  sat.on = false;
+  if (lot) lot.material = lotMat;
+  const pan = document.getElementById("build-sat-pan");
+  if (pan) pan.hidden = true;
+  setSatStatus("");
+}
+{
+  const loadBtn = document.getElementById("build-sat-load");
+  if (loadBtn) loadBtn.addEventListener("click", () => loadSatFromAddress(document.getElementById("build-sat-addr").value));
+  const addrEl = document.getElementById("build-sat-addr");
+  if (addrEl) addrEl.addEventListener("keydown", (e) => { if (e.key === "Enter") loadSatFromAddress(addrEl.value); });
+  const clearBtn = document.getElementById("build-sat-clear");
+  if (clearBtn) clearBtn.addEventListener("click", clearSat);
+  document.querySelectorAll("#build-sat-pan [data-pan]").forEach((b) =>
+    b.addEventListener("click", () => {
+      const [dx, dz] = b.dataset.pan.split(",").map(Number);
+      sat.offX += dx; sat.offZ += dz;
+      renderSatTexture();
+    })
+  );
+}
 
 // ---------- 내 땅 크기 (고객 대지 입력) ----------
 function updateLotUI() {

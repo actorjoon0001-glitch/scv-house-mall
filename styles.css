@@ -1340,6 +1340,12 @@ body.build-page { margin: 0; overflow: hidden; background: #12150f; }
   background: rgba(255,255,255,0.08); color: #fff; font-size: 12px; text-align: center;
 }
 .build__lot-info { margin: 0 0 10px; font-size: 11px; color: #cfe3d6; }
+.build__sat-addr {
+  width: 100%; box-sizing: border-box; margin-bottom: 5px; padding: 6px 8px;
+  border-radius: 8px; border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.08); color: #fff; font-size: 12px;
+}
+.build__sat-pan .btn { padding: 4px 8px; }
 .build__palette-title { margin: 0 0 8px; font-size: 12px; font-weight: 700; color: #9fd9bd; letter-spacing: 0.06em; }
 .build__unitbtn {
   display: flex; align-items: center; gap: 9px; width: 100%; margin-bottom: 6px;

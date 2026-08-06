@@ -32,6 +32,19 @@
         <button type="button" class="btn btn--glass btn--sm" id="build-lot-apply">적용</button>
       </div>
       <p class="build__lot-info" id="build-lot-info"></p>
+      <p class="build__palette-title">🛰️ 위성으로 내 땅 보기</p>
+      <input id="build-sat-addr" class="build__sat-addr" placeholder="주소 입력 (도로명/지번)" />
+      <div class="build__lot">
+        <button type="button" class="btn btn--glass btn--sm" id="build-sat-load">불러오기</button>
+        <button type="button" class="btn btn--glass btn--sm" id="build-sat-clear">지우기</button>
+      </div>
+      <div class="build__lot build__sat-pan" id="build-sat-pan" hidden>
+        <button type="button" class="btn btn--glass btn--sm" data-pan="0,-4">▲</button>
+        <button type="button" class="btn btn--glass btn--sm" data-pan="0,4">▼</button>
+        <button type="button" class="btn btn--glass btn--sm" data-pan="-4,0">◀</button>
+        <button type="button" class="btn btn--glass btn--sm" data-pan="4,0">▶</button>
+      </div>
+      <p class="build__lot-info" id="build-sat-status"></p>
       <p class="build__palette-title">모듈 유닛</p>
       <div id="build-units"></div>
       <p class="build__palette-title" style="margin-top:12px">실제 판매 모델</p>
