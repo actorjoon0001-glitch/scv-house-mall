@@ -24,6 +24,14 @@
 
     <!-- 좌측: 유닛 팔레트 -->
     <div class="build__palette" id="build-palette">
+      <p class="build__palette-title">내 땅 크기 (m)</p>
+      <div class="build__lot">
+        <input id="build-lot-w" type="number" min="9" max="60" step="1" inputmode="numeric" aria-label="가로(m)" />
+        <span>×</span>
+        <input id="build-lot-d" type="number" min="9" max="60" step="1" inputmode="numeric" aria-label="세로(m)" />
+        <button type="button" class="btn btn--glass btn--sm" id="build-lot-apply">적용</button>
+      </div>
+      <p class="build__lot-info" id="build-lot-info"></p>
       <p class="build__palette-title">모듈 유닛</p>
       <div id="build-units"></div>
       <p class="build__palette-title" style="margin-top:12px">실제 판매 모델</p>
