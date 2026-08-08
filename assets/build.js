@@ -279,9 +279,10 @@ function rebuildGround() {
   sun.shadow.camera.left = -half; sun.shadow.camera.right = half;
   sun.shadow.camera.top = half; sun.shadow.camera.bottom = -half;
   sun.shadow.camera.updateProjectionMatrix();
-  // 위성 지도가 켜져 있으면 새 부지 크기로 다시 깐다
+  // 위성 지도가 켜져 있으면 새 부지 크기로 다시 깐다 (기본 나무는 숨김 유지)
   if (typeof sat !== "undefined" && sat.on) {
     lot.material = satMat;
+    treeGroup.visible = false;
     renderSatTexture();
   }
 }
@@ -652,6 +653,7 @@ function loadTile(z, x, y) {
     img.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
   });
 }
+let satGroundMesh = null; // 부지 밖 주변 동네까지 덮는 위성 지면
 function renderSatTexture() {
   if (!sat.on) return Promise.resolve();
   const z = sat.z;
@@ -672,6 +674,23 @@ function renderSatTexture() {
       jobs.push(loadTile(z, tx, ty).then((img) => c2.drawImage(img, Math.round(tx * 256 - left), Math.round(ty * 256 - top))).catch(() => {}));
     }
   }
+  // 주변 동네(240×240m)도 위성으로 — 부지만 사진이면 어색하니 지평선까지 실제 동네를 깐다 (한 단계 낮은 배율로 충분)
+  const zg = Math.max(14, z - 2);
+  const gm = satMpp(sat.lat, zg);
+  const GSIZE = 240;
+  const gPx = Math.min(1400, Math.max(256, Math.round(GSIZE / gm)));
+  const gLeft = lon2px(sat.lon, zg) + sat.offX / gm - gPx / 2;
+  const gTop = lat2px(sat.lat, zg) + sat.offZ / gm - gPx / 2;
+  const gcv = document.createElement("canvas");
+  gcv.width = gcv.height = gPx;
+  const g2 = gcv.getContext("2d");
+  g2.fillStyle = "#48523f";
+  g2.fillRect(0, 0, gPx, gPx);
+  for (let tx = Math.floor(gLeft / 256); tx <= Math.floor((gLeft + gPx) / 256); tx++) {
+    for (let ty = Math.floor(gTop / 256); ty <= Math.floor((gTop + gPx) / 256); ty++) {
+      jobs.push(loadTile(zg, tx, ty).then((img) => g2.drawImage(img, Math.round(tx * 256 - gLeft), Math.round(ty * 256 - gTop))).catch(() => {}));
+    }
+  }
   return Promise.all(jobs).then(() => {
     const t = new THREE.CanvasTexture(cv);
     t.colorSpace = THREE.SRGBColorSpace;
@@ -680,6 +699,26 @@ function renderSatTexture() {
     satMat.map = t;
     satMat.needsUpdate = true;
     if (lot) lot.material = satMat;
+    // 주변 지면 적용 + 기본 잔디·나무 숨김
+    const gt = new THREE.CanvasTexture(gcv);
+    gt.colorSpace = THREE.SRGBColorSpace;
+    gt.anisotropy = 4;
+    if (!satGroundMesh) {
+      satGroundMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(GSIZE, GSIZE),
+        new THREE.MeshStandardMaterial({ roughness: 1 })
+      );
+      satGroundMesh.rotation.x = -Math.PI / 2;
+      satGroundMesh.position.y = -0.015;
+      satGroundMesh.receiveShadow = true;
+      scene.add(satGroundMesh);
+    }
+    if (satGroundMesh.material.map) satGroundMesh.material.map.dispose();
+    satGroundMesh.material.map = gt;
+    satGroundMesh.material.needsUpdate = true;
+    satGroundMesh.visible = true;
+    lawn.visible = false;
+    if (treeGroup) treeGroup.visible = false;
   });
 }
 function setSatStatus(msg) {
@@ -796,6 +835,9 @@ function openMapPicker(lat, lon, z) {
 function clearSat() {
   sat.on = false;
   if (lot) lot.material = lotMat;
+  if (satGroundMesh) satGroundMesh.visible = false;
+  lawn.visible = true;
+  if (treeGroup) treeGroup.visible = true;
   const pan = document.getElementById("build-sat-pan");
   if (pan) pan.hidden = true;
   setSatStatus("");
@@ -1163,6 +1205,7 @@ window.__seumBuild = {
   models: () => MODELS,
   setLot: applyLotSize,
   lot: () => ({ w: LOT_W, d: LOT_D }),
+  satAt: applySatAt,
   units: () => placed.map((p) => ({ type: p.typeId, x: p.x, z: p.z, rot: p.rot })),
   quote,
   setOpt: (k, v) => { opt[k] = v; renderOptions(); refreshUnitMeshes(); refreshQuote(); },
