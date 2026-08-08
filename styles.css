@@ -1331,12 +1331,16 @@ body.build-page { margin: 0; overflow: hidden; background: #12150f; }
   background: rgba(16,19,15,0.72); border: 1px solid rgba(255,255,255,0.16);
   border-radius: 14px; padding: 12px; color: #fff;
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  max-height: calc(100% - 120px); overflow-y: auto;
+  max-height: calc(100% - 120px); overflow-y: auto; overflow-x: hidden;
 }
+.build__palette .btn { min-width: 0; }
 .build__unitbtn-img { width: 36px; height: 27px; object-fit: cover; border-radius: 6px; flex: none; }
-.build__lot { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+.build__unitbtn { min-width: 0; }
+.build__unitbtn > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.build__lot { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; flex-wrap: wrap; }
 .build__lot input {
-  width: 40px; padding: 5px 3px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.25);
+  flex: 1 1 34px; width: 34px; min-width: 0; max-width: 52px;
+  padding: 5px 3px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.25);
   background: rgba(255,255,255,0.08); color: #fff; font-size: 12px; text-align: center;
 }
 .build__lot-info { margin: 0 0 10px; font-size: 11px; color: #cfe3d6; }

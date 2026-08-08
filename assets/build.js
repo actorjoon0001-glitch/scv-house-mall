@@ -54,7 +54,15 @@ function pyeongOf(m) {
   return sum || 10;
 }
 function priceOf(m) {
-  return Number(m.event_on && m.event_price ? m.event_price : m.base_price) || 0;
+  // 카탈로그 가격은 원 단위 저장 → 만원으로 변환 (유닛 가격과 단위 통일)
+  const won = Number(m.event_on && m.event_price ? m.event_price : m.base_price) || 0;
+  return Math.round(won / 1e4);
+}
+function fmtMan(man) {
+  if (!man) return "상담";
+  const uk = Math.floor(man / 1e4);
+  const rest = man % 1e4;
+  return `${uk ? uk + "억 " : ""}${rest ? rest.toLocaleString() + "만" : ""}`.trim();
 }
 function normalizeFootprint(obj, maxXZ, maxH) {
   const box = new THREE.Box3().setFromObject(obj);
@@ -969,10 +977,10 @@ function refreshQuote() {
   const q = quote();
   const body = document.getElementById("build-quote-body");
   body.innerHTML = q.items.length
-    ? q.items.map((i) => `<div class="build__qrow"><span>${i.label}</span><span>${i.amt.toLocaleString()}만</span></div>`).join("")
+    ? q.items.map((i) => `<div class="build__qrow"><span>${i.label}</span><span>${fmtMan(i.amt)}</span></div>`).join("")
     : `<p class="build__qempty">왼쪽에서 유닛을 눌러 집을 올려보세요!</p>`;
   document.getElementById("build-area").textContent = q.pyeong ? `${q.pyeong.toFixed(1)}평 (${q.area.toFixed(0)}㎡)` : "0평";
-  document.getElementById("build-price").textContent = q.price ? `${q.price.toLocaleString()}만원~` : "-";
+  document.getElementById("build-price").textContent = q.price ? `${fmtMan(q.price)}원~` : "-";
   refreshExtras();
 }
 
@@ -997,7 +1005,7 @@ function renderModels() {
     (m, i) => `
     <button type="button" class="build__unitbtn" data-model="${i}">
       ${m.main_image ? `<img class="build__unitbtn-img" src="${m.main_image}" alt="" loading="lazy" />` : `<span class="build__unitbtn-ic">🏠</span>`}
-      <span><b>${m.name}</b><br /><small>${pyeongOf(m).toFixed(0)}평 · ${priceOf(m) ? priceOf(m).toLocaleString() + "만" : "상담"}</small></span>
+      <span><b>${m.name}</b><br /><small>${pyeongOf(m).toFixed(0)}평 · ${fmtMan(priceOf(m))}</small></span>
     </button>`
   ).join("");
   el2.querySelectorAll("[data-model]").forEach((b) =>
