@@ -97,7 +97,12 @@ exports.handler = async (event) => {
       },
       body: JSON.stringify({ message: { to: phone, from: SMS_FROM, text } }),
     });
-    if (!smsRes.ok) return json(502, { error: "sms_failed" });
+    if (!smsRes.ok) {
+      // 원인 진단용: 솔라피 오류 코드·메시지를 함께 반환 (서명 불일치/발신번호/잔액 등 구분)
+      const d = await smsRes.json().catch(() => ({}));
+      console.error("solapi send failed:", smsRes.status, d.errorCode, d.errorMessage);
+      return json(502, { error: "sms_failed", provider: "solapi", status: smsRes.status, code: d.errorCode, detail: d.errorMessage });
+    }
   }
   return json(200, { ok: true });
 };
