@@ -1327,29 +1327,42 @@ body.build-page { margin: 0; overflow: hidden; background: #12150f; }
 .build__top strong { font-size: 16px; }
 .build__hint { flex: 1; font-size: 12px; color: rgba(255,255,255,0.85); }
 .build__palette {
-  position: absolute; left: 14px; top: 64px; z-index: 5; width: 168px;
+  position: absolute; left: 14px; top: 64px; z-index: 5; width: 172px;
   background: rgba(16,19,15,0.72); border: 1px solid rgba(255,255,255,0.16);
-  border-radius: 14px; padding: 12px; color: #fff;
+  border-radius: 14px; padding: 10px; color: #fff;
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   max-height: calc(100% - 120px); overflow-y: auto; overflow-x: hidden;
 }
-.build__palette .btn { min-width: 0; }
+/* 팔레트 내부 버튼: 크기 통일 + 컴팩트 */
+.build__palette .btn {
+  min-width: 0; padding: 6px 8px; font-size: 12px; border-radius: 9px;
+}
+/* 섹션 제목 사이 구분선으로 정리 */
+.build__palette .build__palette-title {
+  margin: 12px 0 7px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);
+}
+.build__palette .build__palette-title:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 .build__unitbtn-img { width: 36px; height: 27px; object-fit: cover; border-radius: 6px; flex: none; }
 .build__unitbtn { min-width: 0; }
 .build__unitbtn > span:last-child { min-width: 0; overflow-wrap: anywhere; }
-.build__lot { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; flex-wrap: wrap; }
+.build__lot { display: flex; align-items: center; gap: 4px; margin-bottom: 5px; flex-wrap: wrap; }
+.build__lot .btn { flex: 1 1 auto; }
 .build__lot input {
-  flex: 1 1 34px; width: 34px; min-width: 0; max-width: 52px;
-  padding: 5px 3px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.25);
+  flex: 1 1 34px; width: 34px; min-width: 0; max-width: 56px;
+  padding: 6px 3px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.25);
   background: rgba(255,255,255,0.08); color: #fff; font-size: 12px; text-align: center;
 }
+/* 적용 버튼은 입력칸 아랫줄 전체 폭으로 — 어중간하게 잘리지 않게 */
+#build-lot-apply { flex: 1 1 100%; }
 .build__lot-info { margin: 0 0 10px; font-size: 11px; color: #cfe3d6; }
 .build__sat-addr {
   width: 100%; box-sizing: border-box; margin-bottom: 5px; padding: 6px 8px;
   border-radius: 8px; border: 1px solid rgba(255,255,255,0.25);
   background: rgba(255,255,255,0.08); color: #fff; font-size: 12px;
 }
-.build__sat-pan .btn { padding: 4px 8px; }
+/* 미세조정 화살표: 한 줄 4등분 그리드 */
+.build__sat-pan { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.build__sat-pan .btn { padding: 5px 0; text-align: center; }
 .build__map-panel { max-width: 420px; }
 #build-map-canvas {
   width: 100%; border-radius: 12px; cursor: crosshair; display: block;
