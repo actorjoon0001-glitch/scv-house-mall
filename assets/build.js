@@ -117,7 +117,8 @@ const scene = new THREE.Scene();
     pmrem.dispose();
   } catch (e) {}
 }
-scene.fog = new THREE.Fog(0xdfeaf2, 70, 150);
+// 안개는 아주 멀리서만 — 축소 시 부지가 뿌옇게 덮이지 않게
+scene.fog = new THREE.Fog(0xdfeaf2, 150, 340);
 const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 300);
 
 const hemi = new THREE.HemisphereLight(0xeaf4ff, 0x8fae7c, 0.55);
@@ -287,23 +288,7 @@ function rebuildGround() {
   }
 }
 rebuildGround();
-// 구름 (렌더 루프에서 천천히 드리프트)
-const clouds = [];
-{
-  const cm = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1 });
-  for (let i = 0; i < 5; i++) {
-    const c = new THREE.Group();
-    for (let j = 0; j < 3; j++) {
-      const puff = new THREE.Mesh(new THREE.SphereGeometry(1.5 + (j % 2) * 0.7, 10, 10), cm);
-      puff.position.set(j * 1.7 - 1.7, (j % 2) * 0.35, (j % 2) * 0.6);
-      puff.scale.y = 0.55;
-      c.add(puff);
-    }
-    c.position.set(-70 + i * 32, 17 + (i % 3) * 3.5, -34 + (i % 4) * 20);
-    clouds.push(c);
-    scene.add(c);
-  }
-}
+// 구름 없음 — 부지를 가려 뿌옇게 보이는 문제로 제거 (하늘은 배경 그라데이션만)
 
 // ---------- 상태 ----------
 let placed = []; // { uid, typeId, x, z, rot, group }
@@ -1187,16 +1172,7 @@ function resize() {
 }
 window.addEventListener("resize", resize);
 resize();
-let lastT = 0;
-renderer.setAnimationLoop((t) => {
-  const dt = Math.min((t - lastT) / 1000, 0.05);
-  lastT = t;
-  clouds.forEach((c, i) => {
-    c.position.x += dt * (0.5 + i * 0.12);
-    if (c.position.x > 90) c.position.x = -90;
-  });
-  renderer.render(scene, camera);
-});
+renderer.setAnimationLoop(() => renderer.render(scene, camera));
 
 // 디버그 훅
 window.__seumBuild = {
