@@ -1346,6 +1346,13 @@ body.build-page { margin: 0; overflow: hidden; background: #12150f; }
   background: rgba(255,255,255,0.08); color: #fff; font-size: 12px;
 }
 .build__sat-pan .btn { padding: 4px 8px; }
+.build__map-panel { max-width: 420px; }
+#build-map-canvas {
+  width: 100%; border-radius: 12px; cursor: crosshair; display: block;
+  border: 1px solid rgba(255,255,255,0.2); background: #1c211c;
+}
+.build__map-ctl { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; }
+.build__map-ctl span { font-size: 12px; color: #cfe3d6; min-width: 48px; text-align: center; }
 .build__palette-title { margin: 0 0 8px; font-size: 12px; font-weight: 700; color: #9fd9bd; letter-spacing: 0.06em; }
 .build__unitbtn {
   display: flex; align-items: center; gap: 9px; width: 100%; margin-bottom: 6px;

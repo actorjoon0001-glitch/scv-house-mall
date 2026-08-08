@@ -71,6 +71,22 @@
     <!-- 하단: 옵션 바 -->
     <div class="build__options" id="build-options"></div>
 
+    <!-- 위성 지도 피커 -->
+    <div class="build__modal" id="build-map-modal" hidden>
+      <div class="build__modal-panel build__map-panel">
+        <button type="button" class="build__modal-close" id="build-map-close">✕</button>
+        <h3>🛰️ 내 땅 위치 맞추기</h3>
+        <p class="build__modal-sub">지도를 클릭하면 그 지점이 가운데로 오면서 확대돼요.<br />노란 사각형 = 현재 부지 크기. 내 땅이 가운데 오면 적용!</p>
+        <canvas id="build-map-canvas" width="360" height="300"></canvas>
+        <div class="build__map-ctl">
+          <button type="button" class="btn btn--glass btn--sm" id="build-map-zo">−</button>
+          <span id="build-map-z">확대 16</span>
+          <button type="button" class="btn btn--glass btn--sm" id="build-map-zi">＋</button>
+          <button type="button" class="btn btn--primary btn--sm" id="build-map-apply">✓ 이 위치로 적용</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 상담 모달 -->
     <div class="build__modal" id="build-modal" hidden>
       <div class="build__modal-panel">
