@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "./GLTFLoader.js";
 import { RGBELoader } from "./RGBELoader.js";
 import { clone as skeletonClone } from "./SkeletonUtils.js";
+import { buildHouseMerged, HOUSE_SPECS } from "./house-kit.js";
 import { EffectComposer } from "./postprocessing/EffectComposer.js";
 import { RenderPass } from "./postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "./postprocessing/UnrealBloomPass.js";
@@ -1855,8 +1856,9 @@ function init() {
       const idxInCat = catCounters[c] || 0;
       catCounters[c] = idxInCat + 1;
       const url = archetypeFor(m, idxInCat);
-      loadGlb(url)
-        .catch(() => loadGlb(DEFAULT_GLB))
+      // 정밀 사양(HOUSE_SPECS)이 있는 모델은 파라메트릭 하우스 키트로 조립 (고품질·치수 기반)
+      const kitSpec = m.slug && HOUSE_SPECS[m.slug] ? HOUSE_SPECS[m.slug] : null;
+      (kitSpec ? Promise.resolve(null) : loadGlb(url).catch(() => loadGlb(DEFAULT_GLB)))
         .then((seed) => {
           const wrap = new THREE.Group();
           // 부지 패드: 집을 잔디/포장 위에 바로 얹지 않고 전시 부스처럼 콘크리트 판 위에
@@ -1865,12 +1867,13 @@ function init() {
           pad.receiveShadow = true;
           wrap.add(makeAoDisc(11.5)); // 패드 접지 그림자 — 판이 잔디에 붙어 보이게
           wrap.add(pad);
-          const inst = seed.clone(true);
+          const inst = seed ? seed.clone(true) : buildHouseMerged(kitSpec);
           const foot = 7.2 + ((i * 2654435761) % 100) / 100 * 0.8; // 부지 내 크기 변화 (최대 8)
           const castsShadow = lot.z > -25; // 앞쪽 줄만 그림자 캐스팅 (성능)
           inst.traverse((o) => { if (o.isMesh) { o.castShadow = castsShadow; o.receiveShadow = true; } });
           const h = normalizeFootprint(inst, Math.min(foot, LOT_MAX), 5.2);
-          inst.position.y += 0.22 - h * 0.04; // 패드 위에 올리고 스캔 밑판은 살짝 묻기
+          // 키트 집은 바닥이 정확히 y0 → 패드 위에 그대로. 스캔 GLB는 밑판을 살짝 묻는다.
+          inst.position.y += kitSpec ? 0.22 : 0.22 - h * 0.04;
           wrap.add(inst);
           // 집 이름표: 떠 있는 라벨 대신 앞마당의 작은 사인보드 (통일 스타일)
           const tag = makeHouseTag(m.name);
