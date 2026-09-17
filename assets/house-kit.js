@@ -716,6 +716,346 @@ export const HOUSE_SPECS = {
     ],
     sidePorch: { side: "right", w: 2.4, railing: false },
   },
+  // ===== 2차 커버리지: 카탈로그 전 모델 (실물 사진 대조) =====
+  // STAY18-WR · 18평 — 화이트 벽 + 레드브릭 포치부 · 외쪽 다크 지붕 · 좌측 코너 포치
+  "stay-18wb": {
+    w: 9.4, d: 5.4, wallH: 2.7, finish: "metal", color: 0xdfdcd2,
+    roof: { type: "mono", h: 0.55, color: 0x33373c },
+    accents: [
+      { side: "front", u: 3.7, w: 1.9, finish: "brick", color: 0xa04a34 },
+      { side: "front", u: 8.4, w: 1.0, finish: "wood", color: 0x6a5a45 },
+    ],
+    door: { side: "front", u: 4.6, w: 0.95, h: 2.05 },
+    windows: [
+      { side: "front", u: 6.6, w: 1.6, h: 1.9, sill: 0.15, bars: 1, noSill: true },
+      { side: "front", u: 8.3, w: 1.1, h: 1.9, sill: 0.15, noSill: true },
+      { side: "back", u: 3.0, w: 1.5, h: 1.1, sill: 0.95 },
+      { side: "right", u: 2.2, w: 1.2, h: 1.0, sill: 1.0 },
+    ],
+    porch: { u: 0, w: 3.6, depth: 2.1, railing: true, stepU: 1.8 },
+  },
+  // CUBE-T4-K · 4평 — 네이비 컨테이너 · 평지붕 · 트윈 도어 · 우드 플랫폼
+  "cube-4b": {
+    w: 5.6, d: 2.4, wallH: 2.5, finish: "metal", color: 0x2b3350,
+    roof: { type: "flat" },
+    door: { side: "front", u: 1.4, w: 0.9, h: 2.0 },
+    windows: [
+      { side: "front", u: 4.0, w: 0.9, h: 1.95, sill: 0.05, bars: 0.001, noSill: true },
+      { side: "back", u: 2.0, w: 1.0, h: 0.8, sill: 1.1 },
+    ],
+    deck: { w: 5.6, depth: 1.4, stepU: 1.4 },
+  },
+  // STAY18-UB · 18평 — 블루그레이 브릭 + 우드 루버 · 외쪽 다크 · 풀폭 커버드 포치
+  stay18k: {
+    w: 9.4, d: 5.2, wallH: 2.75, finish: "brick", color: 0x8a93a8,
+    roof: { type: "mono", h: 0.5, color: 0x33373c },
+    accents: [
+      { side: "front", u: 3.4, w: 1.4, finish: "wood", color: 0xa8703c, h: 2.75 },
+      { side: "front", u: 7.6, w: 1.6, finish: "wood", color: 0xa8703c, h: 1.0, sill: 1.75 },
+    ],
+    door: { side: "front", u: 6.6, w: 1.0, h: 2.1, dark: true },
+    windows: [
+      { side: "front", u: 1.8, w: 2.1, h: 2.05, sill: 0.1, bars: 1, noSill: true },
+      { side: "front", u: 8.3, w: 1.4, h: 1.3, sill: 0.85 },
+      { side: "back", u: 3.0, w: 1.5, h: 1.1, sill: 0.95 },
+      { side: "left", u: 2.2, w: 1.2, h: 1.0, sill: 1.0 },
+    ],
+    porch: { u: 0, depth: 2.2, railing: true, stepU: 6.6 },
+  },
+  // FOREST10-WB · 10평 — 라이트그레이 패널 + 다크 섹션 · 외쪽 다크 · 랩 데크+난간
+  forest10wb: {
+    w: 8.2, d: 4.0, wallH: 2.65, finish: "metal", color: 0xd8d8d2,
+    roof: { type: "mono", h: 0.45, color: 0x2e3236 },
+    accents: [{ side: "front", u: 1.5, w: 2.0, finish: "metal", color: 0x3a3d42 }],
+    door: { side: "front", u: 2.5, w: 0.95, h: 2.05, dark: true, canopy: true },
+    windows: [
+      { side: "front", u: 0.8, w: 0.8, h: 1.0, sill: 0.95 },
+      { side: "front", u: 5.6, w: 3.4, h: 1.95, sill: 0.1, bars: 2, noSill: true },
+      { side: "back", u: 2.8, w: 1.4, h: 1.0, sill: 1.0 },
+    ],
+    deck: { depth: 2.0, w: 9.6, stepU: 2.5, railing: true },
+  },
+  // CUBE10-W · 10평 — 화이트 컨테이너 · 평지붕 · 블랙 개구부
+  cube10w: {
+    w: 9.0, d: 3.0, wallH: 2.6, finish: "metal", color: 0xe3e1da,
+    roof: { type: "flat" },
+    pier: true,
+    door: { side: "front", u: 2.5, w: 0.95, h: 2.05, dark: true },
+    windows: [
+      { side: "front", u: 1.1, w: 1.1, h: 0.75, sill: 1.05 },
+      { side: "front", u: 4.4, w: 1.5, h: 0.75, sill: 1.05 },
+      { side: "front", u: 7.1, w: 2.0, h: 1.95, sill: 0.1, bars: 1, noSill: true },
+      { side: "back", u: 2.4, w: 1.2, h: 0.8, sill: 1.05 },
+    ],
+    deck: { w: 1.6, offset: -2.0, depth: 0.9, stepU: 2.5 },
+  },
+  // FOREST10-3-WB · 10평+다락3평 — 화이트+우드 루버 · 높은 외쪽 · 상부 클리어스토리
+  forest13w: {
+    w: 8.0, d: 4.2, wallH: 3.6, finish: "metal", color: 0xe0ddd3,
+    roof: { type: "mono", h: 0.8, color: 0x2e3236 },
+    accents: [{ side: "front", u: 2.2, w: 2.2, finish: "wood", color: 0x9a6a3c }],
+    door: { side: "front", u: 6.8, w: 0.95, h: 2.05, dark: true },
+    windows: [
+      { side: "front", u: 1.1, w: 1.2, h: 1.1, sill: 0.9 },
+      { side: "front", u: 3.3, w: 1.8, h: 2.05, sill: 0.1, bars: 1, noSill: true },
+      { side: "front", u: 2.2, w: 1.5, h: 0.7, sill: 2.6, noSill: true },
+      { side: "front", u: 5.4, w: 1.1, h: 0.7, sill: 2.6, noSill: true },
+      { side: "back", u: 2.8, w: 1.3, h: 1.0, sill: 1.0 },
+    ],
+    deck: { depth: 1.9, w: 8.6, stepU: 4.0, railing: true },
+  },
+  // FOREST10-M · 10평 — 세이지 그린 컨테이너 · 평지붕 · 대형 우드 플랫폼
+  forest10m: {
+    w: 8.4, d: 3.4, wallH: 2.6, finish: "metal", color: 0xa8bf8a,
+    roof: { type: "flat" },
+    door: { side: "front", u: 6.2, w: 0.9, h: 2.0 },
+    windows: [
+      { side: "front", u: 1.4, w: 1.3, h: 1.1, sill: 0.85 },
+      { side: "front", u: 3.7, w: 2.2, h: 1.95, sill: 0.1, bars: 1, noSill: true },
+      { side: "back", u: 2.6, w: 1.2, h: 0.9, sill: 1.0 },
+    ],
+    deck: { depth: 2.6, w: 10.0, stepU: 4.2 },
+  },
+  // STAY15-B · 15평 — 우드 루버 + 다크 차콜 · 박공 다크 · 매입 현관
+  stay15c: {
+    w: 7.8, d: 5.0, wallH: 2.7, finish: "wood", color: 0xbe8a4a,
+    roof: { type: "gable", h: 1.0, color: 0x26292d },
+    accents: [{ side: "front", u: 0, w: 2.2, finish: "metal", color: 0x33373c }],
+    door: { side: "front", u: 1.1, w: 0.95, h: 2.05, dark: true, canopy: true },
+    windows: [
+      { side: "front", u: 3.3, w: 1.0, h: 1.1, sill: 0.9 },
+      { side: "front", u: 5.8, w: 2.2, h: 1.9, sill: 0.3, bars: 1 },
+      { side: "left", u: 2.0, w: 1.2, h: 1.0, sill: 1.0 },
+      { side: "back", u: 2.8, w: 1.4, h: 1.0, sill: 1.0 },
+    ],
+    deck: { depth: 1.4, inset: 0.4, stepU: 1.1 },
+  },
+  // STAY12-6-W · 복층(12+6평) — 크림 화이트 + 우드 악센트 · 박공 · 2단 창
+  stay18w: {
+    w: 7.6, d: 4.6, wallH: 4.6, finish: "metal", color: 0xe6e2d8,
+    roof: { type: "gable", h: 1.1, color: 0x8a8e93 },
+    accents: [{ side: "front", u: 5.4, w: 2.2, finish: "wood", color: 0xa8703c }],
+    door: { side: "front", u: 6.4, w: 0.95, h: 2.05, dark: true },
+    windows: [
+      { side: "front", u: 1.3, w: 1.3, h: 1.2, sill: 0.9 },
+      { side: "front", u: 3.4, w: 1.5, h: 1.2, sill: 0.9 },
+      { side: "front", u: 1.3, w: 1.1, h: 1.0, sill: 3.1 },
+      { side: "front", u: 3.4, w: 1.1, h: 1.0, sill: 3.1 },
+      { side: "back", u: 2.6, w: 1.4, h: 1.1, sill: 0.95 },
+      { side: "back", u: 5.2, w: 1.1, h: 0.9, sill: 3.1 },
+    ],
+    deck: { depth: 1.6, w: 4.0, offset: 1.6, stepU: 6.4 },
+  },
+  // FOREST10-4-W · 10평+다락4평 — 화이트 보드앤배튼 · 급경사 박공 · 우드 게이블
+  stay10w: {
+    w: 6.4, d: 4.6, wallH: 3.4, finish: "wood", color: 0xe3ded2,
+    roof: { type: "gable", h: 2.0, color: 0x84888d, overhang: 0.4 },
+    accents: [{ side: "right", u: 1.2, w: 2.2, finish: "wood", color: 0xa8703c }],
+    door: { side: "right", u: 3.7, w: 0.95, h: 2.05, dark: true },
+    windows: [
+      { side: "front", u: 2.2, w: 2.0, h: 2.2, sill: 0.15, bars: 1, noSill: true },
+      { side: "front", u: 4.6, w: 1.1, h: 1.1, sill: 0.9 },
+      { side: "front", u: 3.2, w: 1.4, h: 1.0, sill: 3.0, noSill: true },
+      { side: "back", u: 2.4, w: 1.3, h: 1.0, sill: 1.0 },
+    ],
+    deck: { depth: 1.8, w: 7.6, stepU: 3.2 },
+  },
+  // FOREST8-W · 8평 — 크림 패널 + 블랙 트림 · 완경사 박공 · 파일 기초
+  forest8wb: {
+    w: 7.2, d: 3.2, wallH: 2.6, finish: "metal", color: 0xd9d5c9,
+    roof: { type: "gable", h: 0.4, color: 0x26292d, overhang: 0.2 },
+    pier: true,
+    door: { side: "right", u: 1.6, w: 0.95, h: 2.05, dark: true },
+    windows: [
+      { side: "front", u: 1.8, w: 2.0, h: 1.9, sill: 0.15, bars: 1, noSill: true },
+      { side: "front", u: 4.8, w: 1.2, h: 1.0, sill: 1.0 },
+      { side: "back", u: 2.4, w: 1.1, h: 0.9, sill: 1.05 },
+    ],
+  },
+  // FOREST9-O · 9평 — 오렌지+그레이 투톤 · 완경사 박공 블랙 · 데크+난간
+  forest9o: {
+    w: 7.8, d: 3.6, wallH: 2.65, finish: "metal", color: 0x5a6068,
+    roof: { type: "gable", h: 0.55, color: 0x26292d, overhang: 0.25 },
+    accents: [
+      { side: "front", u: 0, w: 1.8, finish: "wood", color: 0xe07b20 },
+      { side: "front", u: 3.6, w: 2.0, finish: "wood", color: 0xe07b20 },
+      { side: "left", u: 0.8, w: 2.0, finish: "wood", color: 0xe07b20 },
+    ],
+    door: { side: "front", u: 6.4, w: 0.95, h: 2.05, dark: true },
+    windows: [
+      { side: "front", u: 2.6, w: 1.5, h: 1.9, sill: 0.2, bars: 1, noSill: true },
+      { side: "left", u: 1.6, w: 1.2, h: 1.0, sill: 0.95 },
+      { side: "back", u: 2.6, w: 1.2, h: 0.95, sill: 1.0 },
+    ],
+    deck: { depth: 1.8, w: 8.8, stepU: 6.4, railing: true },
+  },
+  // FOREST10-WG · 10평 — 화이트+다크 센터 투톤 컨테이너 · 평지붕
+  forest10w: {
+    w: 8.6, d: 3.4, wallH: 2.65, finish: "metal", color: 0xdedbd2,
+    roof: { type: "flat" },
+    accents: [{ side: "front", u: 2.6, w: 2.6, finish: "metal", color: 0x4a4e54 }],
+    door: { side: "front", u: 3.9, w: 0.95, h: 2.05, dark: true },
+    windows: [
+      { side: "front", u: 1.3, w: 1.8, h: 1.9, sill: 0.15, bars: 1, noSill: true },
+      { side: "front", u: 6.8, w: 1.4, h: 1.1, sill: 0.9 },
+      { side: "back", u: 2.8, w: 1.2, h: 0.95, sill: 1.0 },
+    ],
+    deck: { depth: 1.6, w: 9.2, stepU: 3.9 },
+  },
+  // STAY16-C · 16평 — 올 다크 차콜 투 매스 · 평지붕 · 중앙 리세스 현관 · 데크+난간
+  stay16dg: {
+    w: 6.0, d: 5.0, wallH: 2.75, finish: "metal", color: 0x3a3e44,
+    roof: { type: "flat" },
+    accents: [{ side: "front", u: 4.6, w: 1.4, finish: "wood", color: 0x9a6a3c }],
+    door: { side: "front", u: 5.2, w: 0.95, h: 2.1, dark: true },
+    windows: [
+      { side: "front", u: 1.6, w: 2.2, h: 2.1, sill: 0.1, bars: 1, noSill: true },
+      { side: "back", u: 2.6, w: 1.4, h: 1.1, sill: 0.95 },
+    ],
+    tower: { side: "right", w: 3.6, h: 3.4, finish: "metal", color: 0x33373c },
+    deck: { depth: 1.9, w: 9.2, offset: 1.7, stepU: 3.0, railing: true },
+  },
+  // STAY20-WB · 20평 — 화이트 + 다크브라운 트림 · 박공 + 중앙 3연창 · 랩 데크+난간
+  stay20wb: {
+    w: 10.0, d: 6.4, wallH: 2.75, finish: "metal", color: 0xe8e5dd,
+    roof: { type: "gable", h: 0.85, color: 0xb0b4b8 },
+    centerGable: { u: 3.4, w: 3.2, h: 1.1 },
+    accents: [{ side: "front", u: 4.2, w: 1.6, finish: "wood", color: 0x6a4a30 }],
+    door: { side: "front", u: 5.0, w: 1.0, h: 2.1, dark: true },
+    windows: [
+      { side: "front", u: 1.8, w: 2.3, h: 2.1, sill: 0.1, bars: 1, noSill: true },
+      { side: "front", u: 8.1, w: 2.0, h: 1.3, sill: 0.9, bars: 2 },
+      { side: "left", u: 2.2, w: 1.4, h: 1.1, sill: 0.95 },
+      { side: "back", u: 3.0, w: 1.6, h: 1.2, sill: 0.95 },
+    ],
+    deck: { depth: 2.0, w: 11.4, stepU: 5.0, railing: true },
+  },
+  // STAY19-WB · 19평 — 화이트 + 다크브라운 양끝 · 외쪽 다크 · 좌측 개방 포치
+  stay19wb: {
+    w: 8.4, d: 5.2, wallH: 2.75, finish: "metal", color: 0xe4e1d8,
+    roof: { type: "mono", h: 0.4, color: 0x33373c },
+    accents: [{ side: "front", u: 7.2, w: 1.2, finish: "wood", color: 0x5a4634 }],
+    door: { side: "front", u: 7.7, w: 0.95, h: 2.05, dark: true },
+    windows: [
+      { side: "front", u: 1.7, w: 2.6, h: 2.05, sill: 0.1, bars: 2, noSill: true },
+      { side: "front", u: 4.8, w: 1.9, h: 1.5, sill: 0.6, bars: 1 },
+      { side: "back", u: 2.8, w: 1.5, h: 1.1, sill: 0.95 },
+    ],
+    sidePorch: { side: "left", w: 2.8, railing: false },
+  },
+  // CUBE-H4-O · 4평+포치2평 — 우드 + 블랙 트림 · 평지붕 오버행 · 전면 포치
+  "cube-h4o": {
+    w: 3.4, d: 2.6, wallH: 2.55, finish: "wood", color: 0xb27a3e,
+    roof: { type: "flat" },
+    door: { side: "front", u: 1.7, w: 0.9, h: 2.0, dark: true },
+    windows: [
+      { side: "left", u: 1.0, w: 1.0, h: 0.9, sill: 1.0 },
+      { side: "back", u: 1.3, w: 1.0, h: 0.8, sill: 1.05 },
+    ],
+    porch: { u: 0, w: 3.4, depth: 1.7, railing: true, stepU: 1.7 },
+  },
+  // FOREST10-3-E · 13평 — 크림+그레이 투 매스(다락 타워) · 데크+난간
+  forest13: {
+    w: 4.8, d: 4.4, wallH: 2.6, finish: "metal", color: 0xe0ddd3,
+    roof: { type: "mono", h: 0.45, color: 0x8a8e93 },
+    accents: [{ side: "front", u: 0.4, w: 1.6, finish: "metal", color: 0x9a9ea4 }],
+    door: { side: "front", u: 3.4, w: 0.95, h: 2.05, dark: true },
+    windows: [{ side: "front", u: 1.4, w: 1.6, h: 1.3, sill: 0.7, bars: 1 }],
+    tower: { side: "right", w: 3.6, h: 4.3, finish: "metal", color: 0xe0ddd3 },
+    deck: { depth: 1.8, w: 8.8, offset: 1.6, stepU: 2.4, railing: true },
+  },
+  // STAY15-BK · 15평 — 다크 차콜 + 우드 · 완경사 박공 · 풀폭 커버드 포치 + 랩 데크
+  stay15w: {
+    w: 8.6, d: 5.0, wallH: 2.7, finish: "metal", color: 0x2b2e33,
+    roof: { type: "gable", h: 0.55, color: 0x232528 },
+    accents: [{ side: "front", u: 4.6, w: 2.4, finish: "wood", color: 0xb27a3e }],
+    door: { side: "front", u: 4.0, w: 1.0, h: 2.1, dark: true },
+    windows: [
+      { side: "front", u: 1.6, w: 2.2, h: 1.9, sill: 0.25, bars: 1 },
+      { side: "front", u: 6.9, w: 1.6, h: 1.5, sill: 0.6 },
+      { side: "back", u: 2.8, w: 1.5, h: 1.1, sill: 0.95 },
+    ],
+    porch: { u: 0, depth: 2.3, railing: true, stepU: 6.6 },
+  },
+  // STAY20-4-BW · 2층(20평+포치4평) — 블랙+화이트 투톤 · 외쪽 · 2단 창
+  stay24wb: {
+    w: 7.4, d: 5.4, wallH: 5.4, finish: "metal", color: 0x2b2e33,
+    roof: { type: "mono", h: 0.4, color: 0x26292d },
+    accents: [
+      { side: "front", u: 0, w: 2.6, finish: "metal", color: 0xe6e3da, h: 2.7 },
+      { side: "front", u: 0, w: 2.0, finish: "metal", color: 0xe6e3da, h: 2.7, sill: 2.7 },
+    ],
+    door: { side: "front", u: 3.5, w: 0.95, h: 2.1, dark: false },
+    windows: [
+      { side: "front", u: 1.3, w: 1.9, h: 2.05, sill: 0.15, bars: 1, noSill: true },
+      { side: "front", u: 5.6, w: 1.6, h: 1.2, sill: 0.9 },
+      { side: "front", u: 5.2, w: 1.7, h: 1.2, sill: 3.4, noSill: true },
+      { side: "front", u: 2.9, w: 1.3, h: 1.2, sill: 3.4, noSill: true },
+      { side: "back", u: 2.6, w: 1.5, h: 1.1, sill: 0.95 },
+      { side: "back", u: 4.8, w: 1.3, h: 1.1, sill: 3.4 },
+    ],
+    deck: { depth: 1.6, w: 4.6, offset: -1.2, stepU: 3.5 },
+  },
+  // STAY10-6-W · 복층(10+6평) — 화이트 보드앤배튼 + 다크 1층 악센트 · 박공
+  stay16w: {
+    w: 6.2, d: 4.8, wallH: 4.8, finish: "wood", color: 0xe3ded2,
+    roof: { type: "gable", h: 1.3, color: 0x33373c },
+    accents: [{ side: "front", u: 0, w: 3.0, finish: "metal", color: 0x33373c, h: 2.6 }],
+    door: { side: "right", u: 3.4, w: 0.95, h: 2.05, dark: true },
+    windows: [
+      { side: "front", u: 1.5, w: 2.4, h: 2.2, sill: 0.15, bars: 2, noSill: true },
+      { side: "front", u: 4.7, w: 1.2, h: 1.2, sill: 0.9 },
+      { side: "front", u: 4.4, w: 1.4, h: 1.2, sill: 3.2, noSill: true },
+      { side: "back", u: 2.4, w: 1.4, h: 1.1, sill: 0.95 },
+      { side: "back", u: 4.4, w: 1.2, h: 1.0, sill: 3.2 },
+    ],
+    deck: { depth: 1.5, w: 3.6, offset: 1.2, stepU: 4.6 },
+  },
+  // STAY13-W · 13평 — 화이트 + 다크 도어 섹션 · 블랙 모임지붕(근사) · 저상 데크
+  stay13w: {
+    w: 7.6, d: 5.0, wallH: 2.7, finish: "brick", color: 0xe8e4dc,
+    roof: { type: "gable", h: 0.75, color: 0x26292d, overhang: 0.55 },
+    accents: [{ side: "front", u: 2.6, w: 1.7, finish: "wood", color: 0x4a4440 }],
+    door: { side: "front", u: 3.4, w: 0.95, h: 2.1, dark: true },
+    windows: [
+      { side: "front", u: 1.4, w: 1.1, h: 0.95, sill: 1.05 },
+      { side: "front", u: 5.9, w: 1.7, h: 1.2, sill: 0.9, bars: 1 },
+      { side: "back", u: 2.8, w: 1.4, h: 1.0, sill: 1.0 },
+    ],
+    deck: { depth: 1.7, w: 8.6, stepU: 3.4 },
+  },
+  // STAY19-R · 19평 — 레드 브릭 · 브라운 박공 · 풀폭 커버드 포치
+  stay19rb: {
+    w: 9.4, d: 5.4, wallH: 2.7, finish: "brick", color: 0x8f4a38,
+    roof: { type: "gable", h: 1.0, color: 0x5a4232 },
+    door: { side: "front", u: 1.3, w: 1.0, h: 2.1 },
+    windows: [
+      { side: "front", u: 3.3, w: 1.1, h: 1.3, sill: 0.8 },
+      { side: "front", u: 5.4, w: 1.5, h: 2.05, sill: 0.1, bars: 1, noSill: true },
+      { side: "front", u: 7.6, w: 1.5, h: 2.05, sill: 0.1, bars: 1, noSill: true },
+      { side: "left", u: 2.2, w: 1.3, h: 1.1, sill: 0.95 },
+      { side: "back", u: 3.0, w: 1.5, h: 1.1, sill: 0.95 },
+    ],
+    porch: { u: 0, depth: 2.4, railing: true, stepU: 7.0 },
+  },
+  // STAY13-B · 13평 — 다크브라운 우드 루버 · 평지붕 · 좌측 개방 포치
+  stay12b: {
+    w: 7.0, d: 4.8, wallH: 2.7, finish: "wood", color: 0x6a4e36,
+    roof: { type: "flat" },
+    door: { side: "front", u: 1.1, w: 0.95, h: 2.05, dark: true },
+    windows: [
+      { side: "front", u: 4.6, w: 2.5, h: 2.1, sill: 0.1, bars: 1, noSill: true },
+      { side: "right", u: 2.0, w: 0.9, h: 0.9, sill: 1.6 },
+      { side: "back", u: 2.6, w: 1.4, h: 1.0, sill: 1.0 },
+    ],
+    sidePorch: { side: "left", w: 3.2, railing: true },
+  },
 };
+// 동일 외형 변형 슬러그 (사진이 같은 계열 — 사양 공유)
+HOUSE_SPECS.forest10ww = HOUSE_SPECS.forest10w;
+HOUSE_SPECS.forest10wwww = HOUSE_SPECS.forest10w;
+HOUSE_SPECS.forest10w01 = HOUSE_SPECS.forest10w;
+HOUSE_SPECS.forest10wbb = HOUSE_SPECS.forest10wb;
+HOUSE_SPECS.forest10www = HOUSE_SPECS.forest13w;
 
 export default { buildHouse, buildHouseMerged, HOUSE_SPECS };

@@ -1048,14 +1048,23 @@ function renderPalette() {
 function renderModels() {
   const el2 = document.getElementById("build-models");
   if (!el2) return;
-  if (!MODELS.length) { el2.parentElement && (el2.innerHTML = `<p class="build__qempty">모델을 불러오지 못했어요</p>`); return; }
-  el2.innerHTML = MODELS.map(
-    (m, i) => `
+  if (!MODELS.length) { el2.innerHTML = `<p class="build__qempty">모델을 불러오지 못했어요</p>`; return; }
+  // 카테고리별 접이식 그룹 — 모델이 많아도 팔레트가 부담스럽지 않게
+  const groups = {};
+  MODELS.forEach((m, i) => {
+    const c = m.category || "기타";
+    (groups[c] = groups[c] || []).push([m, i]);
+  });
+  const btn = ([m, i]) => `
     <button type="button" class="build__unitbtn" data-model="${i}">
       ${m.main_image ? `<img class="build__unitbtn-img" src="${m.main_image}" alt="" loading="lazy" />` : `<span class="build__unitbtn-ic">🏠</span>`}
       <span><b>${m.name}</b><br /><small>${pyeongOf(m).toFixed(0)}평 · ${fmtMan(priceOf(m))}</small></span>
-    </button>`
-  ).join("");
+    </button>`;
+  el2.innerHTML = Object.entries(groups).map(([cat, list], gi) => `
+    <details class="build__modelgrp"${gi === 0 ? " open" : ""}>
+      <summary>${cat} <small>${list.length}</small></summary>
+      ${list.map(btn).join("")}
+    </details>`).join("");
   el2.querySelectorAll("[data-model]").forEach((b) =>
     b.addEventListener("click", () => addModel(MODELS[+b.dataset.model]))
   );
