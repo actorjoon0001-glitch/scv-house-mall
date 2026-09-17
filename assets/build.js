@@ -3,6 +3,7 @@
 // 오버라이드 가능하며, 아래 DEFAULT_*는 데이터가 없을 때의 폴백이다.
 import * as THREE from "three";
 import { GLTFLoader } from "./GLTFLoader.js";
+import { buildHouse, HOUSE_SPECS } from "./house-kit.js";
 
 const stage = document.getElementById("build-stage");
 const canvas = document.getElementById("build-canvas");
@@ -463,8 +464,44 @@ function footprint(u, rot) {
   return rot % 180 === 0 ? [u.w, u.d] : [u.d, u.w];
 }
 
-// 실제 판매 모델을 부지에 배치 — 카탈로그 평수에 맞춰 스케일한 실제 3D 외형
+// 배치 공통: 빈 자리 탐색 → 접지 그림자 → 등록·선택·견적
+function registerPlaced(m, g, fw, fd) {
+  let x = 0, z = 0, found = false;
+  outer: for (const tz of [0, -3, 3, -6, 6]) {
+    for (const tx of [0, 3, -3, 6, -6, 9, -9]) {
+      const [cx2, cz] = clampToLotFp(fw, fd, tx, tz);
+      if (!overlapsAnyFp(fw, fd, cx2, cz, null)) { x = cx2; z = cz; found = true; break outer; }
+    }
+  }
+  if (!found) { alert("부지에 자리가 부족해요. 유닛을 정리한 뒤 다시 시도해주세요!"); return; }
+  g.add(makeAoDisc(fw + 2, fd + 2, 0.014));
+  g.position.set(x, 0, z);
+  scene.add(g);
+  const p = { uid: uidSeq++, kind: "model", model: m, fw, fd, x, z, rot: 0, group: g };
+  placed.push(p);
+  selected = p;
+  refreshSelectionRing();
+  refreshQuote();
+}
+
+// 실제 판매 모델을 부지에 배치
 function addModel(m) {
+  // 정밀 사양(HOUSE_SPECS)이 있는 모델은 파라메트릭 하우스 키트로 조립 — 치수 정확·고품질
+  if (m.slug && HOUSE_SPECS[m.slug]) {
+    const spec = HOUSE_SPECS[m.slug];
+    const inner = buildHouse(spec);
+    const bb = new THREE.Box3().setFromObject(inner);
+    const c = bb.getCenter(new THREE.Vector3());
+    inner.position.set(-c.x, 0, -c.z);
+    const g = new THREE.Group();
+    g.add(inner);
+    const size = bb.getSize(new THREE.Vector3());
+    const fw = Math.max(GRID, Math.ceil(size.x / GRID) * GRID);
+    const fd = Math.max(GRID, Math.ceil(size.z / GRID) * GRID);
+    registerPlaced(m, g, fw, fd);
+    return;
+  }
+  // 사양이 없는 모델은 기존 스캔 GLB (마을과 동일 외형)
   const url = (window.SeumTownConfig && window.SeumTownConfig.archetypeFor && window.SeumTownConfig.archetypeFor(m, 0)) || "assets/house-3d.glb";
   loadGlb(url)
     .catch(() => loadGlb("assets/house-3d.glb"))
@@ -477,25 +514,9 @@ function addModel(m) {
       const bs = normalizeFootprint(inst, target, 6.5);
       const fw = Math.max(GRID, Math.ceil(bs.x / GRID) * GRID);
       const fd = Math.max(GRID, Math.ceil(bs.z / GRID) * GRID);
-      // 빈 자리 탐색 (부지 중앙부터 동→서)
-      let x = 0, z = 0, found = false;
-      outer: for (const tz of [0, -3, 3, -6, 6]) {
-        for (const tx of [0, 3, -3, 6, -6, 9, -9]) {
-          const [cx2, cz] = clampToLotFp(fw, fd, tx, tz);
-          if (!overlapsAnyFp(fw, fd, cx2, cz, null)) { x = cx2; z = cz; found = true; break outer; }
-        }
-      }
-      if (!found) { alert("부지에 자리가 부족해요. 유닛을 정리한 뒤 다시 시도해주세요!"); return; }
       const g = new THREE.Group();
       g.add(inst);
-      g.add(makeAoDisc(fw + 2, fd + 2, 0.014));
-      g.position.set(x, 0, z);
-      scene.add(g);
-      const p = { uid: uidSeq++, kind: "model", model: m, fw, fd, x, z, rot: 0, group: g };
-      placed.push(p);
-      selected = p;
-      refreshSelectionRing();
-      refreshQuote();
+      registerPlaced(m, g, fw, fd);
     })
     .catch(() => {});
 }
