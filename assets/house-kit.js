@@ -1,13 +1,13 @@
 // ============ METAHOUSE 하우스 키트 — 파라메트릭 정밀 주택 빌더 ============
-// 치수(m)를 넣으면 실제 건축 디테일로 집을 조립한다: 사이딩 요철, 코너 트림,
-// 매입 창호(리빌+창틀+유리), 파라펫/박공/외쪽 지붕, 물받이·선홈통, 데크, 현관 캐노피.
-// 스캔 GLB보다 지오메트리가 깨끗하고 치수가 정확해 "3D맥스 렌더" 느낌을 낸다.
-// 마을(town.js)·빌드룸(build.js) 공용.
-//   buildHouse(spec)       — 편집 가능한 부재 트리 (빌드룸 등)
-//   buildHouseMerged(spec) — 재질별 병합 메시 (드로우콜 ~12개, 마을 다수 배치용)
+// 치수(m)를 넣으면 실제 건축 디테일로 집을 조립한다. 카탈로그 실물 사진 기준으로
+// 모델별 사양(HOUSE_SPECS)을 작성 — 외장(세로 금속/우드/브릭), 투톤 악센트,
+// 커버드 포치(기둥·우드천장·난간), 데크+난간, 평/박공/외쪽 지붕, 중앙 솟은 박공,
+// 복층 타워, 파일 기초, 옥상 태양광/실외기까지 지원한다.
+//   buildHouse(spec)       — 부재 트리
+//   buildHouseMerged(spec) — 재질별 병합 (집 1채당 드로우콜 ~15개, 다수 배치용)
 import * as THREE from "three";
 
-// ---------- 절차적 텍스처 (캔버스) ----------
+// ---------- 절차적 텍스처 ----------
 const texCache = {};
 function canvasTex(key, w, h, srgb, draw) {
   if (texCache[key]) return texCache[key];
@@ -27,68 +27,75 @@ function shade(hex, f) {
   const b = Math.min(255, Math.max(0, Math.round((hex & 255) * f)));
   return `rgb(${r},${g},${b})`;
 }
-// 수평 목재 사이딩: 판재 폭 ~15cm, 나뭇결·판재별 톤 편차·이음 그림자
-function sidingTexture(baseHex) {
-  return canvasTex(`sid_${baseHex}`, 512, 512, true, (c) => {
-    const rows = 12, rh = 512 / rows;
-    for (let i = 0; i < rows; i++) {
-      c.fillStyle = shade(baseHex, 0.9 + ((i * 2654435761) % 100) / 100 * 0.22);
-      c.fillRect(0, i * rh, 512, rh);
-      c.globalAlpha = 0.1;
-      for (let g = 0; g < 7; g++) {
-        c.strokeStyle = g % 2 ? "#000" : "#fff";
-        c.lineWidth = 1;
-        c.beginPath();
-        const y = i * rh + 4 + ((i * 37 + g * 53) % (rh - 8));
-        c.moveTo(0, y);
-        for (let x = 0; x <= 512; x += 64) c.lineTo(x, y + Math.sin((x + i * 91) * 0.02) * 1.6);
-        c.stroke();
-      }
-      c.globalAlpha = 1;
-      c.fillStyle = "rgba(0,0,0,0.38)";
-      c.fillRect(0, (i + 1) * rh - 3, 512, 3);
-      c.fillStyle = "rgba(255,255,255,0.14)";
-      c.fillRect(0, i * rh, 512, 1.5);
-    }
-  });
-}
-function sidingBump() {
-  return canvasTex("sid_bump", 256, 512, false, (c) => {
-    const rows = 12, rh = 512 / rows;
-    c.fillStyle = "#808080";
-    c.fillRect(0, 0, 256, 512);
-    for (let i = 0; i < rows; i++) {
-      c.fillStyle = "#3a3a3a";
-      c.fillRect(0, (i + 1) * rh - 4, 256, 4);
-      c.fillStyle = "#a8a8a8";
-      c.fillRect(0, i * rh, 256, 2);
-    }
-  });
-}
-// 세로 금속 패널 (스탠딩심 지붕/다크 메탈 외장)
-function seamTexture(baseHex) {
-  return canvasTex(`seam_${baseHex}`, 512, 256, true, (c) => {
-    c.fillStyle = shade(baseHex, 1);
-    c.fillRect(0, 0, 512, 256);
-    const cols = 10, cw = 512 / cols;
+// 세로 금속/우드 패널 (512px = 1.8m)
+function vertPanelTexture(baseHex, plank) {
+  return canvasTex(`vp_${baseHex}_${plank}`, 512, 512, true, (c) => {
+    const cols = plank ? 18 : 10; // 우드 루버는 촘촘하게
+    const cw = 512 / cols;
     for (let i = 0; i < cols; i++) {
-      c.fillStyle = "rgba(255,255,255,0.10)";
-      c.fillRect(i * cw, 0, 2.5, 256);
-      c.fillStyle = "rgba(0,0,0,0.34)";
-      c.fillRect(i * cw + 2.5, 0, 3, 256);
-      c.fillStyle = `rgba(255,255,255,${0.015 + (i % 3) * 0.012})`;
-      c.fillRect(i * cw + 6, 0, cw - 6, 256);
+      c.fillStyle = shade(baseHex, 0.9 + ((i * 2654435761) % 100) / 100 * (plank ? 0.24 : 0.1));
+      c.fillRect(i * cw, 0, cw, 512);
+      if (plank) {
+        c.globalAlpha = 0.12;
+        for (let g = 0; g < 4; g++) {
+          c.strokeStyle = "#000";
+          c.beginPath();
+          const x = i * cw + 3 + ((i * 31 + g * 47) % (cw - 6));
+          c.moveTo(x, 0);
+          for (let y = 0; y <= 512; y += 64) c.lineTo(x + Math.sin(y * 0.02 + i) * 1.6, y);
+          c.stroke();
+        }
+        c.globalAlpha = 1;
+      }
+      c.fillStyle = "rgba(0,0,0,0.36)";
+      c.fillRect((i + 1) * cw - 3, 0, 3, 512);
+      c.fillStyle = "rgba(255,255,255,0.12)";
+      c.fillRect(i * cw, 0, 1.6, 512);
     }
   });
 }
-function seamBump() {
-  return canvasTex("seam_bump", 512, 64, false, (c) => {
+function vertPanelBump(plank) {
+  return canvasTex(`vpb_${plank}`, 512, 64, false, (c) => {
+    const cols = plank ? 18 : 10, cw = 512 / cols;
     c.fillStyle = "#808080";
     c.fillRect(0, 0, 512, 64);
-    const cols = 10, cw = 512 / cols;
     for (let i = 0; i < cols; i++) {
-      c.fillStyle = "#ffffff";
-      c.fillRect(i * cw, 0, 3, 64);
+      c.fillStyle = "#3a3a3a";
+      c.fillRect((i + 1) * cw - 3, 0, 3, 64);
+      c.fillStyle = "#b0b0b0";
+      c.fillRect(i * cw, 0, 2, 64);
+    }
+  });
+}
+// 벽돌 (512px = 1.8m → 벽돌 약 22.5×7.5cm)
+function brickTexture(baseHex) {
+  return canvasTex(`brick_${baseHex}`, 512, 512, true, (c) => {
+    c.fillStyle = shade(baseHex, 0.62); // 줄눈
+    c.fillRect(0, 0, 512, 512);
+    const bw = 64, bh = 21;
+    for (let row = 0; row < 512 / bh + 1; row++) {
+      const off = row % 2 ? bw / 2 : 0;
+      for (let col = -1; col < 512 / bw + 1; col++) {
+        const t = 0.82 + (((row * 73 + col * 131) * 2654435761) % 100) / 100 * 0.4;
+        c.fillStyle = shade(baseHex, t);
+        c.fillRect(col * bw + off + 2, row * bh + 2, bw - 4, bh - 4);
+        // 벽돌 표면 얼룩
+        c.fillStyle = "rgba(0,0,0,0.08)";
+        if ((row + col) % 3 === 0) c.fillRect(col * bw + off + 6, row * bh + 5, bw * 0.4, bh * 0.35);
+      }
+    }
+  });
+}
+function brickBump() {
+  return canvasTex("brick_bump", 256, 256, false, (c) => {
+    c.fillStyle = "#909090";
+    c.fillRect(0, 0, 256, 256);
+    const bw = 32, bh = 10.5;
+    c.fillStyle = "#404040";
+    for (let row = 0; row < 26; row++) {
+      c.fillRect(0, row * bh, 256, 2);
+      const off = row % 2 ? bw / 2 : 0;
+      for (let col = -1; col < 9; col++) c.fillRect(col * bw + off, row * bh, 2, bh);
     }
   });
 }
@@ -114,33 +121,47 @@ function deckTexture() {
     }
   });
 }
+// 지붕 스탠딩심
+function seamTexture(baseHex) {
+  return canvasTex(`seam_${baseHex}`, 512, 256, true, (c) => {
+    c.fillStyle = shade(baseHex, 1);
+    c.fillRect(0, 0, 512, 256);
+    const cols = 10, cw = 512 / cols;
+    for (let i = 0; i < cols; i++) {
+      c.fillStyle = "rgba(255,255,255,0.10)";
+      c.fillRect(i * cw, 0, 2.5, 256);
+      c.fillStyle = "rgba(0,0,0,0.30)";
+      c.fillRect(i * cw + 2.5, 0, 3, 256);
+    }
+  });
+}
 
-// ---------- 재질 세트 (집 1채당 1세트 — 병합 시 재질별 버킷이 되도록 공유) ----------
-function makeMaterialSet(spec) {
-  const color = spec.color != null ? spec.color : 0x8a6a4c;
-  let wall;
-  if (spec.finish === "metal") {
-    wall = new THREE.MeshStandardMaterial({
-      map: seamTexture(color).clone(), bumpMap: seamBump().clone(), bumpScale: 1.6,
-      roughness: 0.42, metalness: 0.35, envMapIntensity: 0.9,
-    });
-  } else {
-    wall = new THREE.MeshStandardMaterial({
-      map: sidingTexture(color).clone(), bumpMap: sidingBump().clone(), bumpScale: 1.8,
-      roughness: 0.72, envMapIntensity: 0.55,
+// ---------- 재질 ----------
+function surfaceMaterial(finish, color) {
+  if (finish === "brick") {
+    return new THREE.MeshStandardMaterial({
+      map: brickTexture(color).clone(), bumpMap: brickBump().clone(), bumpScale: 2.2,
+      roughness: 0.88, envMapIntensity: 0.4,
     });
   }
-  wall.map.needsUpdate = true;
-  wall.bumpMap.needsUpdate = true;
-  const doorWood = new THREE.MeshStandardMaterial({
-    map: sidingTexture(0x5d4634).clone(), roughness: 0.55, envMapIntensity: 0.5,
+  if (finish === "wood") {
+    return new THREE.MeshStandardMaterial({
+      map: vertPanelTexture(color, true).clone(), bumpMap: vertPanelBump(true).clone(), bumpScale: 1.6,
+      roughness: 0.68, envMapIntensity: 0.5,
+    });
+  }
+  // metal (기본)
+  return new THREE.MeshStandardMaterial({
+    map: vertPanelTexture(color, false).clone(), bumpMap: vertPanelBump(false).clone(), bumpScale: 1.6,
+    roughness: 0.45, metalness: 0.3, envMapIntensity: 0.85,
   });
-  doorWood.map.rotation = Math.PI / 2;
-  doorWood.map.center.set(0.5, 0.5);
-  doorWood.map.needsUpdate = true;
+}
+function makeMaterialSet(spec) {
+  const wall = surfaceMaterial(spec.finish || "metal", spec.color != null ? spec.color : 0x33373c);
+  const woodAccent = surfaceMaterial("wood", 0xb27a3e);
   return {
     wall,
-    doorWood,
+    woodAccent,
     trim: new THREE.MeshStandardMaterial({ color: 0x22252a, roughness: 0.45, metalness: 0.25 }),
     frame: new THREE.MeshStandardMaterial({ color: 0x1c1f24, roughness: 0.32, metalness: 0.55, envMapIntensity: 1.0 }),
     glass: new THREE.MeshPhysicalMaterial({
@@ -151,14 +172,15 @@ function makeMaterialSet(spec) {
     concrete: new THREE.MeshStandardMaterial({ color: 0x8f9089, roughness: 0.95 }),
     roof: new THREE.MeshStandardMaterial({
       map: seamTexture(spec.roof && spec.roof.color != null ? spec.roof.color : 0x2e3338).clone(),
-      bumpMap: seamBump().clone(), bumpScale: 1.4,
-      roughness: 0.5, metalness: 0.4, envMapIntensity: 0.8,
+      roughness: 0.5, metalness: 0.35, envMapIntensity: 0.8,
     }),
     fascia: new THREE.MeshStandardMaterial({ color: 0x282c31, roughness: 0.5, metalness: 0.2 }),
     deck: new THREE.MeshStandardMaterial({ map: deckTexture(), roughness: 0.7, envMapIntensity: 0.4 }),
     white: new THREE.MeshStandardMaterial({ color: 0xeceae4, roughness: 0.6 }),
     steel: new THREE.MeshStandardMaterial({ color: 0xc9c9c9, roughness: 0.25, metalness: 0.9 }),
     bulb: new THREE.MeshStandardMaterial({ color: 0xfff2cf, emissive: 0xffdf9a, emissiveIntensity: 0.55, roughness: 0.4 }),
+    solar: new THREE.MeshStandardMaterial({ color: 0x18244a, roughness: 0.25, metalness: 0.6, envMapIntensity: 1.2 }),
+    membrane: new THREE.MeshStandardMaterial({ color: 0xdfe2e2, roughness: 0.85 }),
   };
 }
 function box(w, h, d, mat, x, y, z) {
@@ -169,9 +191,7 @@ function box(w, h, d, mat, x, y, z) {
   return m;
 }
 
-// ---------- 창호 유닛 ----------
-// 벽이 솔리드 박스이므로 요소들을 바깥쪽(+z)으로 살짝 띄우고
-// 어두운 리빌 + 프레임 그림자로 매입감을 표현한다.
+// ---------- 부재: 창호 ----------
 function makeWindow(M, w, h, opts) {
   const g = new THREE.Group();
   const o = opts || {};
@@ -186,39 +206,49 @@ function makeWindow(M, w, h, opts) {
   for (let i = 1; i <= bars; i++) {
     g.add(box(0.035, h - F * 2, 0.035, M.frame, -w / 2 + (w / (bars + 1)) * i, 0, 0.034));
   }
-  g.add(box(w + 0.1, 0.045, 0.12, M.trim, 0, -h / 2 - 0.0225, 0.05)); // 창대(물끊기)
+  if (!o.noSill) g.add(box(w + 0.1, 0.045, 0.12, M.trim, 0, -h / 2 - 0.0225, 0.05));
   return g;
 }
-// 현관문 (패널 + 손잡이 + 캐노피 + 현관등)
+// 부재: 현관문
 function makeDoor(M, w, h, opts) {
   const g = new THREE.Group();
+  const o = opts || {};
   g.add(box(w + 0.12, h + 0.06, 0.012, M.reveal, 0, 0.03, 0.008));
   g.add(box(w + 0.12, 0.06, 0.06, M.frame, 0, h / 2 + 0.03, 0.03));
   g.add(box(0.06, h + 0.06, 0.06, M.frame, -w / 2 - 0.03, 0.03, 0.03));
   g.add(box(0.06, h + 0.06, 0.06, M.frame, w / 2 + 0.03, 0.03, 0.03));
-  g.add(box(w, h, 0.045, M.doorWood, 0, 0, 0.026));
+  const doorMat = o.dark ? M.fascia : M.woodAccent;
+  g.add(box(w, h, 0.045, doorMat, 0, 0, 0.026));
   g.add(box(0.14, h * 0.72, 0.02, M.glass, w / 2 - 0.2, 0.05, 0.052));
   const hd = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.32, 10), M.steel);
   hd.position.set(-w / 2 + 0.12, 0, 0.085);
   g.add(hd);
-  if (!opts || opts.canopy !== false) {
+  if (o.canopy) {
     const cn = box(w + 0.7, 0.05, 0.75, M.fascia, 0, h / 2 + 0.22, 0.36);
     cn.rotation.x = -0.06;
     g.add(cn);
-    [-1, 1].forEach((s) => {
-      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.62, 8), M.frame);
-      rod.position.set(s * (w / 2 + 0.22), h / 2 + 0.42, 0.4);
-      rod.rotation.x = 0.85;
-      g.add(rod);
-    });
   }
   g.add(box(0.07, 0.16, 0.07, M.frame, w / 2 + 0.35, h * 0.42, 0.045));
   g.add(box(0.05, 0.09, 0.05, M.bulb, w / 2 + 0.35, h * 0.42, 0.05));
   return g;
 }
-
-// ---------- 벽면에 개구부 배치 ----------
-// side: "front"(+z) "back"(-z) "left"(-x) "right"(+x), u: 벽 좌측단으로부터 중심 위치(m)
+// 부재: 블랙 메탈 난간 (로컬 x축 길이 len, 바닥 y0 기준)
+function makeRailing(M, len) {
+  const g = new THREE.Group();
+  const H = 1.02;
+  g.add(box(len, 0.05, 0.05, M.fascia, 0, H, 0)); // 상부 레일
+  g.add(box(len, 0.035, 0.035, M.fascia, 0, 0.12, 0)); // 하부 레일
+  const nPosts = Math.max(2, Math.round(len / 1.4) + 1);
+  for (let i = 0; i < nPosts; i++) {
+    g.add(box(0.05, H, 0.05, M.fascia, -len / 2 + (len / (nPosts - 1)) * i, H / 2, 0));
+  }
+  const nBal = Math.floor(len / 0.15);
+  for (let i = 1; i < nBal; i++) {
+    g.add(box(0.016, H - 0.17, 0.016, M.fascia, -len / 2 + (len / nBal) * i, (H - 0.17) / 2 + 0.14, 0));
+  }
+  return g;
+}
+// 벽면 배치 헬퍼 — side: front(+z) back(-z) left(-x) right(+x), u: 벽 좌측단 기준 중심(m)
 function placeOnWall(group, item, W, D, side, u, cy) {
   const HW = W / 2, HD = D / 2;
   if (side === "front") { item.position.set(-HW + u, cy, HD); }
@@ -229,27 +259,46 @@ function placeOnWall(group, item, W, D, side, u, cy) {
 }
 
 // ---------- 메인: 주택 조립 ----------
-// spec: { w, d, wallH, finish:"wood"|"metal", color,
-//         roof:{type:"flat"|"gable"|"mono", h, overhang, color},
-//         windows:[{side,u,w,h,sill,bars}], door:{side,u,w,h}, deck:{depth,inset,stepU}, base }
 export function buildHouse(spec) {
   const W = spec.w, D = spec.d, H = spec.wallH || 2.7;
   const BASE = spec.base != null ? spec.base : 0.32;
   const M = makeMaterialSet(spec);
   const g = new THREE.Group();
+  const topY = BASE + H;
 
-  // 기초
-  g.add(box(W - 0.12, BASE, D - 0.12, M.concrete, 0, BASE / 2, 0));
-  // 벽체 (텍스처 반복을 실치수에 맞춤)
+  // 기초: 통기초 또는 파일(피어)
+  if (spec.pier) {
+    const nx = Math.max(2, Math.round(W / 1.7) + 1);
+    for (let i = 0; i < nx; i++) {
+      const px = -W / 2 + 0.35 + (W - 0.7) * (i / (nx - 1));
+      g.add(box(0.42, BASE, 0.42, M.concrete, px, BASE / 2, D / 2 - 0.35));
+      g.add(box(0.42, BASE, 0.42, M.concrete, px, BASE / 2, -D / 2 + 0.35));
+    }
+    g.add(box(W, 0.14, D, M.fascia, 0, BASE - 0.07, 0)); // 하부 프레임
+  } else {
+    g.add(box(W - 0.12, BASE, D - 0.12, M.concrete, 0, BASE / 2, 0));
+  }
+
+  // 벽체
   M.wall.map.repeat.set(Math.max(1, W / 1.8), Math.max(1, H / 1.8));
   if (M.wall.bumpMap) M.wall.bumpMap.repeat.copy(M.wall.map.repeat);
   g.add(box(W, H, D, M.wall, 0, BASE + H / 2, 0));
-  // 하단 물끊기
-  g.add(box(W + 0.06, 0.09, D + 0.06, M.trim, 0, BASE + 0.045, 0));
-  // 코너 트림
+  g.add(box(W + 0.06, 0.09, D + 0.06, M.trim, 0, BASE + 0.045, 0)); // 하단 물끊기
   const CT = 0.09;
   [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(([sx, sz]) => {
     g.add(box(CT, H, CT, M.trim, sx * (W / 2 - 0.005), BASE + H / 2, sz * (D / 2 - 0.005)));
+  });
+
+  // 투톤 악센트 패널 (벽면 위 얇은 오버레이)
+  (spec.accents || []).forEach((a) => {
+    const mat = surfaceMaterial(a.finish || "wood", a.color != null ? a.color : 0xb27a3e);
+    mat.map.repeat.set(Math.max(0.5, a.w / 1.8), Math.max(1, H / 1.8));
+    if (mat.bumpMap) mat.bumpMap.repeat.copy(mat.map.repeat);
+    const ah = a.h || H;
+    const panel = box(a.w, ah, 0.035, mat, 0, 0, 0.018);
+    const wrapG = new THREE.Group();
+    wrapG.add(panel);
+    placeOnWall(g, wrapG, W, D, a.side || "front", a.u + a.w / 2, BASE + (a.sill || 0) + ah / 2);
   });
 
   // 창호·현관
@@ -263,10 +312,104 @@ export function buildHouse(spec) {
     placeOnWall(g, dr, W, D, spec.door.side || "front", spec.door.u, BASE + (spec.door.h || 2.1) / 2);
   }
 
+  // 커버드 포치 (전면): 플랫 캐노피 + 우드 천장 + 블랙 기둥 + 데크 + 난간
+  if (spec.porch) {
+    const p = spec.porch;
+    const pw = p.w || W, pd = p.depth || 2.2;
+    const px0 = -W / 2 + (p.u || 0) + pw / 2; // 중심 x
+    const pg = new THREE.Group();
+    // 캐노피 (벽 상단에서 밖으로)
+    pg.add(box(pw + 0.1, 0.09, pd + 0.15, M.fascia, 0, H - 0.045, pd / 2));
+    const ceil = new THREE.Mesh(new THREE.BoxGeometry(pw, 0.02, pd), M.deck);
+    ceil.position.set(0, H - 0.1, pd / 2);
+    pg.add(ceil); // 우드 천장
+    // 데크 바닥
+    pg.add(box(pw, 0.1, pd, M.deck, 0, -0.05, pd / 2));
+    // 기둥 (모서리 + 폭 4m 이상이면 중간)
+    const postXs = pw > 4.2 ? [-pw / 2 + 0.1, 0, pw / 2 - 0.1] : [-pw / 2 + 0.1, pw / 2 - 0.1];
+    postXs.forEach((x) => pg.add(box(0.1, H, 0.1, M.fascia, x, H / 2, pd - 0.1)));
+    // 난간 (전면 — 스텝 자리 비움 — + 양측)
+    if (p.railing !== false) {
+      const gap = p.stepU != null ? p.stepU - (p.u || 0) : pw / 2; // 포치 내 스텝 중심
+      const segL = gap - 0.7, segR = pw - gap - 0.7;
+      if (segL > 0.5) { const r = makeRailing(M, segL); r.position.set(-pw / 2 + segL / 2, 0, pd - 0.06); pg.add(r); }
+      if (segR > 0.5) { const r = makeRailing(M, segR); r.position.set(pw / 2 - segR / 2, 0, pd - 0.06); pg.add(r); }
+      [-1, 1].forEach((s) => {
+        const r = makeRailing(M, pd - 0.1);
+        r.rotation.y = Math.PI / 2;
+        r.position.set(s * (pw / 2 - 0.03), 0, pd / 2);
+        pg.add(r);
+      });
+    }
+    // 스텝
+    const stepX = p.stepU != null ? p.stepU - (p.u || 0) - pw / 2 : 0;
+    pg.add(box(1.3, 0.09, 0.38, M.deck, stepX, -0.14, pd + 0.19));
+    pg.add(box(1.3, 0.09, 0.38, M.deck, stepX, -0.23, pd + 0.45));
+    pg.position.set(px0, BASE, D / 2);
+    g.add(pg);
+  }
+
+  // 사이드 포치 (박공 본체 옆에 붙는 개방형 포치 — stay14 스타일)
+  if (spec.sidePorch) {
+    const sp = spec.sidePorch;
+    const dir = sp.side === "left" ? -1 : 1;
+    const pw = sp.w || 3.4;
+    const pg = new THREE.Group();
+    // 캐노피 + 우드 천장
+    pg.add(box(pw + 0.15, 0.12, D + 0.1, M.fascia, 0, H - 0.06, 0));
+    const ceil = new THREE.Mesh(new THREE.BoxGeometry(pw, 0.02, D - 0.1), M.deck);
+    ceil.position.set(0, H - 0.13, 0);
+    pg.add(ceil);
+    // 데크 바닥
+    pg.add(box(pw, 0.12, D, M.deck, 0, -0.06, 0));
+    // 뒷벽 (본체 마감 연장) + 안쪽 유리 양문
+    const bw = box(pw, H, 0.14, M.wall, 0, H / 2, -D / 2 + 0.07);
+    pg.add(bw);
+    const gl = makeWindow(M, Math.min(2.2, pw - 0.9), 2.05, { bars: 1, noSill: true });
+    gl.position.set(0, 1.06, -D / 2 + 0.16);
+    pg.add(gl);
+    // 기둥 2개 (바깥 모서리)
+    pg.add(box(0.1, H, 0.1, M.fascia, dir * (pw / 2 - 0.1), H / 2, D / 2 - 0.1));
+    pg.add(box(0.1, H, 0.1, M.fascia, dir * (pw / 2 - 0.1), H / 2, -D / 2 + 0.35));
+    // 바깥쪽 난간
+    if (sp.railing !== false) {
+      const r = makeRailing(M, D - 0.4);
+      r.rotation.y = Math.PI / 2;
+      r.position.set(dir * (pw / 2 - 0.04), 0, 0);
+      pg.add(r);
+    }
+    pg.position.set(dir * (W / 2 + pw / 2), BASE, 0);
+    g.add(pg);
+  }
+
+  // 복층 타워 (stay18-b 스타일 — 본체 한쪽 끝의 높은 볼륨)
+  if (spec.tower) {
+    const t = spec.tower;
+    const dir = t.side === "left" ? -1 : 1;
+    const tw = t.w || 3.4, th = t.h || H * 2;
+    const tMat = surfaceMaterial(t.finish || spec.finish || "metal", t.color != null ? t.color : spec.color);
+    tMat.map.repeat.set(Math.max(1, tw / 1.8), Math.max(1, th / 1.8));
+    if (tMat.bumpMap) tMat.bumpMap.repeat.copy(tMat.map.repeat);
+    const tg = new THREE.Group();
+    tg.add(box(tw, th, D, tMat, 0, th / 2, 0));
+    tg.add(box(tw + 0.14, 0.3, D + 0.14, M.fascia, 0, th - 0.15, 0)); // 상단 밴드
+    tg.add(box(tw - 0.08, 0.04, D - 0.08, M.membrane, 0, th + 0.02, 0));
+    // 1층 대형 유리 + 상부 창 3개
+    const big = makeWindow(M, tw - 1.0, 2.15, { bars: 1, noSill: true });
+    big.position.set(0, 1.35, D / 2);
+    tg.add(big);
+    for (let i = 0; i < 3; i++) {
+      const sw = makeWindow(M, 0.55, 0.95, { bars: 0.0001, noSill: true });
+      sw.position.set(-tw / 2 + 0.65 + i * ((tw - 1.3) / 2), th - 1.15, D / 2);
+      tg.add(sw);
+    }
+    tg.position.set(dir * (W / 2 + tw / 2 - 0.01), BASE, 0);
+    g.add(tg);
+  }
+
   // 지붕
   const roof = spec.roof || { type: "flat" };
   const OV = roof.overhang != null ? roof.overhang : 0.35;
-  const topY = BASE + H;
   if (roof.type === "gable") {
     const RH = roof.h || Math.min(1.4, W * 0.2);
     const shape = new THREE.Shape();
@@ -281,7 +424,7 @@ export function buildHouse(spec) {
     rf.castShadow = true;
     rf.receiveShadow = true;
     g.add(rf);
-    g.add(box(0.12, 0.06, D + OV * 2 + 0.04, M.fascia, 0, topY + RH + 0.01, 0)); // 용마루 캡
+    g.add(box(0.12, 0.06, D + OV * 2 + 0.04, M.fascia, 0, topY + RH + 0.01, 0));
     [-1, 1].forEach((s) => g.add(box(W + OV * 2, 0.14, 0.05, M.fascia, 0, topY - 0.02, s * (D / 2 + OV))));
   } else if (roof.type === "mono") {
     const RH = roof.h || 0.5;
@@ -293,57 +436,108 @@ export function buildHouse(spec) {
     g.add(box(0.06, 0.24, D + OV * 2, M.fascia, -(W / 2 + OV), topY + 0.02, 0));
     g.add(box(0.06, 0.24, D + OV * 2, M.fascia, W / 2 + OV, topY + RH + 0.02, 0));
   } else {
-    // 평지붕: 파라펫 + 두겁 + 지붕판
-    const P = 0.32;
-    g.add(box(W + 0.08, P, D + 0.08, M.wall, 0, topY + P / 2, 0));
-    g.add(box(W + 0.16, 0.05, D + 0.16, M.fascia, 0, topY + P + 0.025, 0));
-    g.add(box(W - 0.1, 0.03, D - 0.1, M.roof, 0, topY + P - 0.06, 0));
+    // 평지붕 (멤브레인 + 파라펫 얇은 두겁)
+    g.add(box(W + 0.12, 0.2, D + 0.12, M.fascia, 0, topY + 0.1, 0));
+    g.add(box(W - 0.06, 0.04, D - 0.06, M.membrane, 0, topY + 0.22, 0));
+  }
+  // 중앙 솟은 박공 (stay20r 스타일 클리어스토리)
+  if (spec.centerGable) {
+    const cgSpec = spec.centerGable;
+    const cw = cgSpec.w || 3.4, ch = cgSpec.h || 1.15, cd = D * 0.7;
+    const cx = cgSpec.u != null ? -W / 2 + cgSpec.u + cw / 2 : 0;
+    const cMat = M.wall;
+    const cg = new THREE.Group();
+    cg.add(box(cw, ch, cd, cMat, 0, ch / 2, 0));
+    const shape = new THREE.Shape();
+    shape.moveTo(-cw / 2 - 0.25, 0);
+    shape.lineTo(cw / 2 + 0.25, 0);
+    shape.lineTo(0, Math.min(0.9, cw * 0.22));
+    shape.closePath();
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: cd + 0.5, bevelEnabled: false });
+    geo.translate(0, 0, -(cd + 0.5) / 2);
+    const rf = new THREE.Mesh(geo, M.roof);
+    rf.position.y = ch;
+    rf.castShadow = true;
+    cg.add(rf);
+    // 3연창
+    for (let i = 0; i < 3; i++) {
+      const sw = makeWindow(M, (cw - 0.9) / 3 - 0.12, ch - 0.5, { bars: 0.0001, noSill: true });
+      sw.position.set(-cw / 2 + 0.45 + (i + 0.5) * ((cw - 0.9) / 3), ch / 2, cd / 2 + 0.02);
+      cg.add(sw);
+    }
+    cg.position.set(cx, topY + (roof.type === "gable" ? (roof.h || 0.9) * 0.35 : 0), (D - cd) / 2 - 0.0);
+    cg.position.z = D / 2 - cd / 2; // 전면 벽과 면 맞춤
+    g.add(cg);
   }
 
   // 물받이·선홈통 (경사지붕)
   if (roof.type === "gable" || roof.type === "mono") {
     [-1, 1].forEach((s) => {
-      const gutter = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, D + OV * 2, 10, 1, false, 0, Math.PI), M.fascia);
-      gutter.rotation.x = Math.PI / 2;
-      gutter.rotation.z = Math.PI;
-      gutter.position.set(s * (W / 2 + OV), topY - 0.1, 0);
-      g.add(gutter);
       const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, H + BASE - 0.15, 8), M.fascia);
       pipe.position.set(s * (W / 2 + 0.05), (H + BASE) / 2, D / 2 - 0.25);
       g.add(pipe);
     });
   }
 
-  // 데크
+  // 데크 (포치 없는 모델의 개방 데크)
   if (spec.deck) {
     const dk = spec.deck;
     const depth = dk.depth || 1.8;
     const dw = dk.w || W - (dk.inset || 0) * 2;
-    g.add(box(dw, 0.12, depth, M.deck, dk.offset || 0, BASE - 0.06, D / 2 + depth / 2));
-    g.add(box(dw, 0.16, 0.1, M.trim, dk.offset || 0, BASE - 0.2, D / 2 + depth - 0.05));
-    g.add(box(1.4, 0.11, 0.4, M.deck, dk.stepU != null ? -W / 2 + dk.stepU : 0, BASE - 0.26, D / 2 + depth + 0.2));
+    const dx = dk.offset || 0;
+    g.add(box(dw, 0.12, depth, M.deck, dx, BASE - 0.06, D / 2 + depth / 2));
+    g.add(box(dw, 0.16, 0.1, M.trim, dx, BASE - 0.2, D / 2 + depth - 0.05));
+    const stepX = dk.stepU != null ? -W / 2 + dk.stepU : dx;
+    g.add(box(1.4, 0.11, 0.4, M.deck, stepX, BASE - 0.26, D / 2 + depth + 0.2));
+    if (dk.railing) {
+      const gap = (dk.stepU != null ? -W / 2 + dk.stepU : dx) - (dx - dw / 2); // 스텝 중심까지
+      const segL = gap - 0.75, segR = dw - gap - 0.75;
+      if (segL > 0.5) { const r = makeRailing(M, segL); r.position.set(dx - dw / 2 + segL / 2, BASE, D / 2 + depth - 0.05); g.add(r); }
+      if (segR > 0.5) { const r = makeRailing(M, segR); r.position.set(dx + dw / 2 - segR / 2, BASE, D / 2 + depth - 0.05); g.add(r); }
+      [-1, 1].forEach((s) => {
+        const r = makeRailing(M, depth - 0.1);
+        r.rotation.y = Math.PI / 2;
+        r.position.set(dx + s * (dw / 2 - 0.03), BASE, D / 2 + depth / 2);
+        g.add(r);
+      });
+    }
   }
 
-  // 후면 소품: 환기구 + 실외기
-  g.add(box(0.35, 0.22, 0.05, M.trim, W / 2 - 0.6, BASE + H - 0.45, -D / 2 - 0.02));
-  const ac = new THREE.Group();
-  ac.add(box(0.85, 0.6, 0.32, M.white, 0, 0.34, 0));
-  const fan = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.02, 20), M.trim);
-  fan.rotation.x = Math.PI / 2;
-  fan.position.set(-0.16, 0.36, 0.17);
-  ac.add(fan);
-  ac.position.set(-W / 2 + 0.75, 0, -D / 2 - 0.42);
-  g.add(ac);
+  // 옥상 설비 (평지붕): 태양광 패널 + 실외기
+  if (roof.type !== "gable" && roof.type !== "mono") {
+    const ry = topY + 0.24;
+    if (roof.solar) {
+      const pnl = box(2.6, 0.06, 1.6, M.solar, -W * 0.15, ry + 0.22, 0);
+      pnl.rotation.x = -0.24;
+      g.add(pnl);
+      [[-1.1, 0.6], [1.1, 0.6], [-1.1, -0.6], [1.1, -0.6]].forEach(([lx, lz]) => {
+        g.add(box(0.06, 0.3, 0.06, M.fascia, -W * 0.15 + lx, ry + 0.12, lz));
+      });
+    }
+    if (roof.ac) {
+      g.add(box(0.8, 0.55, 0.3, M.white, W * 0.22, ry + 0.28, -D * 0.15));
+    }
+  } else {
+    // 후면 실외기
+    const ac = new THREE.Group();
+    ac.add(box(0.85, 0.6, 0.32, M.white, 0, 0.34, 0));
+    const fan = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.02, 20), M.trim);
+    fan.rotation.x = Math.PI / 2;
+    fan.position.set(-0.16, 0.36, 0.17);
+    ac.add(fan);
+    ac.position.set(-W / 2 + 0.75, 0, -D / 2 - 0.42);
+    g.add(ac);
+  }
 
   g.userData.spec = spec;
   return g;
 }
 
-// ---------- 재질별 병합 (드로우콜 절감: ~90개 → 재질 수 ~12개) ----------
+// ---------- 재질별 병합 (드로우콜 절감) ----------
 export function buildHouseMerged(spec) {
   const src = buildHouse(spec);
   src.updateMatrixWorld(true);
-  const buckets = new Map(); // material → geometry[]
+  const buckets = new Map();
   src.traverse((o) => {
     if (!o.isMesh) return;
     const geo = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone());
@@ -378,134 +572,149 @@ export function buildHouseMerged(spec) {
   return out;
 }
 
-// ---------- 모델별 사양 (실측 도면 값으로 교체 가능 — 단위: m) ----------
+// ---------- 모델별 사양 (카탈로그 실물 사진 대조 — 단위: m) ----------
 export const HOUSE_SPECS = {
-  // 14평 세컨하우스 — 다크 우드 · 평지붕 · 전면 데크
+  // STAY14-BK · 10평+포치4평 — 블랙 세로 금속 + 우드 악센트 · 박공 · 우측 개방 포치
   stay14: {
-    w: 9.0, d: 5.1, wallH: 2.65, finish: "wood", color: 0x6e5138,
-    roof: { type: "flat" },
-    door: { side: "front", u: 7.9, w: 1.0, h: 2.1 },
-    windows: [
-      { side: "front", u: 2.1, w: 2.6, h: 1.9, sill: 0.45, bars: 2 },
-      { side: "front", u: 5.2, w: 1.6, h: 1.4, sill: 0.9 },
-      { side: "right", u: 2.0, w: 1.2, h: 1.1, sill: 1.0 },
-      { side: "back", u: 2.4, w: 1.4, h: 1.1, sill: 1.0 },
-      { side: "back", u: 6.4, w: 0.8, h: 0.7, sill: 1.4 },
-      { side: "left", u: 2.6, w: 1.2, h: 1.1, sill: 1.0 },
+    w: 6.6, d: 5.0, wallH: 2.7, finish: "metal", color: 0x24262a,
+    roof: { type: "gable", h: 1.15, color: 0x232528 },
+    accents: [
+      { side: "front", u: 0.9, w: 2.2, finish: "wood", color: 0xb27a3e },
+      { side: "left", u: 1.2, w: 2.4, finish: "wood", color: 0xb27a3e },
     ],
-    deck: { depth: 1.8, inset: 0.4, stepU: 7.9 },
+    door: { side: "front", u: 4.4, w: 1.0, h: 2.1, dark: true },
+    windows: [
+      { side: "front", u: 1.9, w: 1.3, h: 1.1, sill: 0.95 },
+      { side: "left", u: 2.4, w: 1.2, h: 1.0, sill: 1.0 },
+      { side: "back", u: 2.2, w: 1.4, h: 1.1, sill: 0.95 },
+    ],
+    sidePorch: { side: "right", w: 3.6, railing: true },
   },
-  // 19평 전원주택 — 웜 브릭 레드 사이딩 · 박공
+  // STAY19-BK · 19평 — 다크 차콜 + 우드 악센트 · 저경사 박공 · 전면 풀폭 커버드 포치
   "stay-19rb": {
-    w: 9.9, d: 6.3, wallH: 2.7, finish: "wood", color: 0x96543e,
-    roof: { type: "gable", h: 1.5, color: 0x33373c },
-    door: { side: "front", u: 1.2, w: 1.0, h: 2.1 },
-    windows: [
-      { side: "front", u: 4.2, w: 2.4, h: 1.8, sill: 0.5, bars: 2 },
-      { side: "front", u: 7.6, w: 1.6, h: 1.4, sill: 0.9 },
-      { side: "right", u: 2.2, w: 1.4, h: 1.2, sill: 0.95 },
-      { side: "right", u: 4.6, w: 1.0, h: 1.0, sill: 1.05 },
-      { side: "back", u: 3.0, w: 1.6, h: 1.2, sill: 0.95 },
-      { side: "left", u: 3.2, w: 1.2, h: 1.1, sill: 1.0 },
+    w: 9.2, d: 5.2, wallH: 2.7, finish: "metal", color: 0x2e3236,
+    roof: { type: "gable", h: 0.85, color: 0x232528 },
+    accents: [
+      { side: "front", u: 3.4, w: 2.6, finish: "wood", color: 0xb9834a },
     ],
-    deck: { depth: 1.6, inset: 0.5, stepU: 1.2 },
+    door: { side: "front", u: 3.0, w: 1.0, h: 2.1, dark: true },
+    windows: [
+      { side: "front", u: 1.4, w: 1.5, h: 1.6, sill: 0.55 },
+      { side: "front", u: 5.6, w: 1.7, h: 1.7, sill: 0.45, bars: 1 },
+      { side: "front", u: 7.9, w: 1.7, h: 1.7, sill: 0.45, bars: 1 },
+      { side: "right", u: 2.1, w: 1.3, h: 1.1, sill: 0.95 },
+      { side: "back", u: 2.6, w: 1.5, h: 1.1, sill: 0.95 },
+      { side: "back", u: 6.8, w: 0.8, h: 0.7, sill: 1.35 },
+    ],
+    porch: { u: 0, depth: 2.3, railing: true, stepU: 3.0 },
   },
-  // 24평 전원주택 — 화이트 사이딩 · 박공 · 대형 창
+  // STAY24-WB · 24평 — 화이트+블랙 투톤 세로 금속 · 외쪽 지붕 · 플로팅 데크
   stay24w: {
-    w: 10.8, d: 7.3, wallH: 2.75, finish: "wood", color: 0xe3ddd0,
-    roof: { type: "gable", h: 1.7, color: 0x3a3f45 },
-    door: { side: "front", u: 9.5, w: 1.05, h: 2.1 },
-    windows: [
-      { side: "front", u: 2.6, w: 3.0, h: 2.0, sill: 0.4, bars: 3 },
-      { side: "front", u: 6.2, w: 2.0, h: 1.6, sill: 0.7, bars: 2 },
-      { side: "right", u: 2.4, w: 1.6, h: 1.3, sill: 0.9 },
-      { side: "right", u: 5.2, w: 1.2, h: 1.1, sill: 1.0 },
-      { side: "back", u: 2.8, w: 1.8, h: 1.3, sill: 0.9, bars: 2 },
-      { side: "back", u: 7.6, w: 0.8, h: 0.7, sill: 1.4 },
-      { side: "left", u: 3.4, w: 1.6, h: 1.3, sill: 0.9 },
+    w: 10.8, d: 7.3, wallH: 2.85, finish: "metal", color: 0xdfe0da,
+    roof: { type: "mono", h: 0.8, color: 0x33373c },
+    accents: [
+      { side: "front", u: 1.2, w: 4.6, finish: "metal", color: 0x24262a },
     ],
-    deck: { depth: 2.0, inset: 0.6, stepU: 9.5 },
+    door: { side: "front", u: 7.2, w: 1.0, h: 2.15, dark: false },
+    windows: [
+      { side: "front", u: 3.0, w: 3.1, h: 1.35, sill: 0.95, bars: 2 },
+      { side: "front", u: 5.6, w: 2.4, h: 2.2, sill: 0.05, bars: 1, noSill: true },
+      { side: "front", u: 9.3, w: 1.5, h: 1.25, sill: 0.95 },
+      { side: "right", u: 2.6, w: 1.6, h: 1.2, sill: 0.95 },
+      { side: "back", u: 3.0, w: 1.8, h: 1.25, sill: 0.95, bars: 2 },
+      { side: "back", u: 7.8, w: 0.8, h: 0.7, sill: 1.4 },
+      { side: "left", u: 3.4, w: 1.5, h: 1.2, sill: 0.95 },
+    ],
+    deck: { depth: 2.4, w: 4.2, offset: 0.2, stepU: 5.4 },
   },
-  // 20평 전원주택 — 내추럴 우드 · 박공(레드브라운 지붕)
+  // STAY20-R · 20평 — 레드 브릭 · 차콜 박공 + 중앙 솟은 박공(3연창) · 전면 데크+난간
   stay20r: {
-    w: 10.2, d: 6.5, wallH: 2.7, finish: "wood", color: 0x8a6a4c,
-    roof: { type: "gable", h: 1.5, color: 0x5a352c },
-    door: { side: "front", u: 1.3, w: 1.0, h: 2.1 },
+    w: 10.0, d: 6.6, wallH: 2.75, finish: "brick", color: 0x9a4a3c,
+    roof: { type: "gable", h: 0.8, color: 0x2b2e33 },
+    centerGable: { u: 3.3, w: 3.4, h: 1.2 },
+    door: { side: "front", u: 1.5, w: 1.0, h: 2.1, dark: true, canopy: true },
     windows: [
-      { side: "front", u: 4.6, w: 2.6, h: 1.8, sill: 0.5, bars: 2 },
-      { side: "front", u: 8.2, w: 1.5, h: 1.3, sill: 0.9 },
-      { side: "right", u: 2.4, w: 1.4, h: 1.2, sill: 0.95 },
-      { side: "back", u: 3.2, w: 1.6, h: 1.2, sill: 0.95 },
+      { side: "front", u: 4.9, w: 2.7, h: 2.15, sill: 0.05, bars: 2, noSill: true },
+      { side: "front", u: 8.3, w: 1.9, h: 1.25, sill: 0.95, bars: 2 },
+      { side: "left", u: 2.2, w: 1.4, h: 1.1, sill: 1.0 },
+      { side: "back", u: 3.0, w: 1.7, h: 1.2, sill: 0.95 },
       { side: "back", u: 7.4, w: 0.8, h: 0.7, sill: 1.4 },
-      { side: "left", u: 3.0, w: 1.2, h: 1.1, sill: 1.0 },
     ],
-    deck: { depth: 1.7, inset: 0.5, stepU: 1.3 },
+    deck: { depth: 2.0, inset: 0.15, stepU: 5.0, railing: true },
   },
-  // 18평 — 블랙 메탈 · 외쪽지붕 (모던)
+  // STAY14.5-3-GB · 복층 — 크림 브릭 + 다크브라운 트림 · 좌측 평지붕 윙 + 우측 2층 타워
   "stay18-b": {
-    w: 9.6, d: 6.2, wallH: 2.7, finish: "metal", color: 0x33373c,
-    roof: { type: "mono", h: 0.7, color: 0x26292e },
-    door: { side: "front", u: 8.4, w: 1.0, h: 2.1 },
-    windows: [
-      { side: "front", u: 2.4, w: 2.8, h: 1.9, sill: 0.45, bars: 2 },
-      { side: "front", u: 5.8, w: 1.6, h: 1.4, sill: 0.9 },
-      { side: "right", u: 2.2, w: 1.3, h: 1.1, sill: 1.0 },
-      { side: "back", u: 3.0, w: 1.5, h: 1.2, sill: 0.95 },
-      { side: "left", u: 2.8, w: 1.2, h: 1.1, sill: 1.0 },
+    w: 6.4, d: 5.2, wallH: 2.7, finish: "brick", color: 0xcfc0a8,
+    roof: { type: "flat" },
+    accents: [
+      { side: "front", u: 2.4, w: 1.3, finish: "wood", color: 0x8a6038 },
     ],
-    deck: { depth: 1.8, inset: 0.5, stepU: 8.4 },
+    door: { side: "front", u: 3.3, w: 0.95, h: 2.05, dark: true },
+    windows: [
+      { side: "front", u: 1.3, w: 1.4, h: 1.15, sill: 0.9 },
+      { side: "front", u: 5.2, w: 1.3, h: 1.15, sill: 0.9 },
+      { side: "back", u: 2.6, w: 1.4, h: 1.1, sill: 0.95 },
+    ],
+    tower: { side: "right", w: 3.4, h: 5.5, finish: "brick", color: 0xcfc0a8 },
+    porch: { u: 0, w: 6.4, depth: 1.9, railing: false, stepU: 3.3 },
   },
-  // 9평 체류형 쉼터 — 오크 우드 · 평지붕 · 컴팩트
+  // CUBE9-O · 9평 — 그레이 금속 + 오렌지 센터 패널 · 완경사 박공 · 파일 기초
   cube9o: {
-    w: 7.2, d: 4.2, wallH: 2.6, finish: "wood", color: 0x9a7a52,
-    roof: { type: "flat" },
-    door: { side: "front", u: 6.3, w: 0.95, h: 2.05 },
-    windows: [
-      { side: "front", u: 2.0, w: 2.2, h: 1.7, sill: 0.5, bars: 2 },
-      { side: "front", u: 4.4, w: 1.2, h: 1.2, sill: 0.95 },
-      { side: "right", u: 1.8, w: 1.1, h: 1.0, sill: 1.0 },
-      { side: "back", u: 2.4, w: 1.2, h: 1.0, sill: 1.05 },
+    w: 8.4, d: 3.6, wallH: 2.6, finish: "metal", color: 0x6e7276,
+    roof: { type: "gable", h: 0.55, color: 0x84888d, overhang: 0.2 },
+    pier: true,
+    accents: [
+      { side: "front", u: 1.7, w: 4.2, finish: "wood", color: 0xe07b20 },
     ],
-    deck: { depth: 1.5, inset: 0.3, stepU: 6.3 },
+    door: { side: "front", u: 7.3, w: 0.95, h: 2.05, dark: true },
+    windows: [
+      { side: "front", u: 3.8, w: 2.2, h: 1.7, sill: 0.5, bars: 1 },
+      { side: "left", u: 1.4, w: 1.1, h: 1.0, sill: 1.0 },
+      { side: "back", u: 2.6, w: 1.2, h: 1.0, sill: 1.0 },
+    ],
+    deck: { w: 1.6, offset: 3.1, depth: 0.9, stepU: 7.3 },
   },
-  // 10평 포레스트 — 그린 스테인 우드 · 박공
+  // FOREST10-N · 10평 — 딥 그린 세로 사이딩 · 다크 스탠딩심 박공 · 풀폭 데크+블랙 난간
   forest10g: {
-    w: 7.5, d: 4.4, wallH: 2.65, finish: "wood", color: 0x5f7355,
-    roof: { type: "gable", h: 1.2, color: 0x33373c },
-    door: { side: "front", u: 1.1, w: 0.95, h: 2.05 },
+    w: 8.2, d: 4.0, wallH: 2.65, finish: "wood", color: 0x2e4a38,
+    roof: { type: "gable", h: 1.0, color: 0x26292d },
+    door: { side: "front", u: 3.5, w: 0.95, h: 2.05, dark: false },
     windows: [
-      { side: "front", u: 3.6, w: 2.0, h: 1.6, sill: 0.6, bars: 2 },
-      { side: "front", u: 6.2, w: 1.1, h: 1.1, sill: 1.0 },
-      { side: "right", u: 1.9, w: 1.1, h: 1.0, sill: 1.0 },
-      { side: "back", u: 2.6, w: 1.2, h: 1.0, sill: 1.05 },
+      { side: "front", u: 1.6, w: 1.5, h: 0.75, sill: 1.25 },
+      { side: "front", u: 5.2, w: 0.9, h: 0.75, sill: 1.25 },
+      { side: "front", u: 6.9, w: 1.75, h: 1.95, sill: 0.1, bars: 1, noSill: true },
+      { side: "left", u: 1.5, w: 1.1, h: 0.9, sill: 1.05 },
+      { side: "back", u: 2.8, w: 1.3, h: 0.95, sill: 1.0 },
     ],
-    deck: { depth: 1.5, inset: 0.3, stepU: 1.1 },
+    deck: { depth: 1.9, w: 9.4, offset: 0, stepU: 1.6, railing: true },
   },
-  // 10평 포레스트 블랙 — 다크 메탈 · 평지붕
+  // FOREST10-UB · 10평 — 평지붕(멤브레인+태양광+실외기) · 우드 루버 + 컬러 패널 투톤
   forest10bb: {
-    w: 7.5, d: 4.4, wallH: 2.65, finish: "metal", color: 0x26292e,
-    roof: { type: "flat" },
-    door: { side: "front", u: 6.6, w: 0.95, h: 2.05 },
-    windows: [
-      { side: "front", u: 2.2, w: 2.4, h: 1.7, sill: 0.5, bars: 2 },
-      { side: "front", u: 4.9, w: 1.1, h: 1.1, sill: 1.0 },
-      { side: "left", u: 1.9, w: 1.1, h: 1.0, sill: 1.0 },
-      { side: "back", u: 2.6, w: 1.2, h: 1.0, sill: 1.05 },
+    w: 7.6, d: 4.2, wallH: 2.65, finish: "metal", color: 0xb9c4c9,
+    roof: { type: "flat", solar: true, ac: true },
+    accents: [
+      { side: "front", u: 0, w: 1.9, finish: "wood", color: 0xa8703c },
+      { side: "front", u: 1.9, w: 2.7, finish: "metal", color: 0x7076c0 },
     ],
-    deck: { depth: 1.5, inset: 0.3, stepU: 6.6 },
+    door: { side: "front", u: 5.3, w: 0.95, h: 2.05, dark: true },
+    windows: [
+      { side: "front", u: 3.3, w: 1.9, h: 1.9, sill: 0.15, bars: 1, noSill: true },
+      { side: "left", u: 1.3, w: 1.0, h: 0.8, sill: 1.1 },
+      { side: "back", u: 2.6, w: 1.2, h: 0.95, sill: 1.0 },
+    ],
+    deck: { w: 1.9, offset: -0.5, depth: 0.8, stepU: 3.3 },
   },
-  // 10평 큐브 화이트 — 화이트 메탈 · 외쪽지붕
+  // FOREST-G10-W · 10평 — 화이트 세로 사이딩 · 외쪽(쐐기) · 우측 우드 개방 포치
   "cube-g-10w": {
-    w: 7.5, d: 4.4, wallH: 2.6, finish: "metal", color: 0xd7d7d0,
-    roof: { type: "mono", h: 0.55, color: 0x3a3f45 },
-    door: { side: "front", u: 1.1, w: 0.95, h: 2.05 },
+    w: 6.6, d: 4.0, wallH: 2.7, finish: "metal", color: 0xdcdcd6,
+    roof: { type: "mono", h: 0.85, color: 0xd2d2cc, overhang: 0.25 },
+    door: { side: "left", u: 1.6, w: 0.95, h: 2.05, dark: true },
     windows: [
-      { side: "front", u: 3.8, w: 2.2, h: 1.7, sill: 0.5, bars: 2 },
-      { side: "front", u: 6.3, w: 1.1, h: 1.1, sill: 1.0 },
-      { side: "right", u: 1.9, w: 1.1, h: 1.0, sill: 1.0 },
-      { side: "back", u: 2.6, w: 1.2, h: 1.0, sill: 1.05 },
+      { side: "left", u: 3.0, w: 0.9, h: 1.3, sill: 0.7 },
+      { side: "back", u: 2.4, w: 1.3, h: 1.0, sill: 1.0 },
+      { side: "front", u: 1.6, w: 1.3, h: 1.2, sill: 0.85 },
     ],
-    deck: { depth: 1.5, inset: 0.3, stepU: 1.1 },
+    sidePorch: { side: "right", w: 2.4, railing: false },
   },
 };
 
