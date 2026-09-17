@@ -3,7 +3,7 @@
 // 오버라이드 가능하며, 아래 DEFAULT_*는 데이터가 없을 때의 폴백이다.
 import * as THREE from "three";
 import { GLTFLoader } from "./GLTFLoader.js";
-import { buildHouse, HOUSE_SPECS } from "./house-kit.js";
+import { buildHouseMerged, HOUSE_SPECS } from "./house-kit.js";
 
 const stage = document.getElementById("build-stage");
 const canvas = document.getElementById("build-canvas");
@@ -489,7 +489,7 @@ function addModel(m) {
   // 정밀 사양(HOUSE_SPECS)이 있는 모델은 파라메트릭 하우스 키트로 조립 — 치수 정확·고품질
   if (m.slug && HOUSE_SPECS[m.slug]) {
     const spec = HOUSE_SPECS[m.slug];
-    const inner = buildHouse(spec);
+    const inner = buildHouseMerged(spec);
     const bb = new THREE.Box3().setFromObject(inner);
     const c = bb.getCenter(new THREE.Vector3());
     inner.position.set(-c.x, 0, -c.z);
