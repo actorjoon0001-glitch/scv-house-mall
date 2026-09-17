@@ -1355,6 +1355,18 @@ body.build-page { margin: 0; overflow: hidden; background: #12150f; }
 /* 적용 버튼은 입력칸 아랫줄 전체 폭으로 — 어중간하게 잘리지 않게 */
 #build-lot-apply { flex: 1 1 100%; }
 .build__lot-info { margin: 0 0 10px; font-size: 11px; color: #cfe3d6; }
+/* 실제 판매 모델: 카테고리 접이식 그룹 */
+.build__modelgrp { margin-bottom: 6px; }
+.build__modelgrp summary {
+  cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px;
+  padding: 7px 9px; border-radius: 9px; font-size: 12px; font-weight: 700;
+  background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14);
+  user-select: none;
+}
+.build__modelgrp summary::before { content: "▸"; font-size: 10px; color: #9fd9bd; transition: transform 0.15s; }
+.build__modelgrp[open] summary::before { transform: rotate(90deg); }
+.build__modelgrp summary small { margin-left: auto; color: #9fd9bd; font-weight: 600; }
+.build__modelgrp .build__unitbtn { margin-top: 6px; }
 .build__sat-addr {
   width: 100%; box-sizing: border-box; margin-bottom: 5px; padding: 6px 8px;
   border-radius: 8px; border: 1px solid rgba(255,255,255,0.25);
