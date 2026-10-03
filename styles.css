@@ -1382,6 +1382,37 @@ body.build-page { margin: 0; overflow: hidden; background: #12150f; }
 }
 .build__map-ctl { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; }
 .build__map-ctl span { font-size: 12px; color: #cfe3d6; min-width: 48px; text-align: center; }
+
+/* ============ 🎮 집짓기 챌린지 ============ */
+.build__chal {
+  position: absolute; right: 14px; bottom: 96px; z-index: 6; width: 236px;
+  background: rgba(16,19,15,0.85); border: 1px solid rgba(255,215,94,0.35);
+  border-radius: 14px; padding: 12px; color: #fff;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+}
+.build__chal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.build__chal-head strong { font-size: 13px; color: #ffd75e; }
+.build__chal-close {
+  background: none; border: none; color: #aaa; font-size: 14px; cursor: pointer; padding: 2px 4px;
+}
+.build__chal-step { margin: 0 0 2px; font-size: 10px; color: #9fd9bd; letter-spacing: 0.08em; }
+.build__chal-mission { margin: 0 0 3px; font-size: 13px; font-weight: 800; }
+.build__chal-desc { margin: 0 0 9px; font-size: 11px; color: #cfd8cf; line-height: 1.45; }
+.build__chal-check {
+  font-size: 12px; padding: 5px 7px; border-radius: 8px; margin-bottom: 4px;
+  background: rgba(255,255,255,0.05); color: #b9c2b9;
+}
+.build__chal-check.is-ok { background: rgba(80,200,120,0.14); color: #9fe9bd; }
+.build__chal .btn--block { margin-top: 8px; }
+.build__chal-win { margin: 0 0 4px; font-size: 17px; font-weight: 800; color: #ffd75e; text-align: center; }
+.build__chal-reset {
+  width: 100%; margin-top: 7px; background: none; border: none; cursor: pointer;
+  color: #8a948a; font-size: 11px; text-decoration: underline;
+}
+@media (max-width: 640px) {
+  .build__chal { width: 200px; bottom: 150px; }
+}
 .build__palette-title { margin: 0 0 8px; font-size: 12px; font-weight: 700; color: #9fd9bd; letter-spacing: 0.06em; }
 .build__unitbtn {
   display: flex; align-items: center; gap: 9px; width: 100%; margin-bottom: 6px;

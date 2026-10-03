@@ -1047,7 +1047,7 @@ function quote() {
   if (roof.add) { items.push({ label: `🏠 ${roof.label}`, amt: roof.add }); price += roof.add; }
   if (opt.deck) { items.push({ label: `🪵 ${OPTIONS.deck.label}`, amt: OPTIONS.deck.add }); price += OPTIONS.deck.add; }
   if (opt.garden) { items.push({ label: `🌳 ${OPTIONS.garden.label}`, amt: OPTIONS.garden.add }); price += OPTIONS.garden.add; }
-  return { items, area, pyeong: area / PYEONG, price };
+  return { items, area, pyeong: area / PYEONG, price, counts };
 }
 function refreshQuote() {
   const q = quote();
@@ -1058,6 +1058,105 @@ function refreshQuote() {
   document.getElementById("build-area").textContent = q.pyeong ? `${q.pyeong.toFixed(1)}평 (${q.area.toFixed(0)}㎡)` : "0평";
   document.getElementById("build-price").textContent = q.price ? `${fmtMan(q.price)}원~` : "-";
   refreshExtras();
+  checkChal(q);
+}
+
+// ---------- 🎮 집짓기 챌린지 ----------
+// 미션을 깨며 유닛·옵션을 자연스럽게 체험 → 완주 보상 = "이 설계로 상담받기" (리드 전환)
+const CHALLENGES = [
+  {
+    id: "m1", title: "1단계 · 미니멀 스타트", desc: "첫 내 집, 작게 시작해보세요!",
+    checks: [
+      { label: "건물 5평 이상 만들기", test: (q) => q.pyeong >= 5 },
+      { label: "예산 2,500만원 이하", test: (q) => q.price > 0 && q.price <= 2500 },
+    ],
+  },
+  {
+    id: "m2", title: "2단계 · 패밀리 하우스", desc: "가족이 살 수 있게 방과 욕실을 갖추세요",
+    checks: [
+      { label: "건물 10평 이상", test: (q) => q.pyeong >= 10 },
+      { label: "침실동 2개 이상", test: (q) => (q.counts.bed || 0) >= 2 },
+      { label: "욕실동 1개 이상", test: (q) => (q.counts.bath || 0) >= 1 },
+      { label: "예산 6,000만원 이하", test: (q) => q.price > 0 && q.price <= 6000 },
+    ],
+  },
+  {
+    id: "m3", title: "3단계 · 드림 하우스", desc: "데크에서 커피 한 잔, 정원까지 완성!",
+    checks: [
+      { label: "건물 15평 이상", test: (q) => q.pyeong >= 15 },
+      { label: "박공지붕 선택", test: () => opt.roof === "gable" },
+      { label: "우드 데크 추가", test: () => !!opt.deck },
+      { label: "기본 조경 추가", test: () => !!opt.garden },
+      { label: "예산 1억원 이하", test: (q) => q.price > 0 && q.price <= 10000 },
+    ],
+  },
+];
+let chalIdx = 0;
+let chalCleared = false; // 현재 미션 조건 충족 상태
+let chalDone = false;    // 전체 완주
+try {
+  const saved = JSON.parse(localStorage.getItem("seum_build_chal") || "null");
+  if (saved) { chalIdx = Math.min(saved.idx || 0, CHALLENGES.length); chalDone = !!saved.done; }
+} catch (e) {}
+function saveChal() {
+  try { localStorage.setItem("seum_build_chal", JSON.stringify({ idx: chalIdx, done: chalDone })); } catch (e) {}
+}
+function renderChal(q) {
+  const bodyEl = document.getElementById("build-chal-body");
+  if (!bodyEl) return;
+  if (chalDone || chalIdx >= CHALLENGES.length) {
+    bodyEl.innerHTML = `
+      <p class="build__chal-win">🏆 챌린지 완주!</p>
+      <p class="build__chal-desc">대단해요! 방금 만든 설계 그대로<br />전문 매니저가 <b>실제 견적</b>으로 다듬어드립니다.</p>
+      <button type="button" class="btn btn--primary btn--block" id="build-chal-consult">🏠 이 설계로 상담받기</button>
+      <button type="button" class="build__chal-reset" id="build-chal-reset">처음부터 다시 하기</button>`;
+    const cb = document.getElementById("build-chal-consult");
+    if (cb) cb.addEventListener("click", () => document.getElementById("build-consult").click());
+    const rb = document.getElementById("build-chal-reset");
+    if (rb) rb.addEventListener("click", () => { chalIdx = 0; chalDone = false; saveChal(); renderChal(quote()); });
+    return;
+  }
+  const c = CHALLENGES[chalIdx];
+  const results = c.checks.map((ch) => ({ label: ch.label, ok: !!ch.test(q) }));
+  chalCleared = results.every((r) => r.ok);
+  bodyEl.innerHTML = `
+    <p class="build__chal-step">미션 ${chalIdx + 1} / ${CHALLENGES.length}</p>
+    <p class="build__chal-mission">${c.title}</p>
+    <p class="build__chal-desc">${c.desc}</p>
+    ${results.map((r) => `<div class="build__chal-check${r.ok ? " is-ok" : ""}">${r.ok ? "✅" : "⬜"} ${r.label}</div>`).join("")}
+    ${chalCleared
+      ? `<button type="button" class="btn btn--primary btn--block" id="build-chal-next">🎉 미션 달성! ${chalIdx + 1 === CHALLENGES.length ? "완주하기" : "다음 미션 →"}</button>`
+      : ""}`;
+  const nb = document.getElementById("build-chal-next");
+  if (nb) nb.addEventListener("click", () => {
+    chalIdx += 1;
+    if (chalIdx >= CHALLENGES.length) {
+      chalDone = true;
+      if (CFG && CFG.logEvent) CFG.logEvent("build_challenge_done", "");
+    }
+    saveChal();
+    renderChal(quote());
+  });
+}
+function checkChal(q) {
+  const panel = document.getElementById("build-chal");
+  if (!panel || panel.hidden) return;
+  renderChal(q);
+}
+{
+  const btn = document.getElementById("build-chal-btn");
+  const panel = document.getElementById("build-chal");
+  const close = document.getElementById("build-chal-close");
+  if (btn && panel) {
+    btn.addEventListener("click", () => {
+      panel.hidden = !panel.hidden;
+      if (!panel.hidden) {
+        renderChal(quote());
+        if (CFG && CFG.logEvent) CFG.logEvent("build_challenge_open", "");
+      }
+    });
+  }
+  if (close && panel) close.addEventListener("click", () => { panel.hidden = true; });
 }
 
 // ---------- 팔레트·옵션 UI ----------
@@ -1116,7 +1215,8 @@ function renderOptions() {
 function summaryText() {
   const q = quote();
   const parts = q.items.map((i) => i.label.replace(/[🛋️🛏️🍳🛁🎨🏠🪵🌳]/g, "").trim());
-  return `[빌드룸] 대지 ${(LOT_W * LOT_D / PYEONG).toFixed(0)}평(${LOT_W}×${LOT_D}m) · 건물 ${q.pyeong.toFixed(1)}평 · ${q.price.toLocaleString()}만원~ | ${parts.join(", ")}`;
+  const tag = chalDone ? " | 🏆집짓기챌린지 완주" : "";
+  return `[빌드룸] 대지 ${(LOT_W * LOT_D / PYEONG).toFixed(0)}평(${LOT_W}×${LOT_D}m) · 건물 ${q.pyeong.toFixed(1)}평 · ${q.price.toLocaleString()}만원~ | ${parts.join(", ")}${tag}`;
 }
 {
   const modal = document.getElementById("build-modal");
