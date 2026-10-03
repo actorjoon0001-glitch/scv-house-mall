@@ -38,6 +38,10 @@ let OPTIONS = DEFAULT_OPTIONS;
 const CAT_SB = "https://aypugjvzvwinnmpquguj.supabase.co";
 const CAT_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5cHVnanZ6dndpbm5tcHF1Z3VqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1NjQ0ODIsImV4cCI6MjA4OTE0MDQ4Mn0.yLBG31-8VGWai9Rpv9RtVxZwwWMsKI_syGs0QN7PkUU";
 let MODELS = [];
+// 블렌더 정밀 제작 모델 — 도면 기반 1:1 GLB (카탈로그와 별개 로컬 등록)
+const BLENDER_MODELS = [
+  { slug: "gocheonri-a", name: "고천리 A동 · 도면 1:1", category: "블렌더 정밀", size: "10평", base_price: 0, main_image: "", glb: "assets/houses/gocheonri-a.glb" },
+];
 const gltfLoader = new GLTFLoader();
 const glbCache = {};
 function loadGlb(url) {
@@ -486,6 +490,30 @@ function registerPlaced(m, g, fw, fd) {
 
 // 실제 판매 모델을 부지에 배치
 function addModel(m) {
+  // 블렌더 정밀 GLB — 실측 1:1 스케일 그대로 (조명·카메라는 제거)
+  if (m.glb) {
+    loadGlb(m.glb)
+      .then((seed) => {
+        const inst = seed.clone(true);
+        const kill = [];
+        inst.traverse((o) => {
+          if (o.isLight || o.isCamera) kill.push(o);
+          if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+        });
+        kill.forEach((o) => o.parent && o.parent.remove(o));
+        const bb = new THREE.Box3().setFromObject(inst);
+        const c = bb.getCenter(new THREE.Vector3());
+        inst.position.set(-c.x, -bb.min.y, -c.z);
+        const g = new THREE.Group();
+        g.add(inst);
+        const size = bb.getSize(new THREE.Vector3());
+        const fw = Math.max(GRID, Math.ceil(size.x / GRID) * GRID);
+        const fd = Math.max(GRID, Math.ceil(size.z / GRID) * GRID);
+        registerPlaced(m, g, fw, fd);
+      })
+      .catch(() => {});
+    return;
+  }
   // 정밀 사양(HOUSE_SPECS)이 있는 모델은 파라메트릭 하우스 키트로 조립 — 치수 정확·고품질
   if (m.slug && HOUSE_SPECS[m.slug]) {
     const spec = HOUSE_SPECS[m.slug];
@@ -1177,7 +1205,7 @@ Promise.all([
     const b = (cfg.data && cfg.data.build) || {};
     if (Array.isArray(b.units) && b.units.length) UNITS = b.units;
     if (b.options) OPTIONS = Object.assign({}, DEFAULT_OPTIONS, b.options);
-    MODELS = Array.isArray(models) ? models : [];
+    MODELS = BLENDER_MODELS.concat(Array.isArray(models) ? models : []);
   })
   .then(() => {
     renderPalette();
