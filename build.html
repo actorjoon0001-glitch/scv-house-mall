@@ -19,7 +19,17 @@
     <div class="build__top">
       <strong>🔨 메타하우스 빌드룸</strong>
       <span class="build__hint">유닛을 눌러 올리고 · 드래그로 이동 · 빈 곳 드래그로 시점 회전</span>
+      <button type="button" class="btn btn--glass btn--sm" id="build-chal-btn">🎮 집짓기 챌린지</button>
       <a class="btn btn--glass btn--sm" href="town.html">← 마을로</a>
+    </div>
+
+    <!-- 집짓기 챌린지 패널 -->
+    <div class="build__chal" id="build-chal" hidden>
+      <div class="build__chal-head">
+        <strong id="build-chal-title">🎮 집짓기 챌린지</strong>
+        <button type="button" class="build__chal-close" id="build-chal-close">✕</button>
+      </div>
+      <div id="build-chal-body"></div>
     </div>
 
     <!-- 좌측: 유닛 팔레트 -->
