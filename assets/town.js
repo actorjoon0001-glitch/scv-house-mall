@@ -3039,7 +3039,9 @@ function init() {
   const _DOWN = new THREE.Vector3(0, -1, 0);
   const _rayO = new THREE.Vector3(), _rayD = new THREE.Vector3();
   let groundY = 0; // 발밑 지면 높이 (홀 바닥·포치·데크 단차)
-  // 이동 벡터를 벽에 막히면 벽면을 따라 미끄러지게 보정 (가슴·무릎 높이 레이 2개)
+  // 이동 벡터를 벽에 막히면 벽면을 따라 미끄러지게 보정.
+  // 무릎·허리·가슴 레이 3개 중 2개 이상 맞아야 차단 — 폴딩도어의 얇은 가로 프레임 바
+  // 하나에 걸려 문을 못 지나는 일을 막는다 (벽·난간·창턱은 2개 이상 걸려 차단됨).
   function collideMove(dx, dz) {
     if (!expoCollider) return [dx, dz];
     for (let pass = 0; pass < 2; pass++) {
@@ -3047,14 +3049,18 @@ function init() {
       if (len < 1e-5) return [0, 0];
       _rayD.set(dx / len, 0, dz / len);
       let hit = null;
-      for (const h of [0.38, 1.25]) {
+      let hits = 0;
+      for (const h of [0.45, 0.95, 1.45]) {
         _rayO.set(player.position.x, player.position.y + h, player.position.z);
         _wallRay.set(_rayO, _rayD);
         _wallRay.far = len + 0.33; // 몸 반경
         const r = _wallRay.intersectObject(expoCollider, false)[0];
-        if (r && (!hit || r.distance < hit.distance)) hit = r;
+        if (r) {
+          hits++;
+          if (!hit || r.distance < hit.distance) hit = r;
+        }
       }
-      if (!hit) return [dx, dz];
+      if (hits < 2) return [dx, dz];
       const n = hit.face.normal;
       const d = dx * n.x + dz * n.z;
       dx -= n.x * d;
