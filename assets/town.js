@@ -2027,7 +2027,17 @@ function init() {
     // 천장 — 전체 보기(조감) 때 숨겨서 홀 내부가 내려다보이게
     loadGlb(EXPO_ASSET.ceiling)
       .then((g) => {
-        g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+        g.traverse((o) => {
+          if (!o.isMesh) return;
+          o.castShadow = false; o.receiveShadow = false;
+          // 천장 아랫면은 태양 직광을 못 받아 검게 보임 → 밝은 무광 패널로 보정
+          if (o.material) {
+            o.material.metalness = 0;
+            o.material.roughness = 0.92;
+            if (o.material.color) o.material.color.lerp(new THREE.Color(0xffffff), 0.72);
+            if (o.material.emissive) o.material.emissive.setHex(0x14110c);
+          }
+        });
         g.position.y = EXPO_ASSET.y;
         expoCeiling = g;
         scene.add(g);
@@ -2434,8 +2444,8 @@ function init() {
 
   player.position.set(0, 0, 30); // 남쪽 입구(인포 앞)에서 시작
   if (EXPO_MODE) {
-    // 박람회장: 서측 입구에서 홀 안쪽(동쪽)을 바라보며 시작 (블렌더 진입뷰 카메라 위치)
-    player.position.set(-38.5, 0, 0);
+    // 박람회장: 서측 입구에서 홀 안쪽(동쪽)을 바라보며 시작 (벽에서 3.5m 띄워 숄더캠 공간 확보)
+    player.position.set(-35, 0, 0);
     player.rotation.y = Math.PI / 2; // heading 초기값은 선언부에서 EXPO에 맞춰 설정
   }
   // 체험 화면(빌드룸·교육관)에서 돌아온 경우 → 나갔던 자리(체험존)로 복귀
