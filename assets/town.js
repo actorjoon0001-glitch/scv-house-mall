@@ -2,6 +2,7 @@
 // 상쾌환 스타일의 미니 3D 타운: 메타봇이 하우스 사이를 걸어다닌다.
 import * as THREE from "three";
 import { GLTFLoader } from "./GLTFLoader.js";
+import { DRACOLoader } from "./DRACOLoader.js";
 import { RGBELoader } from "./RGBELoader.js";
 import { clone as skeletonClone } from "./SkeletonUtils.js";
 import { buildHouseMerged, HOUSE_SPECS } from "./house-kit.js";
@@ -87,7 +88,7 @@ function init() {
   scene.fog = new THREE.Fog(0xbfe0f5, 55, 155);
 
   // near 0.5: 깊이 버퍼 정밀도 확보 (far 확장으로 인한 바닥 z-파이팅 방지 — 카메라가 0.5m 안까지 붙을 일 없음)
-  const camera = new THREE.PerspectiveCamera(48, 1, 0.5, 520);
+  const camera = new THREE.PerspectiveCamera(62, 1, 0.15, 520); // near 0.15: 1인칭 실내에서 벽 클리핑 방지
 
   // ---------- PBR 지면 텍스처 (ambientCG CC0, 512px 축소판 — 모바일 로딩 부담 최소화) ----------
   THREE.Cache.enabled = true; // 같은 텍스처 파일 재요청 방지
@@ -1066,6 +1067,12 @@ function init() {
 
   // ---------- 모델 로드 ----------
   const loader = new GLTFLoader();
+  {
+    // 세움 홈플래너 블렌더 GLB는 draco 필수 압축 — 디코더 연결 (일반 GLB에는 영향 없음)
+    const draco = new DRACOLoader();
+    draco.setDecoderPath("assets/draco/");
+    loader.setDRACOLoader(draco);
+  }
   const clickTargets = [];
   const maxAniso = renderer.capabilities.getMaxAnisotropy();
 
@@ -1778,6 +1785,10 @@ function init() {
   const CAT_POOL = window.SeumTownConfig.CAT_POOL;
   const DEFAULT_GLB = window.SeumTownConfig.DEFAULT_GLB;
 
+  // 카메라 충돌용 박스 콜라이더 모음 (집마다 1개 — 시점 레이캐스트는 이것만 검사)
+  const camColliders = [];
+  const camColMat = new THREE.MeshBasicMaterial({ visible: false });
+
   const glbCache = {};
   function loadGlb(url) {
     if (!glbCache[url]) {
@@ -1800,7 +1811,13 @@ function init() {
     // 관리자가 고정한 칸(placement)을 우선 반영하고, 나머지는 존 내 빈 칸 자동 채움.
     const CFG = window.SeumTownConfig;
     // 같은 존에 같은 외형이 반복 배치되지 않게 정리 (마을 전시는 외형당 한 채)
-    if (CFG && CFG.dedupeForTown) models = CFG.dedupeForTown(models);
+    // — 단, 고유 외형을 가진 모델(키트 정밀 사양 or 전용 GLB 매핑)은 전부 세운다.
+    //   중복 제거는 공용 풀(CAT_POOL) 외형을 돌려쓰는 폴백 모델에만 적용.
+    if (CFG && CFG.dedupeForTown) {
+      const own = (m) => m.slug && (HOUSE_SPECS[m.slug] || (CFG.HOUSE_GLBS && CFG.HOUSE_GLBS[m.slug]));
+      const uniq = models.filter(own);
+      models = uniq.concat(CFG.dedupeForTown(models.filter((m) => !own(m))));
+    }
     const placement = [];
     if (CFG && CFG.computePlacement) {
       const plan = CFG.computePlacement(models, ovData || {});
@@ -1856,8 +1873,10 @@ function init() {
       const idxInCat = catCounters[c] || 0;
       catCounters[c] = idxInCat + 1;
       const url = archetypeFor(m, idxInCat);
+      // 세움 홈플래너 블렌더 실물 GLB(seum-*/twin-*)는 키트보다 우선 — 가구·베이크 질감 포함 실물
+      const isBlender = /assets\/houses\/(seum-|twin-)/.test(url);
       // 정밀 사양(HOUSE_SPECS)이 있는 모델은 파라메트릭 하우스 키트로 조립 (고품질·치수 기반)
-      const kitSpec = m.slug && HOUSE_SPECS[m.slug] ? HOUSE_SPECS[m.slug] : null;
+      const kitSpec = !isBlender && m.slug && HOUSE_SPECS[m.slug] ? HOUSE_SPECS[m.slug] : null;
       (kitSpec ? Promise.resolve(null) : loadGlb(url).catch(() => loadGlb(DEFAULT_GLB)))
         .then((seed) => {
           const wrap = new THREE.Group();
@@ -1870,11 +1889,28 @@ function init() {
           const inst = seed ? seed.clone(true) : buildHouseMerged(kitSpec);
           const foot = 7.2 + ((i * 2654435761) % 100) / 100 * 0.8; // 부지 내 크기 변화 (최대 8)
           const castsShadow = lot.z > -25; // 앞쪽 줄만 그림자 캐스팅 (성능)
-          inst.traverse((o) => { if (o.isMesh) { o.castShadow = castsShadow; o.receiveShadow = true; } });
+          const kill = []; // 블렌더 GLB에 포함된 조명·카메라는 마을 분위기를 해치지 않게 제거
+          inst.traverse((o) => {
+            if (o.isLight || o.isCamera) kill.push(o);
+            if (o.isMesh) { o.castShadow = castsShadow; o.receiveShadow = true; }
+          });
+          kill.forEach((o) => o.parent && o.parent.remove(o));
           const h = normalizeFootprint(inst, Math.min(foot, LOT_MAX), 5.2);
-          // 키트 집은 바닥이 정확히 y0 → 패드 위에 그대로. 스캔 GLB는 밑판을 살짝 묻는다.
-          inst.position.y += kitSpec ? 0.22 : 0.22 - h * 0.04;
+          // 키트·블렌더 집은 바닥이 정확히 y0 → 패드 위에 그대로. 스캔 GLB는 밑판을 살짝 묻는다.
+          inst.position.y += kitSpec || isBlender ? 0.22 : 0.22 - h * 0.04;
           wrap.add(inst);
+          // 카메라 충돌용 단순 박스 콜라이더 (스케일 적용 후 외곽) — 시점 레이캐스트는 이 박스만 검사
+          {
+            const cb = new THREE.Box3().setFromObject(inst);
+            const cs = cb.getSize(new THREE.Vector3());
+            const col = new THREE.Mesh(new THREE.BoxGeometry(cs.x, cs.y, cs.z), camColMat);
+            col.position.y = cs.y / 2 + 0.22;
+            col.visible = false; // 렌더에선 안 보임 (레이캐스트에는 걸림)
+            wrap.add(col);
+            camColliders.push(col);
+            // 1인칭 자동 전환용 실내 판정 크기 (블렌더 실물 모델만 내부가 있음)
+            wrap.userData.inner = isBlender ? { hw: cs.x * 0.42, hd: cs.z * 0.42 } : null;
+          }
           // 집 이름표: 떠 있는 라벨 대신 앞마당의 작은 사인보드 (통일 스타일)
           const tag = makeHouseTag(m.name);
           tag.position.set(-2.9, 0.22, 4.05);
@@ -1956,6 +1992,16 @@ function init() {
   ])
     .then(([data, cfg]) => {
       let models = data.filter((m) => m.name);
+      // 세움 홈플래너 블렌더 전용 모델(카탈로그 미등록 5종) — 마을 전시용 추가
+      // (관리자 설정 apply 전에 넣어 숨김/이름변경/존이동도 똑같이 적용되게)
+      const BLENDER_TOWN_EXTRA = [
+        { slug: "seum-shelter-10", name: "체류형 쉼터 10평 · 마곡 전시", category: "체류형 쉼터", size: "10평", base_price: 0, main_image: "assets/houses/thumbs/seum-shelter-10.jpg", short_description: "마곡 박람회 전시 모델 — 폴딩도어·합성데크·루버강판, 블렌더 실물 1:1" },
+        { slug: "twin-10", name: "쌍둥이 10평 (6평+4평·중앙데크)", category: "특별모델", size: "10평", base_price: 0, main_image: "assets/houses/thumbs/twin-10.jpg", short_description: "두 동을 중앙 데크로 잇는 브리즈웨이형 — 블렌더 실물 모델" },
+        { slug: "twin-10-L", name: "쌍둥이 10평 ㄱ자형", category: "특별모델", size: "10평", base_price: 0, main_image: "assets/houses/thumbs/twin-10-L.jpg", short_description: "ㄱ자로 데크를 감싸는 변형 — 블렌더 실물 모델" },
+        { slug: "twin-10-2f", name: "쌍둥이 10평 2층형", category: "특별모델", size: "10평", base_price: 0, main_image: "assets/houses/thumbs/twin-10-2f.jpg", short_description: "4평 위에 6평을 올린 복층 + 외부 계단 — 블렌더 실물 모델" },
+        { slug: "seum-hwangto", name: "황토찜질방 (3×4m+포치)", category: "특별모델", size: "4평", base_price: 0, main_image: "assets/houses/thumbs/seum-hwangto.jpg", short_description: "황토미장·건식보일러 찜질방 + 전면 포치 — 블렌더 실물 모델" },
+      ];
+      BLENDER_TOWN_EXTRA.forEach((b) => { if (!models.some((m) => m.slug === b.slug)) models.push(b); });
       // 관리자 표시 설정 병합 (숨김/이름/가격/존/큐레이터 등)
       if (window.SeumTownConfig) models = window.SeumTownConfig.apply(models, cfg.data || {});
       applyZoneOverrides(cfg.data || {});
@@ -2588,6 +2634,7 @@ function init() {
     const tag = document.activeElement && document.activeElement.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
     if (e.code === "Space" && running) { doJump(); flyHeld = true; e.preventDefault(); return; }
+    if (e.code === "KeyV" && running) { setPov(povMode === "fp" ? "tp" : "fp"); return; } // 1인칭/3인칭 수동 토글
     const dir = KEYMAP[e.code];
     if (!dir || !running) return;
     keys.add(dir);
@@ -2626,12 +2673,13 @@ function init() {
   joyBase.addEventListener("pointermove", (e) => { if (joy.active) joyMove(e); });
   ["pointerup", "pointercancel"].forEach((ev) => joyBase.addEventListener(ev, joyEnd));
 
-  // 카메라 줌(휠/핀치)·회전(드래그)
+  // 카메라 줌(휠/핀치)·회전(드래그) — 줌은 숄더뷰 카메라 거리 배율
   let camAz = 0;
+  let camPitch = -0.07; // 상하 시점 (라디안, 음수=살짝 내려다봄)
   let camZoom = 1;
   canvas.addEventListener("wheel", (e) => {
     e.preventDefault();
-    camZoom = Math.min(4.4, Math.max(0.55, camZoom * (1 + e.deltaY * 0.0012)));
+    camZoom = Math.min(2.8, Math.max(0.55, camZoom * (1 + e.deltaY * 0.0012)));
   }, { passive: false });
 
   let orbit = null;
@@ -2644,7 +2692,7 @@ function init() {
   canvas.addEventListener("touchmove", (e) => {
     if (pinch && e.touches.length === 2) {
       const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-      camZoom = Math.min(4.4, Math.max(0.55, camZoom * (pinch / d)));
+      camZoom = Math.min(2.8, Math.max(0.55, camZoom * (pinch / d)));
       pinch = d;
     }
   }, { passive: true });
@@ -2656,12 +2704,14 @@ function init() {
   let downAt = null;
   canvas.addEventListener("pointerdown", (e) => {
     downAt = [e.clientX, e.clientY];
-    orbit = { px: e.clientX, az0: camAz };
+    orbit = { px: e.clientX, py: e.clientY, az0: camAz, p0: camPitch };
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener("pointermove", (e) => {
     if (orbit && (e.buttons || e.pointerType === "touch")) {
       camAz = orbit.az0 + (e.clientX - orbit.px) * 0.006;
+      // 상하 시점 — 위/아래 각각 PITCH_MAX 로 제한
+      camPitch = Math.max(-POV.PITCH_MAX, Math.min(POV.PITCH_MAX, orbit.p0 + (orbit.py - e.clientY) * 0.0045));
     }
   });
   canvas.addEventListener("pointercancel", () => { orbit = null; });
@@ -2734,10 +2784,67 @@ function init() {
   });
 
   // ---------- 루프 ----------
-  const WALK_SPEED = 5.2;
-  const RUN_SPEED = 11;
-  const camOffset = new THREE.Vector3(0, 6.2, 9.5);
-  const camPos = new THREE.Vector3().copy(player.position).add(camOffset);
+  // ===== 시점·이동 튜닝 상수 — 여기 숫자만 바꾸면 바로 반영 =====
+  const POV = {
+    // 3인칭 숄더뷰
+    TP_BACK: 2.8,        // 캐릭터 뒤 카메라 거리 (m)
+    TP_SIDE: 0.4,        // 오른쪽 어깨 오프셋 (m)
+    TP_HEIGHT: 1.75,     // 카메라 높이 (m)
+    TP_LOOK_AHEAD: 5,    // 시선: 머리 앞 몇 m 를 보는지
+    TP_FOV: 62,
+    TP_LERP: 0.12,       // 카메라 따라가기 보간 (0.1~0.15)
+    CAM_MIN_DIST: 0.6,   // 충돌 시 캐릭터-카메라 최소 거리 (m)
+    // 1인칭 (집 내부)
+    FP_EYE: 1.6,         // 눈높이 (m) — 천장고 2.4~2.7m 실감의 기준. 절대 바꾸지 말 것
+    FP_FOV: 72,
+    PITCH_MAX: THREE.MathUtils.degToRad(60), // 상하 시야 제한 (위/아래 각각)
+    // 이동 (실제 보행 스케일)
+    WALK: 1.4,           // 걷기 m/s
+    RUN: 3.0,            // 달리기 m/s (Shift / 조이스틱 끝까지)
+    FP_WALK: 1.1,        // 집 안 걷기 m/s (달리기 없음)
+    ACCEL_T: 0.2,        // 가속·감속 시간 (초)
+    // 전환·조감
+    SWITCH_T: 0.5,       // 1인칭 ↔ 3인칭 전환 시간 (초)
+    AERIAL_T: 2.0,       // 전체 보기 이동 시간 (초)
+    AERIAL_H: 92,        // 조감 높이 (m)
+    AERIAL_FOV: 52,
+  };
+  // 시점 상태
+  let povMode = "tp";        // "tp"=3인칭 숄더뷰, "fp"=1인칭
+  let povBlend = 0;          // 0=3인칭 ~ 1=1인칭 (SWITCH_T 동안 보간)
+  let aerialOn = false;      // 전체 보기 (조감)
+  let aerialBlend = 0;
+  let insideLot = null;      // 지금 들어가 있는 집 (블렌더 실물 모델)
+  let povCheckT = 0;
+  let velMag = 0;            // 가감속 적용된 이동 입력 크기
+  let lastMoveDir = 0;       // 감속 중에도 쓸 마지막 이동 방향
+  const easeIO = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+  const camRay = new THREE.Raycaster();
+  // 매 프레임 재사용하는 임시 벡터 (GC 방지)
+  const _V = new THREE.Vector3(), _right = new THREE.Vector3(), _pivot = new THREE.Vector3(), _camDir = new THREE.Vector3();
+  const _tpPos = new THREE.Vector3(), _tpLook = new THREE.Vector3();
+  const _fpPos = new THREE.Vector3(), _fpLook = new THREE.Vector3();
+  const _aerPos = new THREE.Vector3(0, POV.AERIAL_H, 34), _aerLook = new THREE.Vector3(0, 0, -6);
+  function setPov(mode) { povMode = mode; }
+  const povBtn = document.getElementById("town-pov");
+  if (povBtn) povBtn.addEventListener("click", () => setPov(povMode === "fp" ? "tp" : "fp"));
+  const aerialBtn = document.getElementById("town-aerial");
+  if (aerialBtn) aerialBtn.addEventListener("click", () => { aerialOn = !aerialOn; });
+  // 집 내부 판정: 블렌더 실물 모델의 외곽 박스 안이면 1인칭 (현관 들어서면 자동 전환)
+  function lotPlayerIsIn() {
+    for (const l of houseLots) {
+      const inner = l.wrap.userData.inner;
+      if (!inner) continue;
+      const dx = player.position.x - l.wrap.position.x;
+      const dz = player.position.z - l.wrap.position.z;
+      const th = l.wrap.rotation.y;
+      const lx = dx * Math.cos(th) - dz * Math.sin(th);
+      const lz = dx * Math.sin(th) + dz * Math.cos(th);
+      if (Math.abs(lx) < inner.hw && Math.abs(lz) < inner.hd) return l;
+    }
+    return null;
+  }
+  const camPos = new THREE.Vector3(0, 2.2, 36);
 
   // 미니맵
   const mapCanvas = document.getElementById("town-map");
@@ -2969,6 +3076,8 @@ function init() {
       player.position.z = z.entry.z;
       heading = Math.PI; // 블록(북쪽)을 바라보게
       player.rotation.y = heading;
+      camAz = heading + Math.PI; // 숄더뷰 카메라도 같은 방향으로
+      camPitch = -0.07;
       updateNearCard();
     },
     zones: Object.keys(ZONES),
@@ -2980,6 +3089,8 @@ function init() {
       player.position.z = EXP.entry.z;
       heading = Math.PI;
       player.rotation.y = heading;
+      camAz = heading + Math.PI;
+      camPitch = -0.07;
       updateNearCard();
     },
     // 체험 화면(빌드룸·교육관)으로 나가기 전에 현재 위치 저장 → 돌아오면 그 자리(체험존)로 복귀
@@ -2988,6 +3099,11 @@ function init() {
     },
     // 디버그·연출용 카메라 (방위각 rad, 줌 배율)
     setCam(az, zoom) { if (az != null) camAz = az; if (zoom != null) camZoom = Math.max(0.55, Math.min(3.2, zoom)); },
+    // 시점 상태 조회/전환 (테스트·연출용)
+    pov: () => ({ mode: povMode, blend: +povBlend.toFixed(3), aerial: aerialOn, aerialBlend: +aerialBlend.toFixed(3), inside: insideLot ? insideLot.model.slug : null, fov: +camera.fov.toFixed(1), cam: { x: +camera.position.x.toFixed(2), y: +camera.position.y.toFixed(2), z: +camera.position.z.toFixed(2) } }),
+    setPovMode: (m) => setPov(m === "fp" ? "fp" : "tp"),
+    setAerial: (v) => { aerialOn = !!v; },
+    setPitch: (p) => { camPitch = Math.max(-POV.PITCH_MAX, Math.min(POV.PITCH_MAX, p)); },
     quality: () => ({ qLevel, pixelRatio: renderer.getPixelRatio() }),
     _scene: scene,
     _expPortals: expPortals,
@@ -3024,6 +3140,15 @@ function init() {
     // 존 진입 감지 (0.35초 간격이면 충분)
     zoneCheckT += dt;
     if (zoneCheckT > 0.35) { zoneCheckT = 0; checkZoneBanner(); }
+    // 집 안/밖 자동 시점 전환 (0.2초 간격 판정 — 블렌더 실물 모델만 내부 있음)
+    povCheckT += dt;
+    if (povCheckT > 0.2) {
+      povCheckT = 0;
+      const l = lotPlayerIsIn();
+      if (l && !insideLot) setPov("fp");       // 현관으로 들어옴 → 1인칭
+      else if (!l && insideLot) setPov("tp");  // 밖으로 나감 → 3인칭
+      insideLot = l;
+    }
 
     let mx = 0, mz = 0;
     if (keys.has("f")) mz -= 1;
@@ -3033,30 +3158,37 @@ function init() {
     if (joy.active) { mx += joy.x; mz += joy.y; }
     const mag = Math.min(Math.hypot(mx, mz), 1);
     const moving = mag > 0.12;
-    // Shift 또는 조이스틱을 끝까지 밀면 달리기
-    const sprinting = moving && (shiftHeld || (joy.active && mag > 0.94));
+    const fpNow = povBlend > 0.5; // 1인칭 상태 (집 안)
+    // Shift 또는 조이스틱을 끝까지 밀면 달리기 — 1인칭(실내)에서는 달리기 없음
+    const sprinting = !fpNow && moving && (shiftHeld || (joy.active && mag > 0.94));
+    if (aerialOn && moving) aerialOn = false; // 전체 보기 중 이동 입력 → 캐릭터 시점 복귀
     stepTick(dt, moving, sprinting, player.position.y <= 0.01); // 발소리
 
+    // 가속·감속 (ACCEL_T): 입력을 바로 속도로 쓰지 않고 부드럽게 따라가게
+    velMag += ((moving ? mag : 0) - velMag) * Math.min(1, dt / POV.ACCEL_T);
     if (moving) {
       // 입력을 카메라 방향 기준으로 회전 (시점을 돌려도 W = 화면 앞)
       const ca = Math.cos(camAz), sa = Math.sin(camAz);
       const wx = mx * ca + mz * sa;
       const wz = -mx * sa + mz * ca;
-      const dir = Math.atan2(wx, wz);
-      const speed = sprinting ? RUN_SPEED : WALK_SPEED;
-      player.position.x += Math.sin(dir) * speed * mag * dt;
-      player.position.z += Math.cos(dir) * speed * mag * dt;
+      lastMoveDir = Math.atan2(wx, wz);
+    }
+    if (velMag > 0.015) {
+      const speed = fpNow ? POV.FP_WALK : sprinting ? POV.RUN : POV.WALK;
+      player.position.x += Math.sin(lastMoveDir) * speed * velMag * dt;
+      player.position.z += Math.cos(lastMoveDir) * speed * velMag * dt;
       // 사각 부지 경계 안에서만 이동. 남쪽은 정문(|x|<7.5)으로만 출입
       player.position.x = Math.max(-SITE.x + 2, Math.min(SITE.x - 2, player.position.x));
       const zMax = Math.abs(player.position.x) < 7.5 ? SITE.zS + 8 : SITE.zS - 1.5;
       player.position.z = Math.max(SITE.zN + 2, Math.min(zMax, player.position.z));
       if (player.position.z > SITE.zS - 1.5) player.position.x = Math.max(-7.4, Math.min(7.4, player.position.x));
-      let target = dir;
-      let diff = target - heading;
+      let diff = lastMoveDir - heading;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
       heading += diff * Math.min(1, dt * 10);
       player.rotation.y = heading;
+    }
+    if (moving) {
       const wantRun = sprinting && playerRig && playerRig.run;
       const active = playerRig ? (wantRun ? playerRig.run : playerRig.walk) : null;
       const idle = playerRig ? (wantRun ? playerRig.walk : playerRig.run) : null;
@@ -3261,14 +3393,56 @@ function init() {
     let wph = 1;
     remotes.forEach((r) => flapWings(r.group, r.group.position.y, true, wph++));
 
-    // 시점: 줌·회전 반영
-    camOffset.set(Math.sin(camAz) * 9.5 * camZoom, 6.2 * camZoom, Math.cos(camAz) * 9.5 * camZoom);
-    scene.fog.near = 55 * Math.max(1, camZoom);
-    scene.fog.far = 155 * Math.max(1, camZoom);
-    camPos.lerp(new THREE.Vector3().copy(player.position).add(camOffset), 1 - Math.pow(0.001, dt));
-    camera.position.copy(camPos);
-    lookAt.lerp(new THREE.Vector3(player.position.x, player.position.y + 1.2, player.position.z), 1 - Math.pow(0.0005, dt));
-    camera.lookAt(lookAt);
+    // ===== 시점: 3인칭 숄더뷰 / 1인칭(집 내부) / 전체 보기(조감) =====
+    {
+      // 모드 블렌딩 (SWITCH_T / AERIAL_T 동안 ease-in-out)
+      const toFp = povMode === "fp" ? 1 : 0;
+      povBlend += Math.sign(toFp - povBlend) * Math.min(Math.abs(toFp - povBlend), dt / POV.SWITCH_T);
+      const toAer = aerialOn ? 1 : 0;
+      aerialBlend += Math.sign(toAer - aerialBlend) * Math.min(Math.abs(toAer - aerialBlend), dt / POV.AERIAL_T);
+      const eb = easeIO(povBlend), ea = easeIO(aerialBlend);
+      // 공통 시선 벡터 (yaw=camAz, pitch=camPitch)
+      const cpc = Math.cos(camPitch), sps = Math.sin(camPitch);
+      _V.set(-Math.sin(camAz) * cpc, sps, -Math.cos(camAz) * cpc);
+      _right.set(Math.cos(camAz), 0, -Math.sin(camAz));
+      // --- 3인칭 숄더뷰: 어깨 피벗에서 뒤로 TP_BACK, 시선은 앞 TP_LOOK_AHEAD ---
+      _pivot.set(player.position.x, player.position.y + POV.TP_HEIGHT - 0.2, player.position.z).addScaledVector(_right, POV.TP_SIDE);
+      let back = POV.TP_BACK * camZoom;
+      // 카메라 충돌: 피벗→카메라 레이캐스트 (매 프레임 1회, 집 박스 콜라이더만 검사)
+      _camDir.copy(_V).multiplyScalar(-1);
+      camRay.set(_pivot, _camDir);
+      camRay.far = back;
+      const hit = camRay.intersectObjects(camColliders, false)[0];
+      if (hit) back = Math.max(POV.CAM_MIN_DIST, hit.distance - 0.18);
+      _tpPos.copy(_pivot).addScaledVector(_V, -back);
+      if (_tpPos.y < 0.45) _tpPos.y = 0.45; // 바닥 뚫기 방지
+      _tpLook.copy(_pivot).addScaledVector(_V, POV.TP_LOOK_AHEAD);
+      // --- 1인칭: 눈높이 FP_EYE 고정 ---
+      _fpPos.set(player.position.x, player.position.y + POV.FP_EYE, player.position.z);
+      _fpLook.copy(_fpPos).addScaledVector(_V, 8);
+      // --- 혼합 + 조감 ---
+      _tpPos.lerp(_fpPos, eb);
+      _tpLook.lerp(_fpLook, eb);
+      let fov = POV.TP_FOV + (POV.FP_FOV - POV.TP_FOV) * eb;
+      if (ea > 0.001) {
+        _tpPos.lerp(_aerPos, ea);
+        _tpLook.lerp(_aerLook, ea);
+        fov += (POV.AERIAL_FOV - fov) * ea;
+      }
+      // 부드러운 추적 — 1인칭 완성 상태에서는 즉시 고정(머리 둥실거림·멀미 방지)
+      const snap = eb > 0.98 && ea < 0.01;
+      const k = 1 - Math.pow(1 - POV.TP_LERP, dt * 60);
+      camPos.lerp(_tpPos, snap ? 1 : k);
+      camera.position.copy(camPos);
+      lookAt.lerp(_tpLook, snap ? 1 : Math.min(1, k * 1.7));
+      camera.lookAt(lookAt);
+      if (Math.abs(camera.fov - fov) > 0.05) { camera.fov = fov; camera.updateProjectionMatrix(); }
+      // 1인칭일 때 내 캐릭터(라벨·풍선 포함)만 숨김 — 다른 방문자는 그대로 보임
+      player.visible = eb < 0.6;
+      // 안개: 평소 고정, 조감 시 멀리까지
+      scene.fog.near = 55 + 90 * ea;
+      scene.fog.far = 155 + 340 * ea;
+    }
 
     // 미니맵 갱신 (0.15초 간격)
     if (mapCtx) {
