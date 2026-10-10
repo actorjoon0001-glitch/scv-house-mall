@@ -5,6 +5,8 @@ import { GLTFLoader } from "./GLTFLoader.js";
 import { DRACOLoader } from "./DRACOLoader.js";
 import { RGBELoader } from "./RGBELoader.js";
 import { clone as skeletonClone } from "./SkeletonUtils.js";
+import { mergeGeometries } from "./BufferGeometryUtils.js";
+import { MeshBVH, acceleratedRaycast } from "./three-mesh-bvh.module.js";
 import { buildHouseMerged, HOUSE_SPECS } from "./house-kit.js";
 import { EffectComposer } from "./postprocessing/EffectComposer.js";
 import { RenderPass } from "./postprocessing/RenderPass.js";
@@ -31,6 +33,8 @@ const EXPO_ASSET = {
 // 홀이 차지하는 footprint — 이 안의 야외 조경 인스턴스(나무·소품·풀)는 생성하지 않는다
 const EXPO_FOOT = { x: 43.5, z: 29.5 };
 const inExpoFoot = (x, z) => EXPO_MODE && Math.abs(x) < EXPO_FOOT.x && Math.abs(z) < EXPO_FOOT.z;
+// BVH 가속 레이캐스트 (boundsTree 있는 메시만 가속, 나머진 기존과 동일)
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 // ---------- 로딩 화면: 진행률 + 팁 로테이션 ----------
 // GLB·HDRI·텍스처가 모두 기본 로딩매니저를 쓰므로 전체 진행률을 한 번에 집계할 수 있다.
@@ -2023,6 +2027,7 @@ function init() {
   };
   let expoCeiling = null;
   let expoHouseBoxes = []; // 미니맵용 [{x,z,w,d}]
+  let expoCollider = null; // 플레이어 벽 충돌용 BVH 메시 (유리 제외 → 문으로만 출입)
   function placeExpo() {
     // 본체 (홀·부스·전시주택·간판) — 부스·가구가 그림자를 드리워 깊이감을 주고,
     // 하늘 HDRI 환경광은 실내 과노출의 주범이라 크게 줄인다
@@ -2052,6 +2057,35 @@ function init() {
         g.position.y = EXPO_ASSET.y;
         scene.add(g);
         clickTargets.push(g);
+        // ---- 플레이어 벽 충돌체 (BVH) ----
+        // 불투명 메시만 모아 하나의 충돌 지오메트리로 병합. 유리(투명 변환된 재질)는
+        // 제외해서 폴딩도어·유리문으로는 걸어 들어갈 수 있다. 창문은 하부 벽턱이 막음.
+        setTimeout(() => {
+          try {
+            g.updateMatrixWorld(true);
+            const geos = [];
+            g.traverse((o) => {
+              if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+              if (o.material && o.material.transparent) return; // 유리 통과 허용
+              const cg = new THREE.BufferGeometry();
+              cg.setAttribute("position", o.geometry.attributes.position.clone());
+              if (o.geometry.index) cg.setIndex(o.geometry.index.clone());
+              else {
+                const n = o.geometry.attributes.position.count;
+                const idx = new Uint32Array(n);
+                for (let i = 0; i < n; i++) idx[i] = i;
+                cg.setIndex(new THREE.BufferAttribute(idx, 1));
+              }
+              cg.applyMatrix4(o.matrixWorld);
+              geos.push(cg);
+            });
+            if (!geos.length) return;
+            const merged = mergeGeometries(geos, false);
+            merged.boundsTree = new MeshBVH(merged);
+            expoCollider = new THREE.Mesh(merged, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+            // 씬에 넣지 않음 — 레이캐스트 전용 (렌더 부담 0)
+          } catch (e) {}
+        }, 400);
       })
       .catch(() => {});
     // 천장 — 전체 보기(조감) 때 숨겨서 홀 내부가 내려다보이게
@@ -2997,6 +3031,43 @@ function init() {
   const _tpPos = new THREE.Vector3(), _tpLook = new THREE.Vector3();
   const _fpPos = new THREE.Vector3(), _fpLook = new THREE.Vector3();
   const _aerPos = new THREE.Vector3(0, POV.AERIAL_H, 34), _aerLook = new THREE.Vector3(0, 0, -6);
+  // ---------- 플레이어 벽 충돌 (박람회장) ----------
+  const _wallRay = new THREE.Raycaster();
+  _wallRay.firstHitOnly = true;
+  const _groundRay = new THREE.Raycaster();
+  _groundRay.firstHitOnly = true;
+  const _DOWN = new THREE.Vector3(0, -1, 0);
+  const _rayO = new THREE.Vector3(), _rayD = new THREE.Vector3();
+  let groundY = 0; // 발밑 지면 높이 (홀 바닥·포치·데크 단차)
+  // 이동 벡터를 벽에 막히면 벽면을 따라 미끄러지게 보정.
+  // 무릎·허리·가슴 레이 3개 중 2개 이상 맞아야 차단 — 폴딩도어의 얇은 가로 프레임 바
+  // 하나에 걸려 문을 못 지나는 일을 막는다 (벽·난간·창턱은 2개 이상 걸려 차단됨).
+  function collideMove(dx, dz) {
+    if (!expoCollider) return [dx, dz];
+    for (let pass = 0; pass < 2; pass++) {
+      const len = Math.hypot(dx, dz);
+      if (len < 1e-5) return [0, 0];
+      _rayD.set(dx / len, 0, dz / len);
+      let hit = null;
+      let hits = 0;
+      for (const h of [0.45, 0.95, 1.45]) {
+        _rayO.set(player.position.x, player.position.y + h, player.position.z);
+        _wallRay.set(_rayO, _rayD);
+        _wallRay.far = len + 0.33; // 몸 반경
+        const r = _wallRay.intersectObject(expoCollider, false)[0];
+        if (r) {
+          hits++;
+          if (!hit || r.distance < hit.distance) hit = r;
+        }
+      }
+      if (hits < 2) return [dx, dz];
+      const n = hit.face.normal;
+      const d = dx * n.x + dz * n.z;
+      dx -= n.x * d;
+      dz -= n.z * d;
+    }
+    return [0, 0];
+  }
   function setPov(mode) { povMode = mode; }
   const povBtn = document.getElementById("town-pov");
   if (povBtn) povBtn.addEventListener("click", () => setPov(povMode === "fp" ? "tp" : "fp"));
@@ -3348,10 +3419,25 @@ function init() {
     // 디버그·연출용 카메라 (방위각 rad, 줌 배율)
     setCam(az, zoom) { if (az != null) camAz = az; if (zoom != null) camZoom = Math.max(0.55, Math.min(3.2, zoom)); },
     // 시점 상태 조회/전환 (테스트·연출용)
-    pov: () => ({ mode: povMode, blend: +povBlend.toFixed(3), aerial: aerialOn, aerialBlend: +aerialBlend.toFixed(3), inside: insideLot ? insideLot.model.slug : null, fov: +camera.fov.toFixed(1), cam: { x: +camera.position.x.toFixed(2), y: +camera.position.y.toFixed(2), z: +camera.position.z.toFixed(2) } }),
+    pov: () => ({ mode: povMode, blend: +povBlend.toFixed(3), aerial: aerialOn, aerialBlend: +aerialBlend.toFixed(3), inside: insideLot ? insideLot.model.slug : null, fov: +camera.fov.toFixed(1), cam: { x: +camera.position.x.toFixed(2), y: +camera.position.y.toFixed(2), z: +camera.position.z.toFixed(2) }, me: { x: +player.position.x.toFixed(2), y: +player.position.y.toFixed(2), z: +player.position.z.toFixed(2) }, gy: +groundY.toFixed(2), collider: !!expoCollider }),
     setPovMode: (m) => setPov(m === "fp" ? "fp" : "tp"),
     setAerial: (v) => { aerialOn = !!v; },
     expoCeilingVisible: () => (expoCeiling ? expoCeiling.visible : null),
+    // 디버그: 현재 위치에서 이동 벡터가 충돌 보정 후 얼마나 남는지 (검증용)
+    moveTest: (dx, dz) => { const r = collideMove(dx, dz); return [+r[0].toFixed(4), +r[1].toFixed(4)]; },
+    // 디버그: 두 점 사이 충돌체 히트 거리 (-1 = 뚫림) — 출입구 탐색용
+    probe: (x1, y1, z1, x2, y2, z2) => {
+      if (!expoCollider) return null;
+      _rayO.set(x1, y1, z1);
+      _rayD.set(x2 - x1, y2 - y1, z2 - z1);
+      const len = _rayD.length();
+      if (len < 1e-6) return -1;
+      _rayD.normalize();
+      _wallRay.set(_rayO, _rayD);
+      _wallRay.far = len;
+      const r = _wallRay.intersectObject(expoCollider, false)[0];
+      return r ? +r.distance.toFixed(3) : -1;
+    },
     setPitch: (p) => { camPitch = Math.max(-POV.PITCH_MAX, Math.min(POV.PITCH_MAX, p)); },
     quality: () => ({ qLevel, pixelRatio: renderer.getPixelRatio() }),
     _scene: scene,
@@ -3384,8 +3470,8 @@ function init() {
     tuneQuality(Math.min(rawDt, 1)); // FPS 측정은 실제 프레임 간격으로
 
     // 발밑 블롭 그림자: 점프 중에도 지면에 붙어 있고, 높이에 따라 작아짐
-    playerBlob.position.y = 0.05 - player.position.y;
-    playerBlob.scale.setScalar(Math.max(0.45, 1 - player.position.y * 0.22));
+    playerBlob.position.y = 0.05 + groundY - player.position.y;
+    playerBlob.scale.setScalar(Math.max(0.45, 1 - Math.max(0, player.position.y - groundY) * 0.22));
     // 존 진입 감지 (0.35초 간격이면 충분)
     zoneCheckT += dt;
     if (zoneCheckT > 0.35) { zoneCheckT = 0; if (!EXPO_MODE) checkZoneBanner(); }
@@ -3424,8 +3510,12 @@ function init() {
     }
     if (velMag > 0.015) {
       const speed = fpNow ? POV.FP_WALK : sprinting ? POV.RUN : POV.WALK;
-      player.position.x += Math.sin(lastMoveDir) * speed * velMag * dt;
-      player.position.z += Math.cos(lastMoveDir) * speed * velMag * dt;
+      let mvx = Math.sin(lastMoveDir) * speed * velMag * dt;
+      let mvz = Math.cos(lastMoveDir) * speed * velMag * dt;
+      // 박람회장: 벽·부스·집 외벽 통과 금지 (유리문으로만 출입). 지붕 위 비행은 자유.
+      if (EXPO_MODE && player.position.y < 3.4) [mvx, mvz] = collideMove(mvx, mvz);
+      player.position.x += mvx;
+      player.position.z += mvz;
       if (EXPO_MODE) {
         // 박람회장 홀 내부에서만 이동 (외벽 안쪽)
         player.position.x = Math.max(-41, Math.min(41, player.position.x));
@@ -3460,6 +3550,21 @@ function init() {
       if (playerRig.run) playerRig.run.paused = true;
     }
 
+    // 발밑 지면 높이 (박람회장: 홀 바닥·포치·데크 단차를 밟고 오르내리게)
+    if (EXPO_MODE && expoCollider) {
+      _rayO.set(player.position.x, player.position.y + 1.45, player.position.z);
+      _groundRay.set(_rayO, _DOWN);
+      _groundRay.far = 24;
+      const gh = _groundRay.intersectObject(expoCollider, false)[0];
+      groundY = gh ? gh.point.y : 0;
+      if (!airborne) {
+        const dy = groundY - player.position.y;
+        if (dy > 0.01 && dy <= 0.5) player.position.y = groundY;          // 단차 오르기 (계단·포치)
+        else if (dy < -0.12) { airborne = true; vy = 0; }                  // 모서리에서 낙하
+        else if (Math.abs(dy) <= 0.01) player.position.y = groundY;       // 지면 밀착
+      }
+    } else groundY = 0;
+
     // 점프·비행 물리 — 키를 꾹 누르면 날개 추진으로 상승, 놓으면 활공하며 천천히 하강
     if (airborne) {
       if (flyHeld) {
@@ -3472,7 +3577,7 @@ function init() {
       }
       player.position.y += vy * dt;
       if (player.position.y >= FLY_MAX_Y) { player.position.y = FLY_MAX_Y; if (vy > 0) vy = 0; }
-      if (player.position.y <= 0) { player.position.y = 0; vy = 0; airborne = false; playLand(); }
+      if (player.position.y <= groundY) { player.position.y = groundY; vy = 0; airborne = false; playLand(); }
     }
 
     if (playerRig && playerRig.mixer) playerRig.mixer.update(dt);
