@@ -17,6 +17,21 @@ const loadingEl = document.getElementById("town-loading");
 const joyBase = document.getElementById("town-joystick");
 const joyStick = document.getElementById("town-stick");
 
+// ---------- 박람회장 모드 ----------
+// 대표님이 블렌더로 만든 실내 박람회장(84×56m 홀 + 부스 8개 + 전시 주택 7채)을
+// 부지 중앙에 1:1로 설치한다. 기존 절차 생성 마을(존·43채·NPC·조경 일부)은 끈다.
+// (조명·그림자 설정보다 먼저 필요해 파일 최상단에 선언)
+const EXPO_MODE = true;
+const EXPO_ASSET = {
+  main: "assets/expo/expo-main.glb",       // 홀+부스+전시주택+간판 (draco+webp, 천장 제외)
+  ceiling: "assets/expo/expo-ceiling.glb", // 천장만 분리 — 조감(전체 보기) 때 숨김
+  layout: "assets/expo/expo-layout.json",  // 집·부스 박스(1인칭 판정/충돌)·스폰
+  y: 0.06, // 홀 바닥 슬래브가 기존 포장 위에 얹히게 살짝 띄움
+};
+// 홀이 차지하는 footprint — 이 안의 야외 조경 인스턴스(나무·소품·풀)는 생성하지 않는다
+const EXPO_FOOT = { x: 43.5, z: 29.5 };
+const inExpoFoot = (x, z) => EXPO_MODE && Math.abs(x) < EXPO_FOOT.x && Math.abs(z) < EXPO_FOOT.z;
+
 // ---------- 로딩 화면: 진행률 + 팁 로테이션 ----------
 // GLB·HDRI·텍스처가 모두 기본 로딩매니저를 쓰므로 전체 진행률을 한 번에 집계할 수 있다.
 {
@@ -126,8 +141,10 @@ function init() {
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   // 그림자 카메라를 플레이어 주변에만 집중시켜 같은 해상도로 훨씬 선명한 그림자 (tick에서 추적)
-  sun.shadow.camera.left = -36; sun.shadow.camera.right = 36;
-  sun.shadow.camera.top = 36; sun.shadow.camera.bottom = -36;
+  // 박람회장(실내)은 범위를 더 좁혀 실내 가구 그림자의 지그재그를 줄인다
+  const SHADOW_EXT = EXPO_MODE ? 22 : 36;
+  sun.shadow.camera.left = -SHADOW_EXT; sun.shadow.camera.right = SHADOW_EXT;
+  sun.shadow.camera.top = SHADOW_EXT; sun.shadow.camera.bottom = -SHADOW_EXT;
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.02; // 벽면 그림자 줄무늬(acne) 제거
   scene.add(sun);
@@ -152,6 +169,7 @@ function init() {
       sun.intensity = 1.95;
       renderer.toneMappingExposure = 1.12;
       scene.fog.color.set(0xe7eef4); // 안개 색을 지평선 톤에 맞춤
+      if (EXPO_MODE) { sun.intensity = 1.3; renderer.toneMappingExposure = 1.04; } // 실내 과노출 방지(밝은 쇼룸 톤)
     },
     undefined,
     () => {} // 실패 시 기존 단색 하늘·조명 유지
@@ -256,6 +274,11 @@ function init() {
         scene.fog.color.set(0xbfe0f5);
       }
       renderer.toneMappingExposure = 1.12;
+    }
+    // 박람회장(실내): 태양이 지붕을 통과해 실내가 과노출됨 → 직광·노출 상한 (밤은 그대로)
+    if (EXPO_MODE && !night) {
+      sun.intensity = Math.min(sun.intensity, dusk ? 1.1 : 1.3);
+      renderer.toneMappingExposure = Math.min(renderer.toneMappingExposure, 1.04);
     }
     // 시간대별 화면 그레이드 (골든아워는 화면 전체에 따뜻한 워시)
     canvas.style.filter = night
@@ -424,20 +447,6 @@ function init() {
       });
     }
   }
-
-  // ---------- 박람회장 모드 ----------
-  // 대표님이 블렌더로 만든 실내 박람회장(84×56m 홀 + 부스 8개 + 전시 주택 7채)을
-  // 부지 중앙에 1:1로 설치한다. 기존 절차 생성 마을(존·43채·NPC·조경 일부)은 끈다.
-  const EXPO_MODE = true;
-  const EXPO_ASSET = {
-    main: "assets/expo/expo-main.glb",       // 홀+부스+전시주택+간판 (draco+webp, 천장 제외)
-    ceiling: "assets/expo/expo-ceiling.glb", // 천장만 분리 — 조감(전체 보기) 때 숨김
-    layout: "assets/expo/expo-layout.json",  // 집·부스 박스(1인칭 판정/충돌)·스폰
-    y: 0.06, // 홀 바닥 슬래브가 기존 포장 위에 얹히게 살짝 띄움
-  };
-  // 홀이 차지하는 footprint — 이 안의 야외 조경 인스턴스(나무·소품·풀)는 생성하지 않는다
-  const EXPO_FOOT = { x: 43.5, z: 29.5 };
-  const inExpoFoot = (x, z) => EXPO_MODE && Math.abs(x) < EXPO_FOOT.x && Math.abs(z) < EXPO_FOOT.z;
 
   // ---------- 부지 (전시장 대지: 사각 경계) ----------
   // 부지·통로·존 구획은 관리자 격자(존 데이터)와 같은 좌표 체계에서 생성된다.
@@ -2015,10 +2024,16 @@ function init() {
   let expoCeiling = null;
   let expoHouseBoxes = []; // 미니맵용 [{x,z,w,d}]
   function placeExpo() {
-    // 본체 (홀·부스·전시주택·간판) — 햇빛 그림자는 받기만 (실내가 어두워지지 않게)
+    // 본체 (홀·부스·전시주택·간판) — 부스·가구가 그림자를 드리워 깊이감을 주고,
+    // 하늘 HDRI 환경광은 실내 과노출의 주범이라 크게 줄인다
     loadGlb(EXPO_ASSET.main)
       .then((g) => {
-        g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; } });
+        g.traverse((o) => {
+          if (!o.isMesh) return;
+          o.castShadow = true;
+          o.receiveShadow = true;
+          if (o.material && "envMapIntensity" in o.material) o.material.envMapIntensity = 0.45;
+        });
         g.position.y = EXPO_ASSET.y;
         scene.add(g);
         clickTargets.push(g);
@@ -2034,6 +2049,7 @@ function init() {
           if (o.material) {
             o.material.metalness = 0;
             o.material.roughness = 0.92;
+            o.material.envMapIntensity = 0.32;
             if (o.material.color) o.material.color.lerp(new THREE.Color(0xffffff), 0.72);
             if (o.material.emissive) o.material.emissive.setHex(0x14110c);
           }
@@ -2043,8 +2059,8 @@ function init() {
         scene.add(g);
       })
       .catch(() => {});
-    // 실내 보조광 — 홀 안이 칙칙하지 않게 은은한 앰비언트
-    scene.add(new THREE.AmbientLight(0xfff4e2, 0.3));
+    // 실내 보조광 — 홀 안이 칙칙하지 않게 은은한 앰비언트 (과하면 하얗게 뜸)
+    scene.add(new THREE.AmbientLight(0xfff4e2, 0.22));
     // 레이아웃: 집 박스(1인칭 자동 전환·근접 카드·클릭·카메라 충돌) + 부스·외벽 충돌
     fetch(EXPO_ASSET.layout)
       .then((r) => r.json())
@@ -2076,8 +2092,18 @@ function init() {
           clickTargets.push(wrap);
           houseLots.push({ wrap, model, h: b.ht });
           expoHouseBoxes.push({ x: wrap.position.x, z: wrap.position.z, w: b.w, d: b.d });
+          // 전시주택 실내등 — 지붕이 태양을 가려 실내가 어두워지는 것 보완 (따뜻한 포인트)
+          const hl = new THREE.PointLight(0xffe8c8, 13, Math.max(b.w, b.d) * 1.25, 2);
+          hl.position.set(wrap.position.x, Math.min(2.3, b.ht * 0.6), wrap.position.z);
+          scene.add(hl);
         });
         (L.booths || []).forEach((bx) => addBox(bx.min, bx.max, 0));
+        // 블렌더 조명 설계 재현 — 통로 천장등 4개 (베이크 없이도 홀이 살아나게)
+        (L.aisleLights || []).filter((lt) => lt.n && lt.n.startsWith("통로")).forEach((lt) => {
+          const pl = new THREE.PointLight(0xfff0dc, 26, 36, 2);
+          pl.position.set(lt.p[0], Math.max(4, lt.p[1] - 0.5), lt.p[2]);
+          scene.add(pl);
+        });
         // 외벽 4면 (얇은 박스) — 카메라가 홀 밖으로 뚫고 나가지 않게
         const hm = L.hall ? L.hall : { min: [-42.2, 0, -28.2], max: [42.2, 9, 28.2] };
         const x0 = Math.min(hm.min[0], hm.max[0]), x1 = Math.max(hm.min[0], hm.max[0]);
