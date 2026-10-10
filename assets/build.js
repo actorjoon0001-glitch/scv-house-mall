@@ -3,6 +3,7 @@
 // 오버라이드 가능하며, 아래 DEFAULT_*는 데이터가 없을 때의 폴백이다.
 import * as THREE from "three";
 import { GLTFLoader } from "./GLTFLoader.js";
+import { DRACOLoader } from "./DRACOLoader.js";
 import { buildHouseMerged, HOUSE_SPECS } from "./house-kit.js";
 
 const stage = document.getElementById("build-stage");
@@ -38,11 +39,25 @@ let OPTIONS = DEFAULT_OPTIONS;
 const CAT_SB = "https://aypugjvzvwinnmpquguj.supabase.co";
 const CAT_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5cHVnanZ6dndpbm5tcHF1Z3VqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1NjQ0ODIsImV4cCI6MjA4OTE0MDQ4Mn0.yLBG31-8VGWai9Rpv9RtVxZwwWMsKI_syGs0QN7PkUU";
 let MODELS = [];
-// 블렌더 정밀 제작 모델 — 도면 기반 1:1 GLB (카탈로그와 별개 로컬 등록)
+// 블렌더 정밀 제작 모델 — 세움 3D 홈플래너에서 대표님이 직접 디테일 잡은 실측 1:1 GLB
+//   (가구·소품·베이크 질감 포함, 조명·카메라는 로드 시 제거. draco+webp 압축본)
 const BLENDER_MODELS = [
-  { slug: "gocheonri-a", name: "고천리 A동 · 도면 1:1", category: "블렌더 정밀", size: "10평", base_price: 0, main_image: "", glb: "assets/houses/gocheonri-a.glb" },
+  { slug: "seum-shelter-10", name: "체류형 쉼터 10평 · 마곡 전시", category: "블렌더 정밀", size: "10평", base_price: 0, main_image: "assets/houses/thumbs/seum-shelter-10.jpg", glb: "assets/houses/seum-shelter-10.glb" },
+  { slug: "twin-10", name: "쌍둥이 10평 (6평+4평·중앙데크)", category: "블렌더 정밀", size: "10평", base_price: 0, main_image: "assets/houses/thumbs/twin-10.jpg", glb: "assets/houses/twin-10.glb" },
+  { slug: "twin-10-L", name: "쌍둥이 10평 ㄱ자형", category: "블렌더 정밀", size: "10평", base_price: 0, main_image: "assets/houses/thumbs/twin-10-L.jpg", glb: "assets/houses/twin-10-L.glb" },
+  { slug: "twin-10-2f", name: "쌍둥이 10평 2층형", category: "블렌더 정밀", size: "10평", base_price: 0, main_image: "assets/houses/thumbs/twin-10-2f.jpg", glb: "assets/houses/twin-10-2f.glb" },
+  { slug: "seum-hwangto", name: "황토찜질방 (3×4m+포치)", category: "블렌더 정밀", size: "4평", base_price: 0, main_image: "assets/houses/thumbs/seum-hwangto.jpg", glb: "assets/houses/seum-hwangto.glb" },
 ];
+// 카탈로그 판매 모델 중 블렌더 실물 GLB가 있는 것 — 키트 대신 실물 모델로 배치
+const CATALOG_GLB = {
+  stay15w: "assets/houses/seum-15.glb",          // STAY15-BK 15평
+  "stay-19rb": "assets/houses/seum-bonjeom-19.glb", // STAY19-BK 19평 (본점)
+  stay24w: "assets/houses/seum-24.glb",          // STAY24-WB 24평
+};
 const gltfLoader = new GLTFLoader();
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath("assets/draco/");
+gltfLoader.setDRACOLoader(dracoLoader);
 const glbCache = {};
 function loadGlb(url) {
   if (!glbCache[url]) {
@@ -1305,7 +1320,9 @@ Promise.all([
     const b = (cfg.data && cfg.data.build) || {};
     if (Array.isArray(b.units) && b.units.length) UNITS = b.units;
     if (b.options) OPTIONS = Object.assign({}, DEFAULT_OPTIONS, b.options);
-    MODELS = BLENDER_MODELS.concat(Array.isArray(models) ? models : []);
+    const cat = Array.isArray(models) ? models : [];
+    cat.forEach((m) => { if (CATALOG_GLB[m.slug]) m.glb = CATALOG_GLB[m.slug]; });
+    MODELS = BLENDER_MODELS.concat(cat);
   })
   .then(() => {
     renderPalette();
