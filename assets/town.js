@@ -152,7 +152,7 @@ function init() {
       sun.intensity = 1.95;
       renderer.toneMappingExposure = 1.12;
       scene.fog.color.set(0xe7eef4); // 안개 색을 지평선 톤에 맞춤
-      if (EXPO_MODE) { sun.intensity = 1.0; renderer.toneMappingExposure = 0.98; } // 실내 과노출 방지
+      if (EXPO_MODE) { sun.intensity = 1.3; renderer.toneMappingExposure = 1.04; } // 실내 과노출 방지(밝은 쇼룸 톤)
     },
     undefined,
     () => {} // 실패 시 기존 단색 하늘·조명 유지
@@ -260,8 +260,8 @@ function init() {
     }
     // 박람회장(실내): 태양이 지붕을 통과해 실내가 과노출됨 → 직광·노출 상한 (밤은 그대로)
     if (EXPO_MODE && !night) {
-      sun.intensity = Math.min(sun.intensity, dusk ? 0.9 : 1.0);
-      renderer.toneMappingExposure = Math.min(renderer.toneMappingExposure, 0.98);
+      sun.intensity = Math.min(sun.intensity, dusk ? 1.1 : 1.3);
+      renderer.toneMappingExposure = Math.min(renderer.toneMappingExposure, 1.04);
     }
     // 시간대별 화면 그레이드 (골든아워는 화면 전체에 따뜻한 워시)
     canvas.style.filter = night
@@ -2029,7 +2029,7 @@ function init() {
           if (!o.isMesh) return;
           o.castShadow = true;
           o.receiveShadow = true;
-          if (o.material && "envMapIntensity" in o.material) o.material.envMapIntensity = 0.32;
+          if (o.material && "envMapIntensity" in o.material) o.material.envMapIntensity = 0.45;
         });
         g.position.y = EXPO_ASSET.y;
         scene.add(g);
@@ -2057,7 +2057,7 @@ function init() {
       })
       .catch(() => {});
     // 실내 보조광 — 홀 안이 칙칙하지 않게 은은한 앰비언트 (과하면 하얗게 뜸)
-    scene.add(new THREE.AmbientLight(0xfff4e2, 0.16));
+    scene.add(new THREE.AmbientLight(0xfff4e2, 0.22));
     // 레이아웃: 집 박스(1인칭 자동 전환·근접 카드·클릭·카메라 충돌) + 부스·외벽 충돌
     fetch(EXPO_ASSET.layout)
       .then((r) => r.json())
@@ -2089,8 +2089,18 @@ function init() {
           clickTargets.push(wrap);
           houseLots.push({ wrap, model, h: b.ht });
           expoHouseBoxes.push({ x: wrap.position.x, z: wrap.position.z, w: b.w, d: b.d });
+          // 전시주택 실내등 — 지붕이 태양을 가려 실내가 어두워지는 것 보완 (따뜻한 포인트)
+          const hl = new THREE.PointLight(0xffe8c8, 13, Math.max(b.w, b.d) * 1.25, 2);
+          hl.position.set(wrap.position.x, Math.min(2.3, b.ht * 0.6), wrap.position.z);
+          scene.add(hl);
         });
         (L.booths || []).forEach((bx) => addBox(bx.min, bx.max, 0));
+        // 블렌더 조명 설계 재현 — 통로 천장등 4개 (베이크 없이도 홀이 살아나게)
+        (L.aisleLights || []).filter((lt) => lt.n && lt.n.startsWith("통로")).forEach((lt) => {
+          const pl = new THREE.PointLight(0xfff0dc, 26, 36, 2);
+          pl.position.set(lt.p[0], Math.max(4, lt.p[1] - 0.5), lt.p[2]);
+          scene.add(pl);
+        });
         // 외벽 4면 (얇은 박스) — 카메라가 홀 밖으로 뚫고 나가지 않게
         const hm = L.hall ? L.hall : { min: [-42.2, 0, -28.2], max: [42.2, 9, 28.2] };
         const x0 = Math.min(hm.min[0], hm.max[0]), x1 = Math.max(hm.min[0], hm.max[0]);
