@@ -152,6 +152,7 @@ function init() {
       sun.intensity = 1.95;
       renderer.toneMappingExposure = 1.12;
       scene.fog.color.set(0xe7eef4); // 안개 색을 지평선 톤에 맞춤
+      if (EXPO_MODE) { sun.intensity = 1.0; renderer.toneMappingExposure = 0.98; } // 실내 과노출 방지
     },
     undefined,
     () => {} // 실패 시 기존 단색 하늘·조명 유지
@@ -256,6 +257,11 @@ function init() {
         scene.fog.color.set(0xbfe0f5);
       }
       renderer.toneMappingExposure = 1.12;
+    }
+    // 박람회장(실내): 태양이 지붕을 통과해 실내가 과노출됨 → 직광·노출 상한 (밤은 그대로)
+    if (EXPO_MODE && !night) {
+      sun.intensity = Math.min(sun.intensity, dusk ? 0.9 : 1.0);
+      renderer.toneMappingExposure = Math.min(renderer.toneMappingExposure, 0.98);
     }
     // 시간대별 화면 그레이드 (골든아워는 화면 전체에 따뜻한 워시)
     canvas.style.filter = night
@@ -2015,10 +2021,16 @@ function init() {
   let expoCeiling = null;
   let expoHouseBoxes = []; // 미니맵용 [{x,z,w,d}]
   function placeExpo() {
-    // 본체 (홀·부스·전시주택·간판) — 햇빛 그림자는 받기만 (실내가 어두워지지 않게)
+    // 본체 (홀·부스·전시주택·간판) — 부스·가구가 그림자를 드리워 깊이감을 주고,
+    // 하늘 HDRI 환경광은 실내 과노출의 주범이라 크게 줄인다
     loadGlb(EXPO_ASSET.main)
       .then((g) => {
-        g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; } });
+        g.traverse((o) => {
+          if (!o.isMesh) return;
+          o.castShadow = true;
+          o.receiveShadow = true;
+          if (o.material && "envMapIntensity" in o.material) o.material.envMapIntensity = 0.32;
+        });
         g.position.y = EXPO_ASSET.y;
         scene.add(g);
         clickTargets.push(g);
@@ -2034,6 +2046,7 @@ function init() {
           if (o.material) {
             o.material.metalness = 0;
             o.material.roughness = 0.92;
+            o.material.envMapIntensity = 0.32;
             if (o.material.color) o.material.color.lerp(new THREE.Color(0xffffff), 0.72);
             if (o.material.emissive) o.material.emissive.setHex(0x14110c);
           }
@@ -2043,8 +2056,8 @@ function init() {
         scene.add(g);
       })
       .catch(() => {});
-    // 실내 보조광 — 홀 안이 칙칙하지 않게 은은한 앰비언트
-    scene.add(new THREE.AmbientLight(0xfff4e2, 0.3));
+    // 실내 보조광 — 홀 안이 칙칙하지 않게 은은한 앰비언트 (과하면 하얗게 뜸)
+    scene.add(new THREE.AmbientLight(0xfff4e2, 0.16));
     // 레이아웃: 집 박스(1인칭 자동 전환·근접 카드·클릭·카메라 충돌) + 부스·외벽 충돌
     fetch(EXPO_ASSET.layout)
       .then((r) => r.json())
