@@ -2433,6 +2433,9 @@ function init() {
         // 풍선 액세서리는 내 캐릭터에만
         attachBalloon(player, myColor, CHARACTERS[myChar].height);
         attachWings(player, CHARACTERS[myChar].height);
+        // 숄더뷰 카메라가 가까워 내 라벨·풍선이 화면을 가림 → 내 것만 숨김 (다른 방문자 것은 그대로)
+        myLabel.visible = false;
+        if (player.userData.balloon) player.userData.balloon.visible = false;
         player.scale.setScalar(myScale);
         updateNickChip();
         loadingEl.hidden = true;
