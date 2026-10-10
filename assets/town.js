@@ -17,6 +17,21 @@ const loadingEl = document.getElementById("town-loading");
 const joyBase = document.getElementById("town-joystick");
 const joyStick = document.getElementById("town-stick");
 
+// ---------- 박람회장 모드 ----------
+// 대표님이 블렌더로 만든 실내 박람회장(84×56m 홀 + 부스 8개 + 전시 주택 7채)을
+// 부지 중앙에 1:1로 설치한다. 기존 절차 생성 마을(존·43채·NPC·조경 일부)은 끈다.
+// (조명·그림자 설정보다 먼저 필요해 파일 최상단에 선언)
+const EXPO_MODE = true;
+const EXPO_ASSET = {
+  main: "assets/expo/expo-main.glb",       // 홀+부스+전시주택+간판 (draco+webp, 천장 제외)
+  ceiling: "assets/expo/expo-ceiling.glb", // 천장만 분리 — 조감(전체 보기) 때 숨김
+  layout: "assets/expo/expo-layout.json",  // 집·부스 박스(1인칭 판정/충돌)·스폰
+  y: 0.06, // 홀 바닥 슬래브가 기존 포장 위에 얹히게 살짝 띄움
+};
+// 홀이 차지하는 footprint — 이 안의 야외 조경 인스턴스(나무·소품·풀)는 생성하지 않는다
+const EXPO_FOOT = { x: 43.5, z: 29.5 };
+const inExpoFoot = (x, z) => EXPO_MODE && Math.abs(x) < EXPO_FOOT.x && Math.abs(z) < EXPO_FOOT.z;
+
 // ---------- 로딩 화면: 진행률 + 팁 로테이션 ----------
 // GLB·HDRI·텍스처가 모두 기본 로딩매니저를 쓰므로 전체 진행률을 한 번에 집계할 수 있다.
 {
@@ -126,8 +141,10 @@ function init() {
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   // 그림자 카메라를 플레이어 주변에만 집중시켜 같은 해상도로 훨씬 선명한 그림자 (tick에서 추적)
-  sun.shadow.camera.left = -36; sun.shadow.camera.right = 36;
-  sun.shadow.camera.top = 36; sun.shadow.camera.bottom = -36;
+  // 박람회장(실내)은 범위를 더 좁혀 실내 가구 그림자의 지그재그를 줄인다
+  const SHADOW_EXT = EXPO_MODE ? 22 : 36;
+  sun.shadow.camera.left = -SHADOW_EXT; sun.shadow.camera.right = SHADOW_EXT;
+  sun.shadow.camera.top = SHADOW_EXT; sun.shadow.camera.bottom = -SHADOW_EXT;
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.02; // 벽면 그림자 줄무늬(acne) 제거
   scene.add(sun);
@@ -430,20 +447,6 @@ function init() {
       });
     }
   }
-
-  // ---------- 박람회장 모드 ----------
-  // 대표님이 블렌더로 만든 실내 박람회장(84×56m 홀 + 부스 8개 + 전시 주택 7채)을
-  // 부지 중앙에 1:1로 설치한다. 기존 절차 생성 마을(존·43채·NPC·조경 일부)은 끈다.
-  const EXPO_MODE = true;
-  const EXPO_ASSET = {
-    main: "assets/expo/expo-main.glb",       // 홀+부스+전시주택+간판 (draco+webp, 천장 제외)
-    ceiling: "assets/expo/expo-ceiling.glb", // 천장만 분리 — 조감(전체 보기) 때 숨김
-    layout: "assets/expo/expo-layout.json",  // 집·부스 박스(1인칭 판정/충돌)·스폰
-    y: 0.06, // 홀 바닥 슬래브가 기존 포장 위에 얹히게 살짝 띄움
-  };
-  // 홀이 차지하는 footprint — 이 안의 야외 조경 인스턴스(나무·소품·풀)는 생성하지 않는다
-  const EXPO_FOOT = { x: 43.5, z: 29.5 };
-  const inExpoFoot = (x, z) => EXPO_MODE && Math.abs(x) < EXPO_FOOT.x && Math.abs(z) < EXPO_FOOT.z;
 
   // ---------- 부지 (전시장 대지: 사각 경계) ----------
   // 부지·통로·존 구획은 관리자 격자(존 데이터)와 같은 좌표 체계에서 생성된다.
