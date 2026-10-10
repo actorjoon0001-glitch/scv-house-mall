@@ -3310,6 +3310,7 @@ function init() {
     pov: () => ({ mode: povMode, blend: +povBlend.toFixed(3), aerial: aerialOn, aerialBlend: +aerialBlend.toFixed(3), inside: insideLot ? insideLot.model.slug : null, fov: +camera.fov.toFixed(1), cam: { x: +camera.position.x.toFixed(2), y: +camera.position.y.toFixed(2), z: +camera.position.z.toFixed(2) } }),
     setPovMode: (m) => setPov(m === "fp" ? "fp" : "tp"),
     setAerial: (v) => { aerialOn = !!v; },
+    expoCeilingVisible: () => (expoCeiling ? expoCeiling.visible : null),
     setPitch: (p) => { camPitch = Math.max(-POV.PITCH_MAX, Math.min(POV.PITCH_MAX, p)); },
     quality: () => ({ qLevel, pixelRatio: renderer.getPixelRatio() }),
     _scene: scene,
