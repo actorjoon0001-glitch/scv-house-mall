@@ -3423,6 +3423,8 @@ function init() {
     setPovMode: (m) => setPov(m === "fp" ? "fp" : "tp"),
     setAerial: (v) => { aerialOn = !!v; },
     expoCeilingVisible: () => (expoCeiling ? expoCeiling.visible : null),
+    // 디버그: 현재 위치에서 이동 벡터가 충돌 보정 후 얼마나 남는지 (검증용)
+    moveTest: (dx, dz) => { const r = collideMove(dx, dz); return [+r[0].toFixed(4), +r[1].toFixed(4)]; },
     // 디버그: 두 점 사이 충돌체 히트 거리 (-1 = 뚫림) — 출입구 탐색용
     probe: (x1, y1, z1, x2, y2, z2) => {
       if (!expoCollider) return null;
