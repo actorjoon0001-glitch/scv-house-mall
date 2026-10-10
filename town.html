@@ -47,6 +47,8 @@
     <button type="button" class="town__mini town__mini--night" id="town-night" aria-label="밤/낮 전환" title="밤/낮 전환">🌙</button>
     <button type="button" class="town__mini town__mini--sound" id="town-sound" aria-label="소리 켜기/끄기" title="소리">🔊</button>
     <button type="button" class="town__mini town__mini--share" id="town-share" aria-label="공유하기" title="공유">🔗</button>
+    <button type="button" class="town__mini" id="town-pov" aria-label="시점 전환 (1인칭/3인칭)" title="시점 전환 (V)">👁️</button>
+    <button type="button" class="town__mini" id="town-aerial" aria-label="전체 보기" title="전체 보기 (조감)">🗺️</button>
     <div class="town__count" id="town-count" hidden></div>
 
     <button type="button" class="town__jump" id="town-jump" aria-label="점프">JUMP</button>
@@ -75,7 +77,7 @@
       </div>
     </div>
 
-    <p class="town__hud"><span class="town__keys">W A S D</span> 이동 · <span class="town__keys">SHIFT</span> 달리기 · <span class="town__keys">SPACE</span> 점프 <em>(꾹 누르면 비행 🪽)</em> · 휠 줌 · 드래그 회전 · 모바일은 조이스틱</p>
+    <p class="town__hud"><span class="town__keys">W A S D</span> 이동 · <span class="town__keys">SHIFT</span> 달리기 · <span class="town__keys">SPACE</span> 점프 <em>(꾹 누르면 비행 🪽)</em> · <span class="town__keys">V</span> 1인칭/3인칭 · 드래그 시점 회전 · 모바일은 조이스틱</p>
     <canvas class="town__map" id="town-map" width="160" height="160" aria-hidden="true"></canvas>
     <div class="town__joystick" id="town-joystick" aria-label="이동 조이스틱">
       <div class="town__stick" id="town-stick"></div>

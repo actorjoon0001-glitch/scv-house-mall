@@ -223,8 +223,15 @@
   // 존(카테고리)별로 같은 외형은 첫 모델 한 채만 마을에 세우도록 정리한다.
   // 랜딩 카탈로그(사진 목록)는 전체 유지.
   const HOUSE_GLBS = {
-    "stay-19rb": "assets/houses/stay-19rb.glb",
-    "stay24w": "assets/houses/stay24w.glb",
+    // 세움 3D 홈플래너 블렌더 실물 모델 (draco+webp 압축, 가구·베이크 질감 포함)
+    "stay-19rb": "assets/houses/seum-bonjeom-19.glb",
+    "stay24w": "assets/houses/seum-24.glb",
+    "stay15w": "assets/houses/seum-15.glb",
+    "seum-shelter-10": "assets/houses/seum-shelter-10.glb",
+    "twin-10": "assets/houses/twin-10.glb",
+    "twin-10-L": "assets/houses/twin-10-L.glb",
+    "twin-10-2f": "assets/houses/twin-10-2f.glb",
+    "seum-hwangto": "assets/houses/seum-hwangto.glb",
     "stay20r": "assets/houses/stay20r.glb",
     "stay18-b": "assets/houses/stay18-b.glb",
     "stay14": "assets/houses/stay14.glb",
