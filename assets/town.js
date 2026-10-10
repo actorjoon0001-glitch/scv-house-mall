@@ -2032,7 +2032,22 @@ function init() {
           if (!o.isMesh) return;
           o.castShadow = true;
           o.receiveShadow = true;
-          if (o.material && "envMapIntensity" in o.material) o.material.envMapIntensity = 0.45;
+          const m = o.material;
+          if (!m) return;
+          if ("envMapIntensity" in m) m.envMapIntensity = 0.45;
+          // 블렌더 유리(transmission)는 블룸 후처리와 충돌해 검은 판으로 깨짐
+          // → 단순 반투명 유리로 변환 (모든 기기에서 동일하게 보임)
+          if (m.transmission !== undefined && m.transmission > 0) {
+            m.transmission = 0;
+            m.thickness = 0;
+            m.transparent = true;
+            m.opacity = 0.28;
+            m.depthWrite = false;
+            m.roughness = Math.min(m.roughness ?? 0.1, 0.15);
+            m.metalness = 0;
+            m.side = THREE.DoubleSide;
+            m.needsUpdate = true;
+          }
         });
         g.position.y = EXPO_ASSET.y;
         scene.add(g);
