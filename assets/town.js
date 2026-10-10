@@ -181,7 +181,7 @@ function init() {
       lampGroup.add(pl);
       const pool = new THREE.Mesh(new THREE.PlaneGeometry(9, 9), poolMat);
       pool.rotation.x = -Math.PI / 2;
-      pool.position.set(0, 0.055, z);
+      pool.position.set(0, EXPO_MODE ? 0.125 : 0.055, z); // 박람회장: 홀 바닥(0.06+슬래브) 위로
       lampGroup.add(pool);
     }
     lampGroup.visible = false;
@@ -425,10 +425,24 @@ function init() {
     }
   }
 
+  // ---------- 박람회장 모드 ----------
+  // 대표님이 블렌더로 만든 실내 박람회장(84×56m 홀 + 부스 8개 + 전시 주택 7채)을
+  // 부지 중앙에 1:1로 설치한다. 기존 절차 생성 마을(존·43채·NPC·조경 일부)은 끈다.
+  const EXPO_MODE = true;
+  const EXPO_ASSET = {
+    main: "assets/expo/expo-main.glb",       // 홀+부스+전시주택+간판 (draco+webp, 천장 제외)
+    ceiling: "assets/expo/expo-ceiling.glb", // 천장만 분리 — 조감(전체 보기) 때 숨김
+    layout: "assets/expo/expo-layout.json",  // 집·부스 박스(1인칭 판정/충돌)·스폰
+    y: 0.06, // 홀 바닥 슬래브가 기존 포장 위에 얹히게 살짝 띄움
+  };
+  // 홀이 차지하는 footprint — 이 안의 야외 조경 인스턴스(나무·소품·풀)는 생성하지 않는다
+  const EXPO_FOOT = { x: 43.5, z: 29.5 };
+  const inExpoFoot = (x, z) => EXPO_MODE && Math.abs(x) < EXPO_FOOT.x && Math.abs(z) < EXPO_FOOT.z;
+
   // ---------- 부지 (전시장 대지: 사각 경계) ----------
   // 부지·통로·존 구획은 관리자 격자(존 데이터)와 같은 좌표 체계에서 생성된다.
   const SITE = { x: 70, zN: -82, zS: 34 }; // 대지 사각형 경계
-  const MAP_EXT = 92; // 미니맵 표시 범위 (주차장 포함)
+  const MAP_EXT = EXPO_MODE ? 50 : 92; // 미니맵 표시 범위 (박람회장: 홀 ±42m + 여유)
   // 부지 바깥 완충 녹지 (짙은 톤 — 대지와 확실히 구분)
   const outerGround = new THREE.Mesh(
     new THREE.PlaneGeometry(520, 520),
@@ -575,6 +589,8 @@ function init() {
   const IM_TMP = { m: new THREE.Matrix4(), p: new THREE.Vector3(), q: new THREE.Quaternion(), s: new THREE.Vector3(1, 1, 1), up: new THREE.Vector3(0, 1, 0) };
   function buildInstanced(geo, mat, items) {
     // items: [{x,y,z, sx,sy,sz, ry, color}]
+    // 박람회장 모드: 홀 footprint 안에 떨어지는 야외 인스턴스(나무·울타리·소품·풀)는 제외
+    if (EXPO_MODE) items = items.filter((it) => !inExpoFoot(it.x, it.z));
     const im = new THREE.InstancedMesh(geo, mat, items.length);
     items.forEach((it, i) => {
       IM_TMP.q.setFromAxisAngle(IM_TMP.up, it.ry || 0);
@@ -1558,7 +1574,8 @@ function init() {
   }
 
   // 인포메이션 데스크 (남쪽 입구 광장)
-  const INFO_POS = { x: 0, z: 26 };
+  // 박람회장 모드: 서측 입구 안쪽(스폰 옆)에 인포데스크·안내봇 배치
+  const INFO_POS = EXPO_MODE ? { x: -35.5, z: 5 } : { x: 0, z: 26 };
   const infoDesk = new THREE.Group();
   {
     const base = new THREE.Mesh(
@@ -1983,6 +2000,91 @@ function init() {
       .catch(() => {});
   }
 
+  // ---------- 박람회장 설치 (EXPO_MODE) ----------
+  // 부스별 카탈로그 연결 (카탈로그에 있는 모델만 — 클릭 시 상세 페이지)
+  const EXPO_SLUGS = { "19평": "stay-19rb", "24평": "stay24w" };
+  const EXPO_NAMES = {
+    "17평_방추가": { name: "17평 모듈러주택 · 방추가형", size: "17평" },
+    "19평": { name: "19평 모듈러주택 · 포치 데크형", size: "19평" },
+    "24평": { name: "24평 모듈러주택 · 쓰리룸 패밀리형", size: "24평" },
+    "황토찜질방": { name: "황토찜질방 · 체류형 힐링룸", size: "4평" },
+    "쌍둥이10평_11자": { name: "쌍둥이 10평형 · 11자", size: "10평" },
+    "쌍둥이10평_2층": { name: "쌍둥이 10평형 · 2층", size: "10평" },
+    "쌍둥이10평_ㄱ자": { name: "쌍둥이 10평형 · ㄱ자", size: "10평" },
+  };
+  let expoCeiling = null;
+  let expoHouseBoxes = []; // 미니맵용 [{x,z,w,d}]
+  function placeExpo() {
+    // 본체 (홀·부스·전시주택·간판) — 햇빛 그림자는 받기만 (실내가 어두워지지 않게)
+    loadGlb(EXPO_ASSET.main)
+      .then((g) => {
+        g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; } });
+        g.position.y = EXPO_ASSET.y;
+        scene.add(g);
+        clickTargets.push(g);
+      })
+      .catch(() => {});
+    // 천장 — 전체 보기(조감) 때 숨겨서 홀 내부가 내려다보이게
+    loadGlb(EXPO_ASSET.ceiling)
+      .then((g) => {
+        g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+        g.position.y = EXPO_ASSET.y;
+        expoCeiling = g;
+        scene.add(g);
+      })
+      .catch(() => {});
+    // 실내 보조광 — 홀 안이 칙칙하지 않게 은은한 앰비언트
+    scene.add(new THREE.AmbientLight(0xfff4e2, 0.3));
+    // 레이아웃: 집 박스(1인칭 자동 전환·근접 카드·클릭·카메라 충돌) + 부스·외벽 충돌
+    fetch(EXPO_ASSET.layout)
+      .then((r) => r.json())
+      .then((L) => {
+        const addBox = (min, max, pad) => {
+          const w = Math.abs(max[0] - min[0]) + (pad || 0);
+          const d = Math.abs(max[2] - min[2]) + (pad || 0);
+          const ht = Math.max(0.5, max[1] - Math.min(0, min[1]));
+          const col = new THREE.Mesh(new THREE.BoxGeometry(w, ht, d), camColMat);
+          col.position.set((min[0] + max[0]) / 2, ht / 2, (min[2] + max[2]) / 2);
+          col.visible = false;
+          scene.add(col);
+          camColliders.push(col);
+          return { col, w, d, ht };
+        };
+        (L.houses || []).forEach((h) => {
+          const meta = EXPO_NAMES[h.name] || { name: h.name, size: "" };
+          const model = { slug: EXPO_SLUGS[h.name] || "", name: meta.name, category: "박람회 전시", size: meta.size, base_price: 0, main_image: "" };
+          const b = addBox(h.min, h.max, 0);
+          const wrap = new THREE.Group();
+          wrap.position.set(b.col.position.x, 0, b.col.position.z);
+          wrap.userData.model = model;
+          wrap.userData.inner = { hw: (b.w / 2) * 0.92, hd: (b.d / 2) * 0.92 };
+          const clickBox = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.ht, b.d), camColMat);
+          clickBox.position.y = b.ht / 2;
+          clickBox.visible = false;
+          wrap.add(clickBox);
+          scene.add(wrap);
+          clickTargets.push(wrap);
+          houseLots.push({ wrap, model, h: b.ht });
+          expoHouseBoxes.push({ x: wrap.position.x, z: wrap.position.z, w: b.w, d: b.d });
+        });
+        (L.booths || []).forEach((bx) => addBox(bx.min, bx.max, 0));
+        // 외벽 4면 (얇은 박스) — 카메라가 홀 밖으로 뚫고 나가지 않게
+        const hm = L.hall ? L.hall : { min: [-42.2, 0, -28.2], max: [42.2, 9, 28.2] };
+        const x0 = Math.min(hm.min[0], hm.max[0]), x1 = Math.max(hm.min[0], hm.max[0]);
+        const z0 = Math.min(hm.min[2], hm.max[2]), z1 = Math.max(hm.min[2], hm.max[2]);
+        [[(x0 + x1) / 2, z0 + 0.3, x1 - x0, 0.6], [(x0 + x1) / 2, z1 - 0.3, x1 - x0, 0.6]].forEach(([cx, cz, w, d]) => {
+          const m = new THREE.Mesh(new THREE.BoxGeometry(w, 9, d), camColMat);
+          m.position.set(cx, 4.5, cz); m.visible = false; scene.add(m); camColliders.push(m);
+        });
+        [[x0 + 0.3, (z0 + z1) / 2, 0.6, z1 - z0], [x1 - 0.3, (z0 + z1) / 2, 0.6, z1 - z0]].forEach(([cx, cz, w, d]) => {
+          const m = new THREE.Mesh(new THREE.BoxGeometry(w, 9, d), camColMat);
+          m.position.set(cx, 4.5, cz); m.visible = false; scene.add(m); camColliders.push(m);
+        });
+        updateNearCard();
+      })
+      .catch(() => {});
+  }
+
   Promise.all([
     fetch(
       `${SB_URL}/rest/v1/models?select=slug,name,category,size,base_price,main_image,event_on,event_price,rooms,bathrooms,short_description,features,badge,interior_images,gallery_images&order=created_at.asc`,
@@ -2004,13 +2106,21 @@ function init() {
       BLENDER_TOWN_EXTRA.forEach((b) => { if (!models.some((m) => m.slug === b.slug)) models.push(b); });
       // 관리자 표시 설정 병합 (숨김/이름/가격/존/큐레이터 등)
       if (window.SeumTownConfig) models = window.SeumTownConfig.apply(models, cfg.data || {});
+      if (EXPO_MODE) {
+        // 박람회장 모드: 존 구획·43채 배치·NPC 워커 대신 홀 하나를 설치
+        placeExpo();
+        return;
+      }
       applyZoneOverrides(cfg.data || {});
       zoneOvData = cfg.data || {};
       buildZoneDecor();
       placeModels(models.length ? models : TOWN_FALLBACK, cfg.data || {});
       spawnWalkers();
     })
-    .catch(() => { buildZoneDecor(); placeModels(TOWN_FALLBACK, {}); spawnWalkers(); });
+    .catch(() => {
+      if (EXPO_MODE) { placeExpo(); return; }
+      buildZoneDecor(); placeModels(TOWN_FALLBACK, {}); spawnWalkers();
+    });
 
   // 가까운 집 안내 카드
   let activeLot = null;
@@ -2323,11 +2433,19 @@ function init() {
   }
 
   player.position.set(0, 0, 30); // 남쪽 입구(인포 앞)에서 시작
+  if (EXPO_MODE) {
+    // 박람회장: 서측 입구에서 홀 안쪽(동쪽)을 바라보며 시작 (블렌더 진입뷰 카메라 위치)
+    player.position.set(-38.5, 0, 0);
+    player.rotation.y = Math.PI / 2; // heading 초기값은 선언부에서 EXPO에 맞춰 설정
+  }
   // 체험 화면(빌드룸·교육관)에서 돌아온 경우 → 나갔던 자리(체험존)로 복귀
   try {
     const back = JSON.parse(sessionStorage.getItem("seum_town_return") || "null");
     sessionStorage.removeItem("seum_town_return");
-    if (back && isFinite(back.x) && isFinite(back.z)) {
+    if (back && isFinite(back.x) && isFinite(back.z) && EXPO_MODE) {
+      player.position.x = Math.max(-41, Math.min(41, back.x));
+      player.position.z = Math.max(-27, Math.min(27, back.z));
+    } else if (back && isFinite(back.x) && isFinite(back.z)) {
       player.position.x = Math.max(-SITE.x + 2, Math.min(SITE.x - 2, back.x));
       player.position.z = Math.max(SITE.zN + 2, Math.min(SITE.zS + 8, back.z));
     }
@@ -2619,7 +2737,7 @@ function init() {
   let vy = 0;
   let airborne = false;
   let flyHeld = false;
-  const FLY_MAX_Y = 14; // 최고 비행 고도 (마을 전경이 보이는 높이)
+  const FLY_MAX_Y = EXPO_MODE ? 7 : 14; // 최고 비행 고도 (박람회장: 천장 9m 아래까지)
   function doJump() {
     if (!airborne) { vy = 9.4; airborne = true; playJump(); }
   }
@@ -2674,7 +2792,7 @@ function init() {
   ["pointerup", "pointercancel"].forEach((ev) => joyBase.addEventListener(ev, joyEnd));
 
   // 카메라 줌(휠/핀치)·회전(드래그) — 줌은 숄더뷰 카메라 거리 배율
-  let camAz = 0;
+  let camAz = EXPO_MODE ? Math.PI * 1.5 : 0; // 박람회장: 스폰 방향(동쪽)에 맞춤
   let camPitch = -0.07; // 상하 시점 (라디안, 음수=살짝 내려다봄)
   let camZoom = 1;
   canvas.addEventListener("wheel", (e) => {
@@ -2874,9 +2992,9 @@ function init() {
       const scale = (S / 2 - 10) / MAP_EXT;
       const wx = (((e.clientX - r.left) / r.width) * S - S / 2) / scale;
       const wz = (((e.clientY - r.top) / r.height) * S - S / 2) / scale;
-      // 대지 안으로 클램프 후 그 자리로 이동
-      const tx = Math.max(-SITE.x + 2, Math.min(SITE.x - 2, wx));
-      const tz = Math.max(SITE.zN + 2, Math.min(SITE.zS - 1.5, wz));
+      // 대지(박람회장 모드: 홀 내부) 안으로 클램프 후 그 자리로 이동
+      const tx = EXPO_MODE ? Math.max(-41, Math.min(41, wx)) : Math.max(-SITE.x + 2, Math.min(SITE.x - 2, wx));
+      const tz = EXPO_MODE ? Math.max(-27, Math.min(27, wz)) : Math.max(SITE.zN + 2, Math.min(SITE.zS - 1.5, wz));
       player.position.x = tx;
       player.position.z = tz;
       updateNearCard();
@@ -2884,8 +3002,66 @@ function init() {
       if (window.SeumTownConfig && window.SeumTownConfig.logEvent) window.SeumTownConfig.logEvent("bigmap_tp", "");
     });
   }
+  // 박람회장 전용 미니맵: 홀 평면 + 전시 주택 + 방문자
+  function paintExpoMap(ctx, S, big) {
+    const c = S / 2;
+    const pad = big ? 10 : 6;
+    const scale = (S / 2 - pad) / MAP_EXT; // 홀(±42×±28) + 여유 — 큰지도 클릭 텔레포트와 같은 축척
+    ctx.clearRect(0, 0, S, S);
+    ctx.save();
+    ctx.beginPath();
+    if (big) ctx.roundRect(2, 2, S - 4, S - 4, 18);
+    else ctx.arc(c, c, S / 2 - 3, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.fillStyle = "#6e8f58"; // 바깥 녹지
+    ctx.fillRect(0, 0, S, S);
+    // 홀 바닥 + 외벽
+    ctx.fillStyle = "#e8e3d6";
+    ctx.fillRect(c - 42.2 * scale, c - 28.2 * scale, 84.4 * scale, 56.4 * scale);
+    ctx.strokeStyle = "#5a5649";
+    ctx.lineWidth = big ? 3 : 2;
+    ctx.strokeRect(c - 42.2 * scale, c - 28.2 * scale, 84.4 * scale, 56.4 * scale);
+    // 전시 주택 (부스)
+    ctx.fillStyle = "#8c6b4f";
+    expoHouseBoxes.forEach((b) => {
+      ctx.fillRect(c + (b.x - b.w / 2) * scale, c + (b.z - b.d / 2) * scale, b.w * scale, b.d * scale);
+    });
+    if (big) {
+      ctx.font = "700 13px 'Noto Sans KR', sans-serif";
+      ctx.fillStyle = "#233527";
+      ctx.textAlign = "center";
+      ctx.fillText("METAHOUSE EXPO", c, c - 28.2 * scale - 8);
+      ctx.font = "11px sans-serif";
+      ctx.fillText("◀ 입구", c - 38 * scale, c + 4);
+    }
+    // 다른 방문자
+    ctx.fillStyle = "#f39c12";
+    remotes.forEach((r) => {
+      ctx.beginPath();
+      ctx.arc(c + r.group.position.x * scale, c + r.group.position.z * scale, big ? 4.5 : 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    // 내 위치 화살표
+    ctx.save();
+    ctx.translate(c + player.position.x * scale, c + player.position.z * scale);
+    ctx.rotate(Math.PI - heading);
+    const as = big ? 1.6 : 1;
+    ctx.fillStyle = "#e74c3c";
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, -6.5 * as);
+    ctx.lineTo(4.4 * as, 4.6 * as);
+    ctx.lineTo(-4.4 * as, 4.6 * as);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+  }
   // 미니맵·큰 지도 공용 페인터 (big=true면 존 이름 라벨·큰 글씨)
   function paintMap(ctx, S, big) {
+    if (EXPO_MODE) { paintExpoMap(ctx, S, big); return; }
     const c = S / 2;
     const pad = big ? 10 : 6;
     const scale = (S / 2 - pad) / MAP_EXT;
@@ -2984,7 +3160,7 @@ function init() {
   }
   const lookAt = new THREE.Vector3();
   const clock = new THREE.Clock();
-  let heading = 0;
+  let heading = EXPO_MODE ? Math.PI / 2 : 0;
 
   // ---------- 자동 품질 조절 (프레임 기준 해상도 단계 조정) ----------
   let fpsTime = 0, fpsFrames = 0, qCooldown = 0;
@@ -3071,6 +3247,20 @@ function init() {
     // 존 바로가기 (인포 안내봇·미니맵의 순간이동)
     gotoZone(cat) {
       if (window.SeumTownConfig && window.SeumTownConfig.logEvent) window.SeumTownConfig.logEvent("zone", cat);
+      if (EXPO_MODE) {
+        // 박람회장 부스 바로가기: 북쪽 줄(17·19·24평) / 남쪽 줄(쌍둥이) / 동쪽(황토)
+        const spots = {
+          "전원주택": [10, -3.5, Math.PI], "세컨하우스": [-30, 6, 0],
+          "체류형 쉼터": [30, -6, Math.PI], "특별모델": [-10, 5.5, 0],
+        };
+        const [sx, sz, hd] = spots[cat] || spots[zoneFor(cat)] || [0, 20, Math.PI];
+        player.position.x = sx; player.position.z = sz;
+        heading = hd; player.rotation.y = heading;
+        camAz = heading + Math.PI;
+        camPitch = -0.07;
+        updateNearCard();
+        return;
+      }
       const z = ZONES[zoneFor(cat)];
       player.position.x = z.entry.x;
       player.position.z = z.entry.z;
@@ -3085,8 +3275,12 @@ function init() {
     // 체험존 바로가기 (안내봇의 "직접 지어보기·배워보기" 안내용)
     gotoExperience() {
       if (window.SeumTownConfig && window.SeumTownConfig.logEvent) window.SeumTownConfig.logEvent("zone", "체험존");
-      player.position.x = EXP.entry.x;
-      player.position.z = EXP.entry.z;
+      if (EXPO_MODE) {
+        player.position.x = 0; player.position.z = 20; // 홀 남측 통로 (체험존 포털은 박람회장 모드에선 없음)
+      } else {
+        player.position.x = EXP.entry.x;
+        player.position.z = EXP.entry.z;
+      }
       heading = Math.PI;
       player.rotation.y = heading;
       camAz = heading + Math.PI;
@@ -3139,7 +3333,7 @@ function init() {
     playerBlob.scale.setScalar(Math.max(0.45, 1 - player.position.y * 0.22));
     // 존 진입 감지 (0.35초 간격이면 충분)
     zoneCheckT += dt;
-    if (zoneCheckT > 0.35) { zoneCheckT = 0; checkZoneBanner(); }
+    if (zoneCheckT > 0.35) { zoneCheckT = 0; if (!EXPO_MODE) checkZoneBanner(); }
     // 집 안/밖 자동 시점 전환 (0.2초 간격 판정 — 블렌더 실물 모델만 내부 있음)
     povCheckT += dt;
     if (povCheckT > 0.2) {
@@ -3177,11 +3371,17 @@ function init() {
       const speed = fpNow ? POV.FP_WALK : sprinting ? POV.RUN : POV.WALK;
       player.position.x += Math.sin(lastMoveDir) * speed * velMag * dt;
       player.position.z += Math.cos(lastMoveDir) * speed * velMag * dt;
-      // 사각 부지 경계 안에서만 이동. 남쪽은 정문(|x|<7.5)으로만 출입
-      player.position.x = Math.max(-SITE.x + 2, Math.min(SITE.x - 2, player.position.x));
-      const zMax = Math.abs(player.position.x) < 7.5 ? SITE.zS + 8 : SITE.zS - 1.5;
-      player.position.z = Math.max(SITE.zN + 2, Math.min(zMax, player.position.z));
-      if (player.position.z > SITE.zS - 1.5) player.position.x = Math.max(-7.4, Math.min(7.4, player.position.x));
+      if (EXPO_MODE) {
+        // 박람회장 홀 내부에서만 이동 (외벽 안쪽)
+        player.position.x = Math.max(-41, Math.min(41, player.position.x));
+        player.position.z = Math.max(-27, Math.min(27, player.position.z));
+      } else {
+        // 사각 부지 경계 안에서만 이동. 남쪽은 정문(|x|<7.5)으로만 출입
+        player.position.x = Math.max(-SITE.x + 2, Math.min(SITE.x - 2, player.position.x));
+        const zMax = Math.abs(player.position.x) < 7.5 ? SITE.zS + 8 : SITE.zS - 1.5;
+        player.position.z = Math.max(SITE.zN + 2, Math.min(zMax, player.position.z));
+        if (player.position.z > SITE.zS - 1.5) player.position.x = Math.max(-7.4, Math.min(7.4, player.position.x));
+      }
       let diff = lastMoveDir - heading;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
@@ -3439,9 +3639,11 @@ function init() {
       if (Math.abs(camera.fov - fov) > 0.05) { camera.fov = fov; camera.updateProjectionMatrix(); }
       // 1인칭일 때 내 캐릭터(라벨·풍선 포함)만 숨김 — 다른 방문자는 그대로 보임
       player.visible = eb < 0.6;
-      // 안개: 평소 고정, 조감 시 멀리까지
-      scene.fog.near = 55 + 90 * ea;
-      scene.fog.far = 155 + 340 * ea;
+      // 안개: 실내 홀은 안개 없이 멀리까지, 조감 시 더 멀리
+      scene.fog.near = (EXPO_MODE ? 150 : 55) + 90 * ea;
+      scene.fog.far = (EXPO_MODE ? 460 : 155) + 340 * ea;
+      // 박람회장 천장: 전체 보기(조감)로 올라가면 숨겨서 홀 내부가 보이게
+      if (expoCeiling) expoCeiling.visible = ea < 0.25;
     }
 
     // 미니맵 갱신 (0.15초 간격)
