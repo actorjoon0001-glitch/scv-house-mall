@@ -3417,6 +3417,19 @@ function init() {
     setPovMode: (m) => setPov(m === "fp" ? "fp" : "tp"),
     setAerial: (v) => { aerialOn = !!v; },
     expoCeilingVisible: () => (expoCeiling ? expoCeiling.visible : null),
+    // 디버그: 두 점 사이 충돌체 히트 거리 (-1 = 뚫림) — 출입구 탐색용
+    probe: (x1, y1, z1, x2, y2, z2) => {
+      if (!expoCollider) return null;
+      _rayO.set(x1, y1, z1);
+      _rayD.set(x2 - x1, y2 - y1, z2 - z1);
+      const len = _rayD.length();
+      if (len < 1e-6) return -1;
+      _rayD.normalize();
+      _wallRay.set(_rayO, _rayD);
+      _wallRay.far = len;
+      const r = _wallRay.intersectObject(expoCollider, false)[0];
+      return r ? +r.distance.toFixed(3) : -1;
+    },
     setPitch: (p) => { camPitch = Math.max(-POV.PITCH_MAX, Math.min(POV.PITCH_MAX, p)); },
     quality: () => ({ qLevel, pixelRatio: renderer.getPixelRatio() }),
     _scene: scene,
