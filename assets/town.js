@@ -3656,8 +3656,9 @@ function init() {
       // 안개: 실내 홀은 안개 없이 멀리까지, 조감 시 더 멀리
       scene.fog.near = (EXPO_MODE ? 150 : 55) + 90 * ea;
       scene.fog.far = (EXPO_MODE ? 460 : 155) + 340 * ea;
-      // 박람회장 천장: 전체 보기(조감)로 올라가면 숨겨서 홀 내부가 보이게
-      if (expoCeiling) expoCeiling.visible = ea < 0.25;
+      // 박람회장 천장: 전체 보기(조감) 시작과 거의 동시에 숨김 — 카메라가 지붕(9.2m)을
+      // 넘기 전에 사라져야 하얀 지붕만 보이는 구간이 없다
+      if (expoCeiling) expoCeiling.visible = ea < 0.06;
     }
 
     // 미니맵 갱신 (0.15초 간격)
