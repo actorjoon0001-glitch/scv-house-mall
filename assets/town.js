@@ -2040,6 +2040,18 @@ function init() {
           const m = o.material;
           if (!m) return;
           if ("envMapIntensity" in m) m.envMapIntensity = 0.45;
+          // 최소 자체발광(자기 색의 16%) — 빛이 전혀 안 닿는 안쪽 면·틈새·그늘이
+          // 완전 #000(화면 깨진 듯한 검은 면)으로 떨어지지 않게 하는 베이크형 앰비언트
+          if (m.emissive && m.emissive.getHex() === 0 && !m.emissiveMap) {
+            if (m.map) {
+              m.emissiveMap = m.map;
+              m.emissive.setRGB(1, 1, 1);
+            } else if (m.color) {
+              m.emissive.copy(m.color);
+            }
+            m.emissiveIntensity = 0.16;
+            m.needsUpdate = true;
+          }
           // 블렌더 유리(transmission)는 블룸 후처리와 충돌해 검은 판으로 깨짐
           // → 단순 반투명 유리로 변환 (모든 기기에서 동일하게 보임)
           if (m.transmission !== undefined && m.transmission > 0) {
@@ -3072,6 +3084,7 @@ function init() {
   const _DOWN = new THREE.Vector3(0, -1, 0);
   const _rayO = new THREE.Vector3(), _rayD = new THREE.Vector3();
   let groundY = 0; // 발밑 지면 높이 (홀 바닥·포치·데크 단차)
+  let fallGraceT = 0; // 낙하 유예 — 오픈 계단 디딤판 사이 틈에서 빠지지 않게
   // 이동 벡터를 벽에 막히면 벽면을 따라 미끄러지게 보정.
   // 무릎·허리·가슴 레이 3개 중 2개 이상 맞아야 차단 — 폴딩도어의 얇은 가로 프레임 바
   // 하나에 걸려 문을 못 지나는 일을 막는다 (벽·난간·창턱은 2개 이상 걸려 차단됨).
@@ -3579,18 +3592,31 @@ function init() {
       if (playerRig.run) playerRig.run.paused = true;
     }
 
-    // 발밑 지면 높이 (박람회장: 홀 바닥·포치·데크 단차를 밟고 오르내리게)
+    // 발밑 지면 높이 (박람회장: 홀 바닥·포치·데크·계단을 밟고 오르내리게)
     if (EXPO_MODE && expoCollider) {
-      _rayO.set(player.position.x, player.position.y + 1.45, player.position.z);
-      _groundRay.set(_rayO, _DOWN);
-      _groundRay.far = 24;
-      const gh = _groundRay.intersectObject(expoCollider, false)[0];
-      groundY = gh ? gh.point.y : 0;
+      // 2점 샘플(현재 위치 + 진행 방향 앞 0.28m) 중 높은 쪽 — 오픈형 계단의
+      // 디딤판 사이 틈으로 레이가 빠져 낙하 판정이 나는 것을 방지
+      const sampleGround = (ox, oz) => {
+        _rayO.set(player.position.x + ox, player.position.y + 1.45, player.position.z + oz);
+        _groundRay.set(_rayO, _DOWN);
+        _groundRay.far = 24;
+        const gh = _groundRay.intersectObject(expoCollider, false)[0];
+        return gh ? gh.point.y : 0;
+      };
+      groundY = sampleGround(0, 0);
+      if (velMag > 0.05) {
+        const g2 = sampleGround(Math.sin(lastMoveDir) * 0.28, Math.cos(lastMoveDir) * 0.28);
+        // 앞 샘플이 발보다 과하게 높으면(벽 위) 무시, 계단 한 단 이내만 채택
+        if (g2 > groundY && g2 - player.position.y <= 0.5) groundY = g2;
+      }
       if (!airborne) {
         const dy = groundY - player.position.y;
-        if (dy > 0.01 && dy <= 0.5) player.position.y = groundY;          // 단차 오르기 (계단·포치)
-        else if (dy < -0.12) { airborne = true; vy = 0; }                  // 모서리에서 낙하
-        else if (Math.abs(dy) <= 0.01) player.position.y = groundY;       // 지면 밀착
+        if (dy > 0.01 && dy <= 0.5) { player.position.y = groundY; fallGraceT = 0; }       // 단차·계단 오르기
+        else if (dy <= 0.01 && dy >= -0.55) { player.position.y = groundY; fallGraceT = 0; } // 내려딛기 (계단 하행·낮은 턱)
+        else if (dy < -0.55) {
+          fallGraceT += dt; // 디딤판 틈 유예 — 잠깐의 허공은 무시
+          if (fallGraceT > 0.12) { airborne = true; vy = 0; fallGraceT = 0; }
+        } else fallGraceT = 0;
       }
     } else groundY = 0;
 
