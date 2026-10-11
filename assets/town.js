@@ -2904,12 +2904,33 @@ function init() {
   }, { passive: true });
   canvas.addEventListener("touchend", () => { pinch = null; });
 
+  // ---------- FPS 마우스 조준 (서든어택식 포인터락) ----------
+  // PC에서 화면을 클릭하면 마우스로 시점을 돌리는 조준 모드. ESC로 해제.
+  // 조준 중에는 화면 중앙 크로스헤어로 집을 클릭해 상세를 연다.
+  let ptrLocked = false;
+  const crosshair = document.createElement("div");
+  crosshair.id = "town-crosshair";
+  crosshair.hidden = true;
+  crosshair.style.cssText = "position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:rgba(255,255,255,0.92);box-shadow:0 0 5px rgba(0,0,0,0.65);pointer-events:none;z-index:6";
+  stage.appendChild(crosshair);
+  document.addEventListener("pointerlockchange", () => {
+    ptrLocked = document.pointerLockElement === canvas;
+    crosshair.hidden = !ptrLocked;
+  });
+  document.addEventListener("mousemove", (e) => {
+    if (!ptrLocked) return;
+    camAz -= e.movementX * 0.0026;
+    camPitch = Math.max(-POV.PITCH_MAX, Math.min(POV.PITCH_MAX, camPitch - e.movementY * 0.0026));
+  });
+
   // 하우스 클릭 → 상세 / 드래그 → 시점 회전
   const ray = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   let downAt = null;
+  let downLocked = false;
   canvas.addEventListener("pointerdown", (e) => {
     downAt = [e.clientX, e.clientY];
+    downLocked = ptrLocked;
     orbit = { px: e.clientX, py: e.clientY, az0: camAz, p0: camPitch };
     canvas.setPointerCapture(e.pointerId);
   });
@@ -2923,10 +2944,22 @@ function init() {
   canvas.addEventListener("pointercancel", () => { orbit = null; });
   canvas.addEventListener("pointerup", (e) => {
     orbit = null;
-    if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return;
-    const rect = canvas.getBoundingClientRect();
-    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    // PC 데스크톱: 클릭으로 조준 모드 진입 (이 클릭은 선택으로 치지 않음)
+    if (!ptrLocked && !downLocked && e.pointerType === "mouse" && window.matchMedia("(pointer: fine)").matches) {
+      try { canvas.requestPointerLock(); } catch (err) {}
+      return;
+    }
+    if (ptrLocked !== downLocked) return; // 락 전환 클릭은 무시
+    if (!downAt || (!ptrLocked && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6)) return;
+    if (ptrLocked) {
+      // 조준 모드: 화면 중앙(크로스헤어) 기준으로 선택
+      pointer.x = 0;
+      pointer.y = 0;
+    } else {
+      const rect = canvas.getBoundingClientRect();
+      pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    }
     ray.setFromCamera(pointer, camera);
     const hits = ray.intersectObjects(clickTargets, true);
     if (hits.length) {
@@ -3015,9 +3048,9 @@ function init() {
     AERIAL_H: 92,        // 조감 높이 (m)
     AERIAL_FOV: 52,
   };
-  // 시점 상태
-  let povMode = "tp";        // "tp"=3인칭 숄더뷰, "fp"=1인칭
-  let povBlend = 0;          // 0=3인칭 ~ 1=1인칭 (SWITCH_T 동안 보간)
+  // 시점 상태 — 서든어택식 FPS: 기본 1인칭 (V 키로 3인칭 숄더뷰 전환 가능)
+  let povMode = "fp";        // "tp"=3인칭 숄더뷰, "fp"=1인칭
+  let povBlend = 1;          // 0=3인칭 ~ 1=1인칭 (SWITCH_T 동안 보간)
   let aerialOn = false;      // 전체 보기 (조감)
   let aerialBlend = 0;
   let insideLot = null;      // 지금 들어가 있는 집 (블렌더 실물 모델)
@@ -3475,14 +3508,11 @@ function init() {
     // 존 진입 감지 (0.35초 간격이면 충분)
     zoneCheckT += dt;
     if (zoneCheckT > 0.35) { zoneCheckT = 0; if (!EXPO_MODE) checkZoneBanner(); }
-    // 집 안/밖 자동 시점 전환 (0.2초 간격 판정 — 블렌더 실물 모델만 내부 있음)
+    // 집 안/밖 판정 (0.2초 간격 — 근접 카드·디버그용. 시점은 FPS 고정이라 자동 전환 없음)
     povCheckT += dt;
     if (povCheckT > 0.2) {
       povCheckT = 0;
-      const l = lotPlayerIsIn();
-      if (l && !insideLot) setPov("fp");       // 현관으로 들어옴 → 1인칭
-      else if (!l && insideLot) setPov("tp");  // 밖으로 나감 → 3인칭
-      insideLot = l;
+      insideLot = lotPlayerIsIn();
     }
 
     let mx = 0, mz = 0;
@@ -3493,9 +3523,8 @@ function init() {
     if (joy.active) { mx += joy.x; mz += joy.y; }
     const mag = Math.min(Math.hypot(mx, mz), 1);
     const moving = mag > 0.12;
-    const fpNow = povBlend > 0.5; // 1인칭 상태 (집 안)
-    // Shift 또는 조이스틱을 끝까지 밀면 달리기 — 1인칭(실내)에서는 달리기 없음
-    const sprinting = !fpNow && moving && (shiftHeld || (joy.active && mag > 0.94));
+    // Shift 또는 조이스틱을 끝까지 밀면 달리기 (FPS식 — 1인칭에서도 달림)
+    const sprinting = moving && (shiftHeld || (joy.active && mag > 0.94));
     if (aerialOn && moving) aerialOn = false; // 전체 보기 중 이동 입력 → 캐릭터 시점 복귀
     stepTick(dt, moving, sprinting, player.position.y <= 0.01); // 발소리
 
@@ -3509,7 +3538,7 @@ function init() {
       lastMoveDir = Math.atan2(wx, wz);
     }
     if (velMag > 0.015) {
-      const speed = fpNow ? POV.FP_WALK : sprinting ? POV.RUN : POV.WALK;
+      const speed = sprinting ? POV.RUN : POV.WALK;
       let mvx = Math.sin(lastMoveDir) * speed * velMag * dt;
       let mvz = Math.cos(lastMoveDir) * speed * velMag * dt;
       // 박람회장: 벽·부스·집 외벽 통과 금지 (유리문으로만 출입). 지붕 위 비행은 자유.
